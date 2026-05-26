@@ -27,6 +27,7 @@ htmlcov/
 *.mp4
 *.m4a
 *.webm
+*.txt
 
 # Generated transcript outputs
 transcripts/
