@@ -1,7 +1,7 @@
 from faster_whisper import WhisperModel
 import time
 
-AUDIO_PATH = "./temp/meeting.wav"
+AUDIO_PATH = "./test_audio/meeting.mp4"
 
 model = WhisperModel(
     "small.en",
