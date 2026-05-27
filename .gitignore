@@ -6,9 +6,9 @@ __pycache__/
 # Virtual environments
 .sf-env/
 venv/
-.env
 
 # Environment variables
+.env
 .env.local
 
 # FastAPI / Backend
@@ -22,19 +22,19 @@ htmlcov/
 *.sqlite3
 
 # Audio / Video Files
+test_audio/
 *.wav
 *.mp3
 *.mp4
 *.m4a
 *.webm
-*.txt
 
-# Generated transcript outputs
+# Generated outputs
 transcripts/
 exports/
 
-# AI / ML
-models/
+# AI / ML Weights
+ml_models/
 checkpoints/
 hf_cache/
 .cache/
@@ -59,6 +59,10 @@ Thumbs.db
 # Docker
 docker-data/
 
-# Temporary
+# Temporary processing files
 tmp/
 temp/
+
+# Runtime generated transcripts
+*.srt
+*.vtt
