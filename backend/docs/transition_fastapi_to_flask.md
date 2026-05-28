@@ -65,15 +65,19 @@ Python environment with pytest-compatible smoke checks.
 2. Flask app factory smoke test added and executed:
    - backend/tests/test_app_bootstrap.py
 
-3. Heavy model tests made opt-in using RUN_HEAVY_TESTS:
+3. Upload route and worker bootstrap checks added:
+   - backend/tests/test_upload_route.py
+   - backend/tests/test_worker_bootstrap.py
+
+4. Heavy model tests made opt-in using RUN_HEAVY_TESTS:
    - backend/tests/test_whisper.py
    - backend/tests/test_diarization.py
    - backend/tests/test_pyannote.py
 
-4. Final pytest run:
-   - 2 passed, 3 skipped, 0 failures
+5. Final pytest run:
+   - 5 passed, 3 skipped, 0 failures
 
-5. Final FastAPI wording scan:
+6. Final FastAPI wording scan:
    - No FastAPI references in active code/docs/README/requirements
    - Only Phase 0 archives retain historical FastAPI mentions
 

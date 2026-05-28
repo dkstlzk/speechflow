@@ -12,7 +12,7 @@ pipelines, including transcript structures and SocketIO event contracts.
 Flow:
 
 Upload -> temp file -> FFmpeg normalize -> Whisper -> diarization
--> transcript alignment -> persistence -> summarization -> session complete
+-> transcript alignment -> persistence -> summarization -> session completed
 
 Step-by-step:
 
@@ -24,7 +24,12 @@ Step-by-step:
 6. Align Whisper segments with diarization regions.
 7. Persist transcript chunks and speaker mappings.
 8. Run summary, MOM, and action item extraction.
-9. Mark the session complete and return session_id.
+9. Mark the session completed and return session_id.
+
+Worker notes:
+
+- API returns session_id immediately and starts the worker thread.
+- Worker updates session status at each stage.
 
 ## Realtime Streaming Pipeline
 
@@ -98,7 +103,7 @@ Final session response:
 ```json
 {
   "session_id": 1,
-  "status": "complete",
+  "status": "completed",
   "transcript": [],
   "summary": "",
   "mom": {
@@ -113,7 +118,8 @@ Final session response:
 
 ## Session Lifecycle
 
-pending -> transcribing -> processing -> complete
+pending -> uploaded -> preprocessing -> transcribing -> diarizing
+-> processing -> completed
 
 Failure path:
 

@@ -47,10 +47,13 @@ implementation.
 - services/diarization/: pyannote segmentation.
 - services/summarization/: Ollama interaction and prompts.
 - services/persistence/: database writes and reads.
+- services/session/: session lifecycle helpers.
+- services/utils/: temp file management utilities.
 - workers/: background thread helpers.
 - models/: SQLAlchemy models.
 - schemas/: response payload shapes.
 - db/: SQLAlchemy base and session.
+- config/: settings, constants, and logging setup.
 
 ## Data Flow Overview
 
@@ -62,6 +65,15 @@ Streaming pipeline:
 
 MediaRecorder -> SocketIO -> Rolling Buffer + VAD -> Whisper -> DB
 -> Diarization -> Summary
+
+## Session Status Lifecycle
+
+pending -> uploaded -> preprocessing -> transcribing -> diarizing
+-> processing -> completed
+
+Failure path:
+
+pending -> failed
 
 ## Model Selection and Fallbacks
 

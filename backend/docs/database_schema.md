@@ -23,7 +23,7 @@ Tracks upload and streaming session lifecycle.
 | --- | --- | --- |
 | id | SERIAL | Primary key |
 | session_type | TEXT | upload or streaming |
-| status | TEXT | pending, transcribing, processing, complete, failed |
+| status | TEXT | pending, uploaded, preprocessing, transcribing, diarizing, processing, completed, failed |
 | original_filename | TEXT | uploaded filename (nullable) |
 | created_at | TIMESTAMP | session creation time |
 | updated_at | TIMESTAMP | last update time |
@@ -100,3 +100,8 @@ Stores action items extracted from sessions.
 - Streaming persists partial chunks with is_partial=true.
 - Finalization overwrites or supersedes partial chunks.
 - Session status transitions are updated on each pipeline stage.
+
+## Status Enumeration
+
+Statuses are centralized in models/enums.py for reuse across API, workers,
+and repositories.
