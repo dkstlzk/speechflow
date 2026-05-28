@@ -3,9 +3,11 @@ from flask_cors import CORS
 from flask_socketio import SocketIO
 
 from .api import register_blueprints
+from .config.logging import configure_logging
 from .config.settings import Settings
 from .websocket import register_socketio_events
 
+configure_logging()
 settings = Settings()
 socketio = SocketIO(
     cors_allowed_origins=settings.CORS_ORIGINS,
@@ -21,6 +23,8 @@ def create_app() -> Flask:
     app.config["EXPORT_DIR"] = settings.EXPORT_DIR
     app.config["TRANSCRIPTS_DIR"] = settings.TRANSCRIPTS_DIR
     app.config["MODEL_DIR"] = settings.MODEL_DIR
+    app.config["MAX_CONTENT_LENGTH"] = settings.MAX_CONTENT_LENGTH
+    app.config["ALLOWED_EXTENSIONS"] = settings.ALLOWED_EXTENSIONS
 
     CORS(app, resources={r"/api/*": {"origins": settings.CORS_ORIGINS}})
 

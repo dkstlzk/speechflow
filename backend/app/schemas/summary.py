@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Dict, List
 
 
@@ -7,3 +7,6 @@ class SummaryPayloadSchema:
     summary: str
     mom: Dict
     action_items: List[str]
+
+    def to_dict(self) -> dict:
+        return asdict(self)

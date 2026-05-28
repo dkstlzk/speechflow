@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Optional
 
 
@@ -9,3 +9,6 @@ class TranscriptChunkSchema:
     end: float
     text: str
     confidence: Optional[float] = None
+
+    def to_dict(self) -> dict:
+        return asdict(self)

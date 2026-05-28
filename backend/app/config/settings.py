@@ -1,6 +1,8 @@
 import os
 from dataclasses import dataclass
 
+from .constants import DEFAULT_ALLOWED_EXTENSIONS, DEFAULT_MAX_UPLOAD_MB
+
 
 @dataclass(frozen=True)
 class Settings:
@@ -15,3 +17,16 @@ class Settings:
     EXPORT_DIR: str = os.getenv("EXPORT_DIR", "exports")
     TRANSCRIPTS_DIR: str = os.getenv("TRANSCRIPTS_DIR", "transcripts")
     MODEL_DIR: str = os.getenv("MODEL_DIR", "ml_models")
+    TEMP_DIR: str = os.getenv("TEMP_DIR", "temp")
+    MAX_UPLOAD_MB: int = int(os.getenv("MAX_UPLOAD_MB", DEFAULT_MAX_UPLOAD_MB))
+    MAX_CONTENT_LENGTH: int = MAX_UPLOAD_MB * 1024 * 1024
+    ALLOWED_EXTENSIONS: tuple = tuple(
+        os.getenv(
+            "ALLOWED_EXTENSIONS",
+            ",".join(sorted(DEFAULT_ALLOWED_EXTENSIONS)),
+        ).split(",")
+    )
+    WHISPER_MODEL: str = os.getenv("WHISPER_MODEL", "small.en")
+    WHISPER_DEVICE: str = os.getenv("WHISPER_DEVICE", "cpu")
+    WHISPER_COMPUTE_TYPE: str = os.getenv("WHISPER_COMPUTE_TYPE", "int8")
+    LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")

@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import List, Optional
 
 from .transcript import TranscriptChunkSchema
@@ -12,3 +12,6 @@ class SessionResponseSchema:
     summary: str = ""
     mom: Optional[dict] = None
     action_items: Optional[list] = None
+
+    def to_dict(self) -> dict:
+        return asdict(self)
