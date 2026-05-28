@@ -9,9 +9,9 @@ venv/
 
 # Environment variables
 .env
-.env.local
+.env.*
 
-# FastAPI / Backend
+# Backend
 *.log
 .pytest_cache/
 .coverage
@@ -28,13 +28,17 @@ test_audio/
 *.mp4
 *.m4a
 *.webm
+*.pdf
 
 # Generated outputs
-transcripts/
-exports/
+transcripts/*
+!transcripts/.gitkeep
+exports/*
+!exports/.gitkeep
 
 # AI / ML Weights
-ml_models/
+ml_models/*
+!ml_models/.gitkeep
 checkpoints/
 hf_cache/
 .cache/
@@ -61,7 +65,8 @@ docker-data/
 
 # Temporary processing files
 tmp/
-temp/
+temp/*
+!temp/.gitkeep
 
 # Runtime generated transcripts
 *.srt

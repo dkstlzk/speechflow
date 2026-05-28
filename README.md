@@ -1,226 +1,141 @@
 # SpeechFlow
 
-SpeechFlow is a full-stack speech-to-text and intelligent transcript processing system focused on realtime and upload-based conversational transcription.
+SpeechFlow is a Flask-first speech-to-text and intelligent transcript processing MVP.
+It supports upload transcription and realtime streaming with local CPU-only models.
 
-The system supports:
-- realtime microphone transcription
-- MP3/MP4 upload transcription
-- speaker-aware transcript generation
-- transcript persistence and session history
-- AI-generated summaries and structured meeting insights
+## MVP Scope
 
-The MVP is designed as a CPU-first, backend-oriented architecture prioritizing:
-- functional correctness
-- realtime feasibility
-- scalable transcript persistence
-- structured conversational intelligence
+- MP3/MP4/WAV upload transcription
+- Realtime microphone streaming with live captions
+- Speaker diarization
+- Transcript persistence and session history
+- Summary, MOM, and action items
+- TXT/JSON export
 
----
+## Architecture (MVP)
 
-# Core Features
+```mermaid
+flowchart LR
+  U[Upload file] --> P[FFmpeg normalize]
+  S[WebSocket stream] --> B[Rolling buffer + VAD]
+  P --> W[Whisper inference]
+  B --> W
+  W --> D[pyannote diarization]
+  D --> A[Transcript alignment]
+  A --> DB[(PostgreSQL)]
+  DB --> L[Ollama summary + MOM + actions]
+```
 
-## Realtime Streaming Transcription
+## Tech Stack
 
-- Browser microphone streaming
-- WebSocket-based audio transport
-- Rolling Whisper inference
-- Live caption generation
-- Incremental transcript persistence
-- Post-session speaker diarization
-
----
-
-## Upload-Based Transcription
-
-- MP3 / WAV / MP4 upload support
-- FFmpeg preprocessing pipeline
-- Audio normalization (16kHz mono WAV)
-- Timestamped transcript generation
-- Speaker-aware transcript reconstruction
-
----
-
-## Intelligent Transcript Processing
-
-- Meeting summary generation
-- Minutes of Meeting (MOM)
-- Action item extraction
-- Structured conversational insights
-
----
-
-# Tech Stack
-
-## Backend
-
-- FastAPI
-- PostgreSQL
-- WebSockets
+Backend:
+- Flask
+- Flask-SocketIO
 - SQLAlchemy
-- FFmpeg
+- PostgreSQL
 
----
-
-## Speech & Audio
+Speech:
 - faster-whisper
-- pyannote.audio
 - Silero VAD
+- pyannote.audio
 
----
+Audio:
+- FFmpeg
+- pydub
 
-## Intelligent Processing
-
+LLM:
 - Ollama
 - phi3:mini
+- llama3.2 fallback
+- bart-large-cnn fallback
 
----
+Frontend:
+- React + Vite
 
-## Frontend
-
-- React
-- Vite
-
----
-
-# System Architecture
-
-## Upload Pipeline
-
-```text
-Upload
-→ FFmpeg preprocessing
-→ Whisper transcription
-→ Speaker segmentation
-→ Transcript-speaker alignment
-→ Transcript persistence
-→ Summary + action extraction
-```
-
----
-
-## Streaming Pipeline
-
-```text
-Browser microphone
-→ MediaRecorder chunks
-→ WebSocket streaming
-→ Backend ring buffer
-→ Silero VAD
-→ Rolling Whisper inference
-→ Incremental transcript persistence
-→ Post-session diarization
-→ Summary generation
-```
-
----
-
-# Current Project Status
-
-Current Phase:
-- Phase 0 completed
-- infrastructure validation completed
-- CPU feasibility benchmarking completed
-- backend architecture finalized
-
-Upcoming Work:
-- upload transcription APIs
-- transcript persistence layer
-- realtime WebSocket pipeline
-- frontend integration
-
----
-
-# Current Repository Structure
+## Repository Structure
 
 ```text
 speechflow/
-│
-├── backend/
-│   ├── app/
-│   │   ├── db/
-│   │   ├── models/
-│   │   ├── routers/
-│   │   ├── schemas/
-│   │   ├── services/
-│   │   ├── utils/
-│   │   └── main.py
-│   │
-│   ├── docs/
-│   └── tests/
-│
-├── docs/
-├── frontend/
-├── ml_models/
-├── temp/
-├── test_audio/
-├── transcripts/
-├── exports/
-│
-├── README.md
-├── LICENSE
-├── pyproject.toml
-└── .gitignore
+  backend/
+    app/
+      api/
+      websocket/
+      services/
+        audio/
+        transcription/
+        diarization/
+        summarization/
+        persistence/
+      models/
+      schemas/
+      utils/
+      config/
+      workers/
+      db/
+    requirements/
+    tests/
+    docs/
+  frontend/
+  scripts/
+  docker/
 ```
 
----
+## Local Setup
 
-# Backend Architecture
+### Prerequisites
 
-## Routers
+- Python 3.10+
+- FFmpeg installed and on PATH
+- PostgreSQL running locally
+- Ollama installed locally
+- HuggingFace token for pyannote
 
-API layer only:
-- upload routes
-- websocket routes
-- session APIs
-- action item APIs
+### Environment Variables
 
----
+- DATABASE_URL
+- HF_TOKEN
+- OLLAMA_HOST (optional)
+- SECRET_KEY (optional)
 
-## Services
+### Backend
 
-Core business logic:
-- Whisper inference
-- diarization
-- transcript alignment
-- FFmpeg preprocessing
-- streaming orchestration
-- summary generation
+```bash
+pip install -r backend/requirements/base.txt
+python -m backend.app.main
+```
 
----
+### Frontend
 
-## Database Layer
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
-Handles:
-- session persistence
-- transcript chunk storage
-- speaker mappings
-- summaries
-- action items
+## Docs
 
----
+- backend/docs/architecture.md
+- backend/docs/pipeline_flow.md
+- backend/docs/database_schema.md
+- backend/docs/archive/phase0 (legacy reference)
 
-# Constraints
+## Roadmap
 
-- CPU-only development
-- local inference only
-- English-only MVP
-- realtime latency target: 4–6 seconds
+- Phase 0 complete (research, benchmarks, feasibility)
+- Phase 1 current: upload pipeline implementation
+- Phase 2: realtime streaming pipeline
+- Phase 3: session history and exports
 
----
+## Known Limitations
 
-# Future Improvements
+- CPU latency can exceed realtime targets on long sessions
+- Diarization quality depends on input audio quality
+- Local LLM context limits require chunking for long transcripts
 
-Planned future enhancements:
-- GPU acceleration
-- semantic transcript search
-- vector embeddings
-- streaming diarization
-- transcript export formats
-- speaker renaming
-- long-session optimization
+## Docker
 
----
+Docker support will be added after the local stack is stable.
 
-# License
+## License
 
 MIT License
