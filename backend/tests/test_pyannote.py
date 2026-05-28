@@ -1,18 +1,24 @@
-from pyannote.audio import Pipeline
-from dotenv import load_dotenv
 import os
 
-load_dotenv(".env")
+import pytest
 
-token = os.getenv("HF_TOKEN")
 
-print("Loaded token:", token[:10] + "...")
-
-print("Loading pyannote pipeline...")
-
-pipeline = Pipeline.from_pretrained(
-    "pyannote/speaker-diarization-3.1",
-    token=token
+pytestmark = pytest.mark.skipif(
+    not os.getenv("RUN_HEAVY_TESTS"),
+    reason="Set RUN_HEAVY_TESTS=1 to run model smoke tests.",
 )
 
-print("Pipeline loaded successfully!")
+
+def test_pyannote_pipeline_loads():
+    token = os.getenv("HF_TOKEN")
+    if not token:
+        pytest.skip("Missing HF_TOKEN for pyannote")
+
+    from pyannote.audio import Pipeline
+
+    pipeline = Pipeline.from_pretrained(
+        "pyannote/speaker-diarization-3.1",
+        token=token,
+    )
+
+    assert pipeline is not None

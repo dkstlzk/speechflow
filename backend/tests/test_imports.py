@@ -1,18 +1,19 @@
-print("Testing imports...")
+import importlib
 
-import torch
-print("torch OK")
 
-from faster_whisper import WhisperModel
-print("faster-whisper OK")
+def test_core_imports():
+	modules = [
+		"torch",
+		"faster_whisper",
+		"flask",
+		"flask_socketio",
+		"silero_vad",
+		"pyannote.audio",
+		"pydub",
+		"ollama",
+		"sqlalchemy",
+		"psycopg2",
+	]
 
-from fastapi import FastAPI
-print("fastapi OK")
-
-from silero_vad import load_silero_vad
-print("silero-vad OK")
-
-from pyannote.audio import Pipeline
-print("pyannote OK")
-
-print("ALL IMPORTS SUCCESSFUL")
+	for module in modules:
+		importlib.import_module(module)

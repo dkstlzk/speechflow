@@ -1,23 +1,23 @@
-from faster_whisper import WhisperModel
-import time
+import os
+from pathlib import Path
 
-AUDIO_PATH = "./test_audio/meeting.mp4"
+import pytest
 
-model = WhisperModel(
-    "small.en",
-    device="cpu",
-    compute_type="int8"
+
+pytestmark = pytest.mark.skipif(
+    not os.getenv("RUN_HEAVY_TESTS"),
+    reason="Set RUN_HEAVY_TESTS=1 to run model smoke tests.",
 )
 
-start = time.time()
 
-segments, info = model.transcribe(AUDIO_PATH)
+def test_whisper_smoke():
+    audio_path = Path("test_audio/meeting.mp4")
+    if not audio_path.exists():
+        pytest.skip("Missing test_audio/meeting.mp4")
 
-for segment in segments:
-    print(
-        f"[{segment.start:.2f}s -> {segment.end:.2f}s] {segment.text}"
-    )
+    from faster_whisper import WhisperModel
 
-end = time.time()
+    model = WhisperModel("small.en", device="cpu", compute_type="int8")
+    segments, _ = model.transcribe(str(audio_path))
 
-print(f"\nTime taken: {end - start:.2f} seconds")
+    assert segments is not None

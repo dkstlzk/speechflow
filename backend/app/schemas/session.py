@@ -1,0 +1,14 @@
+from dataclasses import dataclass
+from typing import List, Optional
+
+from .transcript import TranscriptChunkSchema
+
+
+@dataclass
+class SessionResponseSchema:
+    session_id: int
+    status: str
+    transcript: List[TranscriptChunkSchema]
+    summary: str = ""
+    mom: Optional[dict] = None
+    action_items: Optional[list] = None

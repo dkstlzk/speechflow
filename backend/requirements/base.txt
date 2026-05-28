@@ -1,0 +1,13 @@
+Flask
+Flask-SocketIO
+Flask-Cors
+SQLAlchemy
+psycopg2-binary
+python-dotenv
+faster-whisper
+torch
+pyannote.audio
+silero-vad
+pydub
+ollama
+simple-websocket
