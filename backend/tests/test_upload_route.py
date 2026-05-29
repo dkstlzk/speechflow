@@ -7,8 +7,10 @@ def test_upload_requires_file(client):
     payload = response.get_json()
     assert payload["success"] is False
 
-
-def test_upload_accepts_file(client):
+def test_upload_accepts_file(client, monkeypatch):
+    monkeypatch.setattr(
+        "backend.app.api.upload.start_upload_pipeline", lambda *_args, **_kwargs: None
+    )
     data = {"file": (io.BytesIO(b"dummy"), "sample.wav")}
     response = client.post("/api/upload/", data=data, content_type="multipart/form-data")
     assert response.status_code == 202

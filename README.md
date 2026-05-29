@@ -123,6 +123,7 @@ npm run dev
 - backend/docs/worker_lifecycle.md
 - backend/docs/transition_fastapi_to_flask.md
 - backend/docs/phase1/day4_notes.md
+- backend/docs/phase1/day5_notes.md
 - backend/docs/archive/phase0 (legacy reference)
 
 ## Roadmap

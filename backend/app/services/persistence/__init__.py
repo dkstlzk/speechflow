@@ -5,7 +5,7 @@ from .session_repository import update_session_status as update_session_record
 from .sessions import create_session, update_session_status
 from .summaries import get_summary, save_summary
 from .transcript_repository import bulk_insert_chunks, create_transcript_chunk
-from .transcripts import save_transcript_chunks
+from .transcripts import save_transcript_chunks, save_transcript_segments
 
 __all__ = [
 	"create_session",
@@ -14,6 +14,7 @@ __all__ = [
 	"update_session_record",
 	"get_session_by_id",
 	"save_transcript_chunks",
+	"save_transcript_segments",
 	"create_transcript_chunk",
 	"bulk_insert_chunks",
 	"save_action_items",

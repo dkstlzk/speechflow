@@ -12,6 +12,7 @@ LOGGER_NAMES = {
     "diarization": "diarization",
     "summarization": "summarization",
     "persistence": "persistence",
+    "session": "session",
     "websocket": "websocket",
     "workers": "workers",
 }

@@ -21,10 +21,12 @@ class Settings:
     MAX_UPLOAD_MB: int = int(os.getenv("MAX_UPLOAD_MB", DEFAULT_MAX_UPLOAD_MB))
     MAX_CONTENT_LENGTH: int = MAX_UPLOAD_MB * 1024 * 1024
     ALLOWED_EXTENSIONS: tuple = tuple(
-        os.getenv(
+        ext.strip()
+        for ext in os.getenv(
             "ALLOWED_EXTENSIONS",
             ",".join(sorted(DEFAULT_ALLOWED_EXTENSIONS)),
         ).split(",")
+        if ext.strip()
     )
     WHISPER_MODEL: str = os.getenv("WHISPER_MODEL", "small.en")
     WHISPER_DEVICE: str = os.getenv("WHISPER_DEVICE", "cpu")

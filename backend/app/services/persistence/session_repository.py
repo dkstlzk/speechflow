@@ -3,6 +3,7 @@
 from typing import Optional
 
 from sqlalchemy.orm import Session
+from sqlalchemy.sql import func
 
 from ...models.enums import SessionStatus
 from ...models.session import Session as SessionModel
@@ -36,6 +37,8 @@ def update_session_status(
 
     session.status = status
     session.processing_error = error
+    if status in (SessionStatus.COMPLETED, SessionStatus.FAILED):
+        session.completed_at = func.now()
     db.add(session)
     db.commit()
     db.refresh(session)

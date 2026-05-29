@@ -105,3 +105,7 @@ Stores action items extracted from sessions.
 
 Statuses are centralized in models/enums.py for reuse across API, workers,
 and repositories.
+
+Phase 1 uses the subset:
+
+pending -> preprocessing -> transcribing -> completed (or failed)

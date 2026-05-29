@@ -69,15 +69,21 @@ Python environment with pytest-compatible smoke checks.
    - backend/tests/test_upload_route.py
    - backend/tests/test_worker_bootstrap.py
 
-4. Heavy model tests made opt-in using RUN_HEAVY_TESTS:
+4. Phase 1 pipeline scaffolding validation added:
+   - backend/tests/test_ffmpeg_service.py
+   - backend/tests/test_transcription_service.py
+   - backend/tests/test_persistence_flow.py
+   - backend/tests/test_worker_execution.py
+
+5. Heavy model tests made opt-in using RUN_HEAVY_TESTS:
    - backend/tests/test_whisper.py
    - backend/tests/test_diarization.py
    - backend/tests/test_pyannote.py
 
-5. Final pytest run:
-   - 5 passed, 3 skipped, 0 failures
+6. Final pytest run:
+   - 9 passed, 3 skipped, 0 failures
 
-6. Final FastAPI wording scan:
+7. Final FastAPI wording scan:
    - No FastAPI references in active code/docs/README/requirements
    - Only Phase 0 archives retain historical FastAPI mentions
 

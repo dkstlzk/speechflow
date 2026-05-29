@@ -17,8 +17,7 @@ blocking Flask request handlers.
 
 ## Stage Transitions
 
-pending -> uploaded -> preprocessing -> transcribing -> diarizing
--> processing -> completed
+pending -> preprocessing -> transcribing -> completed
 
 Failure path:
 
@@ -32,5 +31,5 @@ pending -> failed
 
 ## Stop Condition
 
-This worker lifecycle intentionally stops before actual inference logic.
-Implementation begins in Day 5.
+This worker lifecycle intentionally stops before diarization and
+post-processing logic. Phase 1 ends after transcription persistence.

@@ -59,7 +59,10 @@ implementation.
 
 Upload pipeline:
 
-Upload -> FFmpeg -> Whisper -> Diarization -> Alignment -> DB -> Summary
+Upload -> FFmpeg -> Whisper -> DB
+
+Phase 1 ends after transcription persistence. Diarization and summaries
+resume in later phases.
 
 Streaming pipeline:
 
@@ -68,8 +71,11 @@ MediaRecorder -> SocketIO -> Rolling Buffer + VAD -> Whisper -> DB
 
 ## Session Status Lifecycle
 
-pending -> uploaded -> preprocessing -> transcribing -> diarizing
--> processing -> completed
+Phase 1 subset:
+
+pending -> preprocessing -> transcribing -> completed
+
+Future phases expand the lifecycle with uploaded, diarizing, and processing.
 
 Failure path:
 

@@ -11,8 +11,8 @@ pipelines, including transcript structures and SocketIO event contracts.
 
 Flow:
 
-Upload -> temp file -> FFmpeg normalize -> Whisper -> diarization
--> transcript alignment -> persistence -> summarization -> session completed
+Upload -> temp file -> FFmpeg normalize -> Whisper -> persistence
+-> session completed
 
 Step-by-step:
 
@@ -20,11 +20,11 @@ Step-by-step:
 2. Save the file into temp/ for preprocessing.
 3. Normalize to 16kHz mono WAV using FFmpeg.
 4. Run faster-whisper on the normalized WAV.
-5. Run pyannote diarization on the full audio file.
-6. Align Whisper segments with diarization regions.
-7. Persist transcript chunks and speaker mappings.
-8. Run summary, MOM, and action item extraction.
-9. Mark the session completed and return session_id.
+5. Persist transcript chunks with ordered timestamps.
+6. Mark the session completed and return session_id.
+
+Phase 1 scope stops here. Diarization and summarization are planned for
+later phases.
 
 Worker notes:
 
@@ -118,8 +118,7 @@ Final session response:
 
 ## Session Lifecycle
 
-pending -> uploaded -> preprocessing -> transcribing -> diarizing
--> processing -> completed
+pending -> preprocessing -> transcribing -> completed
 
 Failure path:
 
