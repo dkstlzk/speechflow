@@ -1,9 +1,11 @@
 from typing import Dict, Iterable, List
 
+from .whisper_service import WhisperTranscriptionService
+
 
 def transcribe_file(audio_path: str) -> List[Dict]:
-    # TODO: run faster-whisper on normalized WAV and return segments.
-    return []
+    service = WhisperTranscriptionService()
+    return service.transcribe(audio_path).segments
 
 
 def transcribe_stream(chunks: Iterable[bytes]) -> List[Dict]:

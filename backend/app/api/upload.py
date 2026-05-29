@@ -34,7 +34,7 @@ def upload_audio():
         extra={"session_id": session_context.session_id, "filename": filename},
     )
 
-    start_upload_pipeline(session_context, str(temp_path))
+    start_upload_pipeline(session_context.session_id, str(temp_path))
 
     payload = UploadResponseSchema(
         session_id=session_context.session_id,
