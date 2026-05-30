@@ -4,32 +4,66 @@ Date: 28/05/2026
 
 ## Objective
 
-Describe the threaded worker lifecycle used to process uploads without
-blocking Flask request handlers.
+Describe the finalized threaded lifecycle used for Phase 1 upload processing.
 
-## Upload Worker Flow
+## Worker Model
 
-1. API receives upload and saves temp file.
-2. API creates a session and returns session_id immediately.
-3. Worker thread starts pipeline execution.
-4. Worker updates session status after each stage.
-5. Worker persists results and marks completion.
+- Upload requests return quickly with `session_id`.
+- Processing runs in daemon background threads.
+- The worker owns stage transitions and persistence writes.
 
 ## Stage Transitions
 
-pending -> preprocessing -> transcribing -> completed
+Primary path:
+
+`pending -> preprocessing -> transcribing -> diarizing -> processing -> completed`
 
 Failure path:
 
-pending -> failed
+`preprocessing|transcribing|diarizing|processing -> failed`
 
-## Logging Requirements
+## Stage Responsibilities
 
-- Log each stage transition with session_id.
-- Log failures with stack traces and error details.
-- Separate log namespaces for upload and worker modules.
+1. `preprocessing`
+- Convert source media into normalized WAV using FFmpeg.
 
-## Stop Condition
+2. `transcribing`
+- Run faster-whisper and generate ordered transcript segments.
 
-This worker lifecycle intentionally stops before diarization and
-post-processing logic. Phase 1 ends after transcription persistence.
+3. `diarizing`
+- Run pyannote and produce speaker intervals.
+
+4. `processing`
+- Align transcript to diarization output.
+- Resolve speaker IDs.
+- Persist speaker-labeled transcript chunks.
+
+5. `completed`
+- Mark lifecycle completion and make retrieval available.
+
+## Failure Handling
+
+- Any unhandled exception marks the session `failed`.
+- Error details are written to `processing_error`.
+- Failure logging includes `session_id` context.
+
+## Cleanup Guarantees
+
+Worker always attempts cleanup in `finally`:
+
+- uploaded temp file
+- preprocessed WAV artifact
+
+This applies to both successful and failed runs.
+
+## Determinism and Safety
+
+- Alignment is deterministic for the same transcript and diarization inputs.
+- Transcript persistence is replacement-based per session to prevent duplicate
+  chunk accumulation on retries.
+- Retrieval order is deterministic and reproducible.
+
+## Phase Boundary
+
+Worker lifecycle for Phase 1 ends after transcript persistence and completion.
+No streaming, summarization, or Phase 2 orchestration is triggered here.

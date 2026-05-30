@@ -107,6 +107,32 @@ pip install -r backend/requirements/base.txt
 python -m backend.app.main
 ```
 
+### Python Cache Hygiene (Optional, Dev Only)
+
+Python creates `__pycache__` and `.pyc` files to speed up imports. They are
+ignored in git for a cleaner repo.
+
+- Disable bytecode generation for the current shell session:
+
+```bash
+source scripts/dev-bytecode-off.sh
+```
+
+- Clean generated cache artifacts safely (without touching `.git` or virtualenvs):
+
+```bash
+./scripts/clean-python-cache.sh
+```
+
+- Manual equivalents:
+
+```bash
+find . \( -path "./.git" -o -path "./.sf-env" -o -path "./.venv" -o -path "./venv" -o -path "./env" \) -prune -o -type d -name "__pycache__" -exec rm -rf {} +
+find . \( -path "./.git" -o -path "./.sf-env" -o -path "./.venv" -o -path "./venv" -o -path "./env" \) -prune -o -type f \( -name "*.pyc" -o -name "*.pyo" \) -delete
+```
+
+These are local developer workflows only and are not required for production.
+
 ### Frontend
 
 ```bash

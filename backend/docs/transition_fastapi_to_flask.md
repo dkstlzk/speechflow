@@ -81,7 +81,7 @@ Python environment with pytest-compatible smoke checks.
    - backend/tests/test_pyannote.py
 
 6. Final pytest run:
-   - 9 passed, 3 skipped, 0 failures
+   - 13 passed, 3 skipped, 0 failures
 
 7. Final FastAPI wording scan:
    - No FastAPI references in active code/docs/README/requirements

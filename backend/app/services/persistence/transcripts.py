@@ -6,9 +6,17 @@ from .transcript_repository import bulk_insert_chunks
 
 def save_transcript_chunks(session_id: int, chunks: List[Dict]) -> None:
     """Persist transcript chunks with chunk_index ordering."""
+    payloads = []
+    for chunk in chunks:
+        payload = dict(chunk)
+        payload.setdefault("session_id", session_id)
+        if payload["session_id"] != session_id:
+            raise ValueError("chunk session_id does not match save target session_id")
+        payloads.append(payload)
+
     db = SessionLocal()
     try:
-        bulk_insert_chunks(db, chunks)
+        bulk_insert_chunks(db, payloads)
     finally:
         db.close()
 

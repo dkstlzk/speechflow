@@ -4,128 +4,86 @@ Date: 28/05/2026
 
 ## Objective
 
-Provide a detailed, implementation-ready reference for upload and streaming
-pipelines, including transcript structures and SocketIO event contracts.
+Define the finalized Phase 1 upload execution flow and transcript
+reconstruction behavior.
 
-## Upload Pipeline
+## Phase 1 Upload Flow
 
-Flow:
+`Upload -> temp file -> FFmpeg -> Whisper -> pyannote -> alignment -> persistence -> completed`
 
-Upload -> temp file -> FFmpeg normalize -> Whisper -> persistence
--> session completed
+### Step-by-step
 
-Step-by-step:
+1. `POST /api/upload/` receives multipart audio and creates a session record.
+2. File is saved to `TEMP_DIR`.
+3. Worker thread starts and marks session `preprocessing`.
+4. FFmpeg normalizes audio to 16kHz mono WAV.
+5. Worker marks `transcribing` and runs faster-whisper.
+6. Worker marks `diarizing` and runs pyannote diarization.
+7. Alignment service maps Whisper segments to speaker intervals.
+8. Worker marks `processing` and persists speaker-labeled chunks.
+9. Session transitions to `completed`.
 
-1. Receive multipart upload and create a session row.
-2. Save the file into temp/ for preprocessing.
-3. Normalize to 16kHz mono WAV using FFmpeg.
-4. Run faster-whisper on the normalized WAV.
-5. Persist transcript chunks with ordered timestamps.
-6. Mark the session completed and return session_id.
+## Alignment Behavior (Final)
 
-Phase 1 scope stops here. Diarization and summarization are planned for
-later phases.
+- Inputs are normalized and sorted deterministically.
+- Speaker overlap is scored by total overlap per speaker label.
+- Speaker switches require meaningful overlap strength.
+- Tiny ambiguous overlaps use hysteresis to avoid rapid speaker jitter.
+- Empty diarization output falls back to default speaker labeling.
+- Single-speaker diarization remains stable across timestamp gaps.
 
-Worker notes:
+## Persistence Behavior (Final)
 
-- API returns session_id immediately and starts the worker thread.
-- Worker updates session status at each stage.
+- Transcript rows are persisted with fields:
+  - `session_id`
+  - `speaker_id`
+  - `start_time`
+  - `end_time`
+  - `text`
+  - `chunk_index`
+  - `is_partial`
+- Worker uses session-level chunk replacement on reruns to avoid duplicate
+  transcript rows.
 
-## Realtime Streaming Pipeline
+## Retrieval Flow
 
-Flow:
+Endpoint:
 
-MediaRecorder -> SocketIO -> rolling buffer + VAD -> rolling Whisper
--> partial transcript persistence -> stream end -> diarization -> summary
+`GET /api/sessions/<id>/transcript`
 
-Step-by-step:
-
-1. Client opens SocketIO connection and emits stream_start.
-2. Server creates a streaming session and prepares the rolling buffer.
-3. Client emits audio_chunk events at a fixed interval.
-4. Server appends chunks to buffer and runs VAD gating.
-5. Rolling Whisper inference yields partial transcript chunks.
-6. Server emits partial_transcript updates for live captions.
-7. Client emits stream_end to finalize the session.
-8. Server runs diarization, summarization, and final persistence.
-
-## SocketIO Event Contract
-
-Client -> Server:
-
-- stream_start: begins a streaming session.
-  - payload: session metadata, sample_rate, channel_count
-- audio_chunk: raw audio bytes plus chunk_index.
-- stream_end: finalize streaming session.
-
-Server -> Client:
-
-- stream_ack: session started.
-  - payload: session_id
-- partial_transcript: rolling caption updates.
-  - payload: chunk_index, text, partial=true
-- stream_complete: session finalized.
-  - payload: session_id
-
-## Rolling Window Guidance
-
-- Use short chunks (500ms to 1s) for low latency.
-- Keep a rolling window of 10s to 20s for context.
-- Persist partial chunks with is_partial=true, then overwrite on finalize.
-
-## Transcript Structures
-
-Final transcript chunk:
+Response:
 
 ```json
 {
-  "speaker": "SPEAKER_00",
-  "start": 12.5,
-  "end": 15.8,
-  "text": "Today we finalized the backend architecture.",
-  "confidence": null
-}
-```
-
-Partial streaming chunk:
-
-```json
-{
-  "partial": true,
-  "chunk_index": 14,
-  "text": "Today we finalized",
-  "timestamp": 1716812
-}
-```
-
-Final session response:
-
-```json
-{
-  "session_id": 1,
+  "session_id": "1",
   "status": "completed",
-  "transcript": [],
-  "summary": "",
-  "mom": {
-    "attendees": [],
-    "key_points": [],
-    "decisions": [],
-    "next_steps": []
-  },
-  "action_items": []
+  "transcript": [
+    {
+      "speaker": "SPEAKER_00",
+      "start": 0.0,
+      "end": 1.0,
+      "text": "hello",
+      "order": 0
+    }
+  ]
 }
 ```
 
-## Session Lifecycle
+Ordering rule for reconstruction:
 
-pending -> preprocessing -> transcribing -> completed
+`chunk_index -> start_time -> end_time -> row_id`
 
-Failure path:
+## Failure and Cleanup
 
-pending -> failed
+- Any stage exception updates the session to `failed` with `processing_error`.
+- Worker always executes cleanup for original upload and generated WAV artifacts.
 
-## Cleanup and Failure Handling
+## Phase Boundary
 
-- Always delete temp files after success or failure.
-- Store processing_error on session failure for debugging.
-- Persist partial chunks during streaming and finalize after diarization.
+This flow intentionally stops at Phase 1 completion.
+
+Not included here:
+
+- Realtime websocket microphone streaming
+- VAD-gated live chunking
+- Summaries and action-item extraction

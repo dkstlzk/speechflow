@@ -4,96 +4,88 @@ Date: 28/05/2026
 
 ## Objective
 
-Define the Flask-native, CPU-only architecture for SpeechFlow and describe the
-core components, execution model, and system boundaries that guide Phase 1
-implementation.
+Document the finalized Phase 1 backend architecture for the upload transcription
+pipeline in Flask.
 
-## MVP Scope
+## Phase 1 Status
 
-- Upload transcription for MP3/MP4/WAV
-- Realtime streaming with live captions
-- Speaker diarization and alignment
-- Transcript persistence and session history
-- Summary, MOM, and action item extraction
-- TXT/JSON export
+PHASE 1 — Upload Transcription Pipeline is complete.
+
+Implemented scope:
+
+- Upload API (multipart audio)
+- FFmpeg preprocessing (16kHz mono WAV)
+- faster-whisper CPU transcription
+- pyannote diarization
+- Whisper to diarization alignment
+- Speaker-labeled transcript persistence
+- Ordered transcript retrieval API
+- Threaded worker orchestration with lifecycle tracking
+
+Out of scope for Phase 1:
+
+- Realtime websocket streaming
+- VAD-gated live transcription
+- Summarization and action-item extraction
 
 ## Core Components
 
 | Component | Responsibility |
 | --- | --- |
-| Flask | HTTP API layer (upload, sessions, actions) |
-| Flask-SocketIO | Realtime streaming and caption events |
-| SQLAlchemy | ORM and persistence mapping |
-| PostgreSQL | Session and transcript storage |
-| FFmpeg | Audio normalization (16kHz mono WAV) |
-| faster-whisper | Speech-to-text inference |
-| Silero VAD | Speech activity gating for streaming |
+| Flask | HTTP API for upload and transcript retrieval |
+| SQLAlchemy | ORM and repository-backed persistence |
+| PostgreSQL | Session, speaker, and transcript chunk storage |
+| FFmpeg | Audio normalization pipeline |
+| faster-whisper | CPU transcription engine |
 | pyannote.audio | Speaker diarization |
-| Ollama | Summary, MOM, and action extraction |
+| Background worker threads | Non-blocking upload pipeline execution |
 
-## Execution Model
+## Modular Boundaries
 
-- Flask handles API calls synchronously.
-- Flask-SocketIO runs in threading mode for realtime events.
-- Long-running work uses background threads, not async frameworks.
-- No Celery/Redis for MVP unless blocking becomes unmanageable.
+- `api/`: upload and sessions endpoints
+- `workers/`: threaded orchestration and stage transitions
+- `services/audio/`: FFmpeg preprocessing wrappers
+- `services/transcription/`: Whisper service and alignment logic
+- `services/diarization/`: pyannote integration layer
+- `services/persistence/`: session/speaker/chunk repositories
+- `services/session/`: transcript retrieval assembly
+- `models/`: SQLAlchemy entities (`Session`, `Speaker`, `TranscriptChunk`)
+- `db/`: engine/session bootstrap
+- `config/`: runtime settings and logging
 
-## Service Boundaries (Repo Mapping)
+## Finalized Upload Pipeline
 
-- api/: Flask Blueprints for upload, sessions, and actions.
-- websocket/: SocketIO event handlers and streaming contract.
-- services/audio/: FFmpeg preprocessing helpers.
-- services/transcription/: Whisper inference and rolling buffer.
-- services/diarization/: pyannote segmentation.
-- services/summarization/: Ollama interaction and prompts.
-- services/persistence/: database writes and reads.
-- services/session/: session lifecycle helpers.
-- services/utils/: temp file management utilities.
-- workers/: background thread helpers.
-- models/: SQLAlchemy models.
-- schemas/: response payload shapes.
-- db/: SQLAlchemy base and session.
-- config/: settings, constants, and logging setup.
+`Upload -> FFmpeg -> Whisper -> Diarization -> Alignment -> Persistence -> Retrieval`
 
-## Data Flow Overview
+Stage lifecycle:
 
-Upload pipeline:
+`pending -> preprocessing -> transcribing -> diarizing -> processing -> completed`
 
-Upload -> FFmpeg -> Whisper -> DB
+Failure lifecycle:
 
-Phase 1 ends after transcription persistence. Diarization and summaries
-resume in later phases.
+`<current_stage> -> failed`
 
-Streaming pipeline:
+## Transcript Contract
 
-MediaRecorder -> SocketIO -> Rolling Buffer + VAD -> Whisper -> DB
--> Diarization -> Summary
+Final transcript chunks are persisted and reconstructed in chronological order
+with this shape:
 
-## Session Status Lifecycle
+```json
+{
+  "speaker": "SPEAKER_00",
+  "start": 0.0,
+  "end": 1.7,
+  "text": "example utterance",
+  "order": 0
+}
+```
 
-Phase 1 subset:
+## Stability Notes
 
-pending -> preprocessing -> transcribing -> completed
-
-Future phases expand the lifecycle with uploaded, diarizing, and processing.
-
-Failure path:
-
-pending -> failed
-
-## Model Selection and Fallbacks
-
-- faster-whisper uses small or base models with int8 for CPU-friendly speed.
-- pyannote requires a HuggingFace token and runs locally.
-- Ollama uses phi3:mini as primary with llama3.2 or bart-large-cnn fallback.
-
-## Known Risks and Mitigations
-
-- CPU latency may exceed realtime targets on long sessions.
-  - Mitigation: smaller Whisper models, int8, VAD gating, shorter windows.
-- Diarization quality drops on noisy audio.
-  - Mitigation: enforce preprocessing and encourage clean inputs.
-- Long transcripts exceed local LLM context.
-  - Mitigation: chunk summaries and combine outputs.
-- Streaming chunk order can drift.
-  - Mitigation: enforce chunk_index ordering and timestamps.
+- Alignment uses conservative overlap thresholds and speaker-switch hysteresis to
+  reduce unstable speaker flips on tiny overlaps.
+- Transcript chunks are replaced per session on worker reruns to avoid
+  persistence duplication.
+- Retrieval enforces deterministic ordering by chunk index and timestamps.
+- Worker cleanup removes temporary input and intermediate WAV files in both
+  success and failure paths.

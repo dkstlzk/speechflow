@@ -4,108 +4,89 @@ Date: 28/05/2026
 
 ## Objective
 
-Define a PostgreSQL schema that supports upload and streaming sessions,
-chunk-based transcript persistence, diarization, and post-session
-intelligence outputs.
+Capture the finalized persistence model used by the Phase 1 upload
+transcription pipeline.
 
-## Core Design Principles
+## Design Principles
 
-- Each upload or streaming run is a session.
-- Transcripts are stored incrementally as ordered chunks.
-- Chunk ordering relies on chunk_index or timestamps, not insertion order.
-- Upload and streaming pipelines share the same persistence model.
+- Session-centric lifecycle tracking.
+- Ordered chunk persistence for deterministic reconstruction.
+- Speaker labels persisted separately and referenced by transcript chunks.
+- Repository-layer writes and reads enforce stable ordering behavior.
 
-## Table: sessions
+## Table: `sessions`
 
-Tracks upload and streaming session lifecycle.
+Tracks upload lifecycle state.
 
-| Field | Type | Description |
+| Field | Type | Notes |
 | --- | --- | --- |
-| id | SERIAL | Primary key |
-| session_type | TEXT | upload or streaming |
-| status | TEXT | pending, uploaded, preprocessing, transcribing, diarizing, processing, completed, failed |
-| original_filename | TEXT | uploaded filename (nullable) |
-| created_at | TIMESTAMP | session creation time |
-| updated_at | TIMESTAMP | last update time |
-| completed_at | TIMESTAMP | completion time (nullable) |
-| duration_seconds | FLOAT | total duration (nullable) |
-| processing_error | TEXT | error details (nullable) |
+| `id` | SERIAL / INTEGER | Primary key |
+| `session_type` | VARCHAR(32) | `upload` for Phase 1 |
+| `status` | ENUM(`session_status`) | Lifecycle status |
+| `original_filename` | VARCHAR(255) | Uploaded filename |
+| `duration_seconds` | FLOAT | Optional |
+| `processing_error` | TEXT | Failure detail |
+| `created_at` | TIMESTAMP | Created timestamp |
+| `updated_at` | TIMESTAMP | Last update timestamp |
+| `completed_at` | TIMESTAMP | Completion/failure timestamp |
 
-## Table: transcript_chunks
+Phase 1 status subset:
 
-Stores transcript segments from Whisper inference.
+`pending, preprocessing, transcribing, diarizing, processing, completed, failed`
 
-| Field | Type | Description |
+## Table: `speakers`
+
+Stores diarization labels per session.
+
+| Field | Type | Notes |
 | --- | --- | --- |
-| id | SERIAL | Primary key |
-| session_id | FK | sessions.id |
-| speaker_id | FK | speakers.id (nullable) |
-| start_time | FLOAT | segment start time |
-| end_time | FLOAT | segment end time |
-| text | TEXT | transcript text |
-| chunk_index | INTEGER | ordering index |
-| is_partial | BOOLEAN | partial streaming flag |
-| created_at | TIMESTAMP | persistence time |
+| `id` | SERIAL / INTEGER | Primary key |
+| `session_id` | FK -> sessions.id | Session scope |
+| `speaker_label` | VARCHAR(64) | e.g. `SPEAKER_00` |
+| `display_name` | VARCHAR(255) | Optional alias |
 
-Ordering rule:
+Repository behavior normalizes empty labels to `UNKNOWN`.
 
-```sql
-ORDER BY chunk_index
-```
+## Table: `transcript_chunks`
 
-## Table: speakers
+Stores final transcript chunks with speaker references.
 
-Speaker identities detected by diarization.
-
-| Field | Type | Description |
+| Field | Type | Notes |
 | --- | --- | --- |
-| id | SERIAL | Primary key |
-| session_id | FK | sessions.id |
-| speaker_label | TEXT | raw pyannote label |
-| display_name | TEXT | optional rename |
+| `id` | SERIAL / INTEGER | Primary key |
+| `session_id` | FK -> sessions.id | Session scope |
+| `speaker_id` | FK -> speakers.id | Nullable fallback supported |
+| `start_time` | FLOAT | Segment start |
+| `end_time` | FLOAT | Segment end |
+| `text` | TEXT | Chunk text |
+| `chunk_index` | INTEGER | Chunk order index |
+| `is_partial` | BOOLEAN | Reserved for streaming phases |
+| `created_at` | TIMESTAMP | Insert timestamp |
 
-## Table: session_summaries
+## Ordering Contract
 
-Stores summary and MOM payloads.
+Transcript reconstruction query ordering:
 
-| Field | Type | Description |
-| --- | --- | --- |
-| id | SERIAL | Primary key |
-| session_id | FK | sessions.id |
-| summary | TEXT | generated summary |
-| mom | JSON | structured MOM object |
-| created_at | TIMESTAMP | generation time |
+`ORDER BY chunk_index, start_time, end_time, id`
 
-## Table: action_items
+This guarantees deterministic retrieval for API consumers.
 
-Stores action items extracted from sessions.
+## Persistence Contract
 
-| Field | Type | Description |
-| --- | --- | --- |
-| id | SERIAL | Primary key |
-| session_id | FK | sessions.id |
-| text | TEXT | extracted task |
-| status | TEXT | open or done |
-| created_at | TIMESTAMP | creation time |
+- Worker persists speaker-labeled transcript chunks after alignment.
+- On rerun/retry, chunk rows are replaced per session before insert to avoid
+  duplicates.
+- Session status changes are committed at each stage transition.
 
-## Indexing Guidance
+## Retrieval Contract
 
-- transcript_chunks(session_id, chunk_index)
-- speakers(session_id)
-- action_items(session_id)
-- session_summaries(session_id)
+`GET /api/sessions/<id>/transcript` returns:
 
-## Persistence Notes
+- `session_id`
+- `status`
+- ordered `transcript` chunk list with speaker labels
 
-- Streaming persists partial chunks with is_partial=true.
-- Finalization overwrites or supersedes partial chunks.
-- Session status transitions are updated on each pipeline stage.
+## Phase Boundary
 
-## Status Enumeration
-
-Statuses are centralized in models/enums.py for reuse across API, workers,
-and repositories.
-
-Phase 1 uses the subset:
-
-pending -> preprocessing -> transcribing -> completed (or failed)
+Schema supports future phases, but Phase 1 closure is limited to upload,
+transcription, diarization, alignment, and transcript retrieval.

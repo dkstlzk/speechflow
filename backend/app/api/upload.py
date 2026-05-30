@@ -31,7 +31,7 @@ def upload_audio():
     session_context = create_upload_session(filename)
     logger.info(
         "Upload received",
-        extra={"session_id": session_context.session_id, "filename": filename},
+        extra={"session_id": session_context.session_id, "upload_filename": filename},
     )
 
     start_upload_pipeline(session_context.session_id, str(temp_path))

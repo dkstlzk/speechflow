@@ -5,7 +5,9 @@ from ...config.logging import get_logger
 from ...db.session import SessionLocal
 from ...models.enums import SessionStatus
 from ...services.persistence.session_repository import create_session
+from ...services.persistence.session_repository import get_session_by_id
 from ...services.persistence.session_repository import update_session_status as update_record
+from ...services.persistence.transcript_repository import list_transcript_chunks
 
 logger = get_logger("session")
 
@@ -50,5 +52,45 @@ def update_session_status(
             "Session status updated",
             extra={"session_id": session_id, "status": status},
         )
+    finally:
+        db.close()
+
+
+def get_session_transcript(session_id: int) -> Optional[dict]:
+    """Return ordered transcript data for a session."""
+    db = SessionLocal()
+    try:
+        session = get_session_by_id(db, session_id)
+        if session is None:
+            return None
+
+        chunks = sorted(
+            list_transcript_chunks(db, session_id),
+            key=lambda chunk: (
+                chunk.chunk_index,
+                chunk.start_time,
+                chunk.end_time,
+                chunk.id,
+            ),
+        )
+        transcript = [
+            {
+                "speaker": chunk.speaker.speaker_label
+                if chunk.speaker is not None
+                else "UNKNOWN",
+                "start": float(chunk.start_time),
+                "end": float(chunk.end_time),
+                "text": chunk.text,
+                "order": chunk.chunk_index,
+            }
+            for chunk in chunks
+        ]
+
+        status = session.status.value if hasattr(session.status, "value") else session.status
+        return {
+            "session_id": str(session.id),
+            "status": status,
+            "transcript": transcript,
+        }
     finally:
         db.close()

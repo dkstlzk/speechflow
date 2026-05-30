@@ -1,7 +1,10 @@
 from backend.app.models.enums import SessionStatus
 from backend.app.models.transcript_chunk import TranscriptChunk
 from backend.app.services.persistence.session_repository import create_session
-from backend.app.services.persistence.transcript_repository import bulk_insert_chunks
+from backend.app.services.persistence.transcript_repository import (
+    bulk_insert_chunks,
+    replace_session_chunks,
+)
 
 
 def test_transcript_persistence_ordering(db_session):
@@ -38,3 +41,48 @@ def test_transcript_persistence_ordering(db_session):
     )
 
     assert [chunk.text for chunk in ordered] == ["first", "second"]
+
+
+def test_replace_session_chunks_prevents_duplicates(db_session):
+    session = create_session(db_session, session_type="upload", status=SessionStatus.PENDING)
+
+    replace_session_chunks(
+        db_session,
+        session.id,
+        [
+            {
+                "session_id": session.id,
+                "speaker_id": None,
+                "start_time": 0.0,
+                "end_time": 1.0,
+                "text": "first pass",
+                "chunk_index": 0,
+                "is_partial": False,
+            }
+        ],
+    )
+    replace_session_chunks(
+        db_session,
+        session.id,
+        [
+            {
+                "session_id": session.id,
+                "speaker_id": None,
+                "start_time": 0.0,
+                "end_time": 1.0,
+                "text": "second pass",
+                "chunk_index": 0,
+                "is_partial": False,
+            }
+        ],
+    )
+
+    rows = (
+        db_session.query(TranscriptChunk)
+        .filter(TranscriptChunk.session_id == session.id)
+        .order_by(TranscriptChunk.chunk_index)
+        .all()
+    )
+
+    assert len(rows) == 1
+    assert rows[0].text == "second pass"

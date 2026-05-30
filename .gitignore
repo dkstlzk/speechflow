@@ -1,7 +1,11 @@
 # Python
-__pycache__/
+**/__pycache__/
 *.py[cod]
 *.so
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.cache/
 
 # Virtual environments
 .sf-env/
@@ -10,10 +14,10 @@ venv/
 # Environment variables
 .env
 .env.*
+!.env.example
 
 # Backend
 *.log
-.pytest_cache/
 .coverage
 htmlcov/
 
@@ -41,7 +45,6 @@ ml_models/*
 !ml_models/.gitkeep
 checkpoints/
 hf_cache/
-.cache/
 
 # PyTorch
 *.pt
@@ -53,7 +56,9 @@ dist/
 build/
 
 # IDE
-.vscode/
+.vscode/*
+!.vscode/
+!.vscode/settings.json
 .idea/
 
 # OS Files
@@ -67,6 +72,8 @@ docker-data/
 tmp/
 temp/*
 !temp/.gitkeep
+uploads/
+processed/
 
 # Runtime generated transcripts
 *.srt
