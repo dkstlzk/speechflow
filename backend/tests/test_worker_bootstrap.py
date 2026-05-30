@@ -6,4 +6,7 @@ def test_worker_pipeline_stages():
     assert "pending" in stages
     assert "preprocessing" in stages
     assert "transcribing" in stages
+    assert "diarizing" in stages
+    assert "processing" in stages
     assert "completed" in stages
+    assert "failed" in stages

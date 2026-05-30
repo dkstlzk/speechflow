@@ -15,6 +15,8 @@ def get_pipeline_stages() -> List[str]:
         SessionStatus.PENDING.value,
         SessionStatus.PREPROCESSING.value,
         SessionStatus.TRANSCRIBING.value,
+        SessionStatus.DIARIZING.value,
+        SessionStatus.PROCESSING.value,
         SessionStatus.COMPLETED.value,
         SessionStatus.FAILED.value,
     ]

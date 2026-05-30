@@ -11,9 +11,12 @@ from ..config.logging import get_logger
 from ..config.settings import Settings
 from ..models.enums import SessionStatus
 from ..services.audio import AudioPreprocessorService
+from ..services.diarization import DiarizationService
 from ..services.persistence.session_repository import update_session_status
-from ..services.persistence.transcript_repository import bulk_insert_chunks
+from ..services.persistence.speaker_repository import get_or_create_speaker
+from ..services.persistence.transcript_repository import replace_session_chunks
 from ..services.transcription import WhisperTranscriptionService
+from ..services.transcription.transcript_service import align_transcript_with_speakers
 from ..services.utils import cleanup_file
 from ..db.session import SessionLocal
 
@@ -25,6 +28,7 @@ def process_upload_session(
     file_path: str,
     preprocessor: Optional[AudioPreprocessorService] = None,
     transcriber: Optional[WhisperTranscriptionService] = None,
+    diarizer: Optional[DiarizationService] = None,
     db_session: Optional[Session] = None,
 ) -> None:
     """Process an upload session with FFmpeg and Whisper."""
@@ -34,6 +38,7 @@ def process_upload_session(
 
     preprocessor = preprocessor or AudioPreprocessorService(settings.TEMP_DIR)
     transcriber = transcriber or WhisperTranscriptionService()
+    diarizer = diarizer or DiarizationService()
 
     wav_path: Optional[str] = None
 
@@ -44,21 +49,36 @@ def process_upload_session(
         update_session_status(db, session_id, SessionStatus.TRANSCRIBING)
         result = transcriber.transcribe(wav_path)
 
-        payloads = [
-            {
-                "session_id": session_id,
-                "speaker_id": None,
-                "start_time": segment["start"],
-                "end_time": segment["end"],
-                "text": segment["text"],
-                "chunk_index": segment["order"],
-                "is_partial": False,
-            }
-            for segment in result.segments
-        ]
+        update_session_status(db, session_id, SessionStatus.DIARIZING)
+        speaker_segments = diarizer.diarize(wav_path)
+        aligned_segments = align_transcript_with_speakers(
+            result.segments, speaker_segments
+        )
 
-        if payloads:
-            bulk_insert_chunks(db, payloads)
+        update_session_status(db, session_id, SessionStatus.PROCESSING)
+
+        payloads = []
+        speaker_cache = {}
+        for segment in aligned_segments:
+            speaker_label = segment["speaker"]
+            speaker = speaker_cache.get(speaker_label)
+            if speaker is None:
+                speaker = get_or_create_speaker(db, session_id, speaker_label)
+                speaker_cache[speaker_label] = speaker
+
+            payloads.append(
+                {
+                    "session_id": session_id,
+                    "speaker_id": speaker.id,
+                    "start_time": segment["start"],
+                    "end_time": segment["end"],
+                    "text": segment["text"],
+                    "chunk_index": segment["order"],
+                    "is_partial": False,
+                }
+            )
+
+        replace_session_chunks(db, session_id, payloads)
 
         update_session_status(db, session_id, SessionStatus.COMPLETED)
         logger.info("Upload processing completed", extra={"session_id": session_id})
