@@ -2,6 +2,8 @@ from typing import Dict, List, Optional
 
 from pyannote.audio import Pipeline
 
+from backend.app.services import diarization
+
 from ...config.logging import get_logger
 from ...config.settings import Settings
 
@@ -26,13 +28,15 @@ def _get_pipeline() -> Pipeline:
             logger.info("pyannote pipeline device defaulted")
     return _PIPELINE
 
-
 def diarize_audio(audio_path: str) -> List[Dict]:
     pipeline = _get_pipeline()
     diarization = pipeline(audio_path)
 
+    annotation = getattr(diarization, "speaker_diarization", diarization)
+
     segments: List[Dict] = []
-    for turn, _, speaker in diarization.itertracks(yield_label=True):
+
+    for turn, _, speaker in annotation.itertracks(yield_label=True):
         segments.append(
             {
                 "speaker": str(speaker),
@@ -41,5 +45,8 @@ def diarize_audio(audio_path: str) -> List[Dict]:
             }
         )
 
-    segments.sort(key=lambda item: (item["start"], item["end"], item["speaker"]))
+    segments.sort(
+        key=lambda item: (item["start"], item["end"], item["speaker"])
+    )
+
     return segments

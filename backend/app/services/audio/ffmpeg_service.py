@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Optional
 
 from ...config.logging import get_logger
-from ...services.utils import cleanup_file, create_temp_path
+from ...utils.file_manager import cleanup_file, create_temp_path
 from .ffmpeg import preprocess_to_wav
 
 logger = get_logger("ffmpeg")

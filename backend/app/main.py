@@ -7,6 +7,9 @@ from .config.logging import configure_logging
 from .config.settings import Settings
 from .websocket import register_socketio_events
 
+from .db.base import Base
+from .db.session import engine
+
 configure_logging()
 settings = Settings()
 socketio = SocketIO(
@@ -31,6 +34,8 @@ def create_app() -> Flask:
     register_blueprints(app)
     register_socketio_events(socketio)
     socketio.init_app(app)
+
+    Base.metadata.create_all(bind=engine)
 
     @app.get("/health")
     def health():

@@ -81,9 +81,8 @@ Services were refactored into domain-specific subpackages:
 - summarization/
 - persistence/
 - session/
-- utils/
 
-Key service scaffolds and responsibilities:
+Key scaffolds and responsibilities:
 
 - ffmpeg_service.py: define FFmpeg normalization interface
 - whisper_service.py: define transcription interfaces for file/stream
@@ -91,7 +90,9 @@ Key service scaffolds and responsibilities:
 - transcript_service.py: define alignment and transcript orchestration
 - summary_service.py: define summary + MOM generation interface
 - session_service.py: define session lifecycle helpers
-- file_manager.py: temp file helpers, filename sanitization
+- utils/file_manager.py: temp file helpers, filename sanitization
+
+Generic helper utilities live in app/utils.
 
 All services remain implementation scaffolds. No inference logic was
 implemented yet. Day 5 will attach real inference execution to these

@@ -17,7 +17,7 @@ from ..services.persistence.speaker_repository import get_or_create_speaker
 from ..services.persistence.transcript_repository import replace_session_chunks
 from ..services.transcription import WhisperTranscriptionService
 from ..services.transcription.transcript_service import align_transcript_with_speakers
-from ..services.utils import cleanup_file
+from ..utils.file_manager import cleanup_file
 from ..db.session import SessionLocal
 
 logger = get_logger("workers.transcription")
