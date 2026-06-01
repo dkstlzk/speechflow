@@ -32,7 +32,7 @@ class Settings:
     WHISPER_DEVICE: str = os.getenv("WHISPER_DEVICE", "cpu")
     WHISPER_COMPUTE_TYPE: str = os.getenv("WHISPER_COMPUTE_TYPE", "int8")
     DIARIZATION_MODEL: str = os.getenv(
-        "DIARIZATION_MODEL", "pyannote/speaker-diarization-3.1"
+        "DIARIZATION_MODEL", "pyannote/speaker-diarization-community-1"
     )
     HF_TOKEN: str = os.getenv("HF_TOKEN", "")
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")

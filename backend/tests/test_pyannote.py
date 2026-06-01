@@ -2,6 +2,8 @@ import os
 
 import pytest
 
+from backend.app.config.settings import Settings
+
 
 pytestmark = pytest.mark.skipif(
     not os.getenv("RUN_HEAVY_TESTS"),
@@ -16,8 +18,9 @@ def test_pyannote_pipeline_loads():
 
     from pyannote.audio import Pipeline
 
+    settings = Settings()
     pipeline = Pipeline.from_pretrained(
-        "pyannote/speaker-diarization-3.1",
+        settings.DIARIZATION_MODEL,
         token=token,
     )
 

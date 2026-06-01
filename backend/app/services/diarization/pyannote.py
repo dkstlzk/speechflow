@@ -1,3 +1,4 @@
+import time
 from typing import Dict, List, Optional
 
 from pyannote.audio import Pipeline
@@ -9,15 +10,17 @@ from ...config.settings import Settings
 
 logger = get_logger("diarization")
 _PIPELINE: Optional[Pipeline] = None
+_PIPELINE_MODEL: Optional[str] = None
 
 
 def _get_pipeline() -> Pipeline:
-    global _PIPELINE
+    global _PIPELINE, _PIPELINE_MODEL
     if _PIPELINE is None:
         settings = Settings()
         if not settings.HF_TOKEN:
             raise RuntimeError("HF_TOKEN is required for pyannote diarization")
 
+        _PIPELINE_MODEL = settings.DIARIZATION_MODEL
         _PIPELINE = Pipeline.from_pretrained(
             settings.DIARIZATION_MODEL,
             token=settings.HF_TOKEN,
@@ -28,18 +31,23 @@ def _get_pipeline() -> Pipeline:
             logger.info("pyannote pipeline device defaulted")
     return _PIPELINE
 
+
 def diarize_audio(audio_path: str) -> List[Dict]:
     pipeline = _get_pipeline()
+    start_time = time.perf_counter()
     diarization = pipeline(audio_path)
 
     annotation = getattr(diarization, "speaker_diarization", diarization)
 
     segments: List[Dict] = []
+    speaker_labels = set()
 
     for turn, _, speaker in annotation.itertracks(yield_label=True):
+        speaker_label = str(speaker)
+        speaker_labels.add(speaker_label)
         segments.append(
             {
-                "speaker": str(speaker),
+                "speaker": speaker_label,
                 "start": float(turn.start),
                 "end": float(turn.end),
             }
@@ -47,6 +55,18 @@ def diarize_audio(audio_path: str) -> List[Dict]:
 
     segments.sort(
         key=lambda item: (item["start"], item["end"], item["speaker"])
+    )
+
+    duration_seconds = time.perf_counter() - start_time
+    model_name = _PIPELINE_MODEL or Settings().DIARIZATION_MODEL
+    logger.info(
+        "Diarization completed",
+        extra={
+            "model_name": model_name,
+            "speaker_count": len(speaker_labels),
+            "segment_count": len(segments),
+            "duration_seconds": duration_seconds,
+        },
     )
 
     return segments
