@@ -82,13 +82,13 @@ def test_transcript_processor_generation_calls_ollama(monkeypatch):
         "SPEAKER_00: Hello everyone.\nSPEAKER_01: Let's begin."
     )
 
-    assert "Summary:" in client.calls[0]["prompt"]
+    assert "Generate a compressed meeting summary" in client.calls[0]["prompt"]
     assert expected_transcript in client.calls[0]["prompt"]
 
-    assert "Attendees:" in client.calls[1]["prompt"]
+    assert "Generate meeting minutes" in client.calls[1]["prompt"]
     assert expected_transcript in client.calls[1]["prompt"]
 
-    assert "Task | Owner | Deadline" in client.calls[2]["prompt"]
+    assert "Extract action items" in client.calls[2]["prompt"]
     assert expected_transcript in client.calls[2]["prompt"]
 
 
@@ -112,3 +112,43 @@ def test_transcript_processor_empty_transcript(monkeypatch):
     processor = TranscriptProcessor(ollama_client=QueueOllamaClient(["ok"]))
     with pytest.raises(EmptyTranscriptError, match="no transcript chunks"):
         processor.assemble_transcript(2)
+
+def test_transcript_processor_large_transcript_merging(monkeypatch):
+    payload = {
+        "session_id": "3",
+        "status": "completed",
+        "transcript": [
+            {
+                "speaker": "SPEAKER_00",
+                "start": 0.0,
+                "end": 1.0,
+                "text": "A" * 6000,
+                "order": 0,
+            },
+            {
+                "speaker": "SPEAKER_01",
+                "start": 1.0,
+                "end": 2.0,
+                "text": "B" * 6000,
+                "order": 1,
+            },
+        ],
+    }
+    monkeypatch.setattr(
+        "backend.app.services.summarization.transcript_processor.get_session_transcript",
+        lambda _session_id: payload,
+    )
+
+    client = QueueOllamaClient(["summary_part1", "summary_part2", "merged_summary"])
+    processor = TranscriptProcessor(ollama_client=client)
+
+    result = processor.generate_summary(3)
+
+    assert result == "merged_summary"
+    assert len(client.calls) == 3
+    assert "A" * 6000 in client.calls[0]["prompt"]
+    assert "B" * 6000 in client.calls[1]["prompt"]
+    assert "--- PART 1 ---\nsummary_part1" in client.calls[2]["prompt"]
+    assert "--- PART 2 ---\nsummary_part2" in client.calls[2]["prompt"]
+    assert "Partial Summaries:" in client.calls[2]["prompt"]
+

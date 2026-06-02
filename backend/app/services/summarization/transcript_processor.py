@@ -5,7 +5,14 @@ from typing import List, Optional
 from ...config.logging import get_logger
 from ...services.session.session_service import get_session_transcript
 from .ollama import OllamaClient, OllamaClientError
-from .prompts import ACTION_ITEMS_PROMPT, MOM_PROMPT, SUMMARY_PROMPT
+from .prompts import (
+    ACTION_ITEMS_PROMPT,
+    MOM_PROMPT,
+    SUMMARY_PROMPT,
+    SUMMARY_MERGE_PROMPT,
+    MOM_MERGE_PROMPT,
+    ACTION_ITEMS_MERGE_PROMPT,
+)
 
 logger = get_logger("summarization")
 
@@ -37,64 +44,117 @@ class TranscriptProcessor:
         self._client = ollama_client or OllamaClient()
         self._model = model
 
-    def assemble_transcript(self, session_id: int) -> str:
+    def _normalize_speaker(
+        self,
+        speaker: str,
+        speaker_map: dict[str, str],
+    ) -> str:
+        if speaker not in speaker_map:
+            speaker_map[speaker] = f"Participant {chr(65 + len(speaker_map))}"
+        return speaker_map[speaker]
+
+    def assemble_chunks(self, session_id: int, max_chars: int = 8000) -> List[str]:
         payload = get_session_transcript(session_id)
         if payload is None:
             raise TranscriptNotFoundError(f"Session {session_id} not found")
 
         entries = payload.get("transcript") or []
         if not entries:
-            raise EmptyTranscriptError(
-                f"Session {session_id} has no transcript chunks"
-            )
+            raise EmptyTranscriptError(f"Session {session_id} has no transcript chunks")
 
-        lines: List[str] = []
+        chunks: List[str] = []
+        current_chunk_lines: List[str] = []
+        current_length = 0
+        speaker_map: dict[str, str] = {}
+
         for entry in entries:
             text = (entry.get("text") or "").strip()
             if not text:
                 continue
             speaker = (entry.get("speaker") or "UNKNOWN").strip() or "UNKNOWN"
-            lines.append(f"{speaker}: {text}")
 
-        if not lines:
-            raise EmptyTranscriptError(
-                f"Session {session_id} has no usable transcript text"
+            normalized_speaker = self._normalize_speaker(
+                speaker,
+                speaker_map,
             )
 
-        assembled = "\n".join(lines)
+            line = f"{normalized_speaker}: {text}"
+            line_len = len(line) + 1
+
+            if current_chunk_lines and current_length + line_len > max_chars:
+                chunks.append("\n".join(current_chunk_lines))
+                current_chunk_lines = []
+                current_length = 0
+
+            current_chunk_lines.append(line)
+            current_length += line_len
+
+        if current_chunk_lines:
+            chunks.append("\n".join(current_chunk_lines))
+
+        if not chunks:
+            raise EmptyTranscriptError(f"Session {session_id} has no usable transcript text")
+
         logger.info(
-            "Assembled transcript",
+            "Assembled transcript chunks",
             extra={
                 "session_id": session_id,
-                "line_count": len(lines),
-                "char_count": len(assembled),
+                "chunk_count": len(chunks),
+                "total_chars": sum(len(c) for c in chunks),
             },
         )
-        return assembled
+        return chunks
+
+    def assemble_transcript(self, session_id: int) -> str:
+        return "\n".join(self.assemble_chunks(session_id))
 
     def generate_summary(self, session_id: int) -> str:
-        return self._generate(session_id, SUMMARY_PROMPT, "summary")
+        return self._generate(session_id, SUMMARY_PROMPT, SUMMARY_MERGE_PROMPT, "summary")
 
     def generate_mom(self, session_id: int) -> str:
-        return self._generate(session_id, MOM_PROMPT, "mom")
+        return self._generate(session_id, MOM_PROMPT, MOM_MERGE_PROMPT, "mom")
 
     def generate_action_items(self, session_id: int) -> str:
-        return self._generate(session_id, ACTION_ITEMS_PROMPT, "action_items")
+        return self._generate(session_id, ACTION_ITEMS_PROMPT, ACTION_ITEMS_MERGE_PROMPT, "action_items")
 
-    def _generate(self, session_id: int, template: str, output_type: str) -> str:
-        transcript = self.assemble_transcript(session_id)
-        prompt = template.format(transcript=transcript)
+    def _generate(self, session_id: int, template: str, merge_template: str, output_type: str) -> str:
+        chunks = self.assemble_chunks(session_id)
+        
+        partial_outputs = []
+        for i, chunk in enumerate(chunks):
+            prompt = template.format(transcript=chunk)
+            try:
+                out = self._client.generate(prompt, model=self._model)
+                partial_outputs.append(out)
+            except OllamaClientError as exc:
+                logger.exception(
+                    "Ollama chunk generation failed",
+                    extra={
+                        "session_id": session_id,
+                        "model": self._model,
+                        "output_type": output_type,
+                        "chunk_index": i,
+                    },
+                )
+                raise TranscriptGenerationError(
+                    f"Ollama generation failed for {output_type} (chunk {i})"
+                ) from exc
+
+        if len(partial_outputs) == 1:
+            return partial_outputs[0]
+
+        merged_text = "\n\n".join(f"--- PART {i+1} ---\n{text}" for i, text in enumerate(partial_outputs))
+        merge_prompt = merge_template.format(partial_outputs=merged_text)
+        
         try:
-            return self._client.generate(prompt, model=self._model)
+            return self._client.generate(merge_prompt, model=self._model)
         except OllamaClientError as exc:
             logger.exception(
-                "Ollama generation failed",
+                "Ollama merge generation failed",
                 extra={
                     "session_id": session_id,
                     "model": self._model,
                     "output_type": output_type,
                 },
             )
-            raise TranscriptGenerationError(
-                f"Ollama generation failed for {output_type}"
-            ) from exc
+            raise TranscriptGenerationError(f"Ollama merge generation failed for {output_type}") from exc

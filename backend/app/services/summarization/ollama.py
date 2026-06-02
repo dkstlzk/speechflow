@@ -9,7 +9,7 @@ import requests
 from ...config.logging import get_logger
 
 DEFAULT_OLLAMA_ENDPOINT = "http://localhost:11434/api/generate"
-DEFAULT_TIMEOUT_SECONDS = 60.0
+DEFAULT_TIMEOUT_SECONDS = 300.0
 
 logger = get_logger("summarization")
 
@@ -80,14 +80,17 @@ class OllamaClient:
             "stream": False,
         }
 
+        import time
         logger.info(
             "Sending Ollama request",
             extra={
                 "endpoint": self.endpoint,
                 "model": model,
                 "prompt_chars": len(prompt),
+                "timeout": self.timeout_seconds,
             },
         )
+        start_time = time.time()
 
         try:
             response = self._session.post(
@@ -95,20 +98,25 @@ class OllamaClient:
                 json=payload,
                 timeout=self.timeout_seconds,
             )
+            duration = time.time() - start_time
+            logger.info("Ollama request completed", extra={"duration": duration, "type": "success"})
         except requests.Timeout as exc:
+            duration = time.time() - start_time
             logger.warning(
                 "Ollama request timed out",
                 extra={
                     "endpoint": self.endpoint,
                     "model": model,
                     "timeout_seconds": self.timeout_seconds,
+                    "duration": duration,
                 },
             )
-            raise OllamaClientError("Ollama request timed out") from exc
+            raise OllamaClientError(f"Ollama request timed out after {duration:.2f}s") from exc
         except requests.RequestException as exc:
+            duration = time.time() - start_time
             logger.exception(
                 "Ollama request failed",
-                extra={"endpoint": self.endpoint, "model": model},
+                extra={"endpoint": self.endpoint, "model": model, "duration": duration},
             )
             raise OllamaClientError("Ollama request failed") from exc
 
