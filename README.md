@@ -1,56 +1,129 @@
 # SpeechFlow
 
 SpeechFlow is a Flask-first speech-to-text and intelligent transcript processing MVP.
-It supports upload transcription and realtime streaming with local CPU-only models.
 
-## MVP Scope
+It converts uploaded audio/video files into structured outputs including:
 
-- MP3/MP4/WAV upload transcription
-- Realtime microphone streaming with live captions
-- Speaker diarization
-- Transcript persistence and session history
-- Summary, MOM, and action items
-- TXT/JSON export
+- Speaker-labeled transcripts
+- Summaries
+- Minutes of Meeting (MoM)
+- Action items
 
-## Architecture (MVP)
+The project is designed around fully local, CPU-only inference using open-source models.
+
+---
+
+## Current MVP Status
+
+### Completed
+
+#### Upload Processing Pipeline
+- MP3 upload support
+- MP4 upload support
+- File validation
+- FFmpeg audio extraction
+- Audio normalization
+- Background processing workflow
+
+#### Speech Processing
+- faster-whisper transcription
+- pyannote speaker diarization
+- Transcript chunk persistence
+- Speaker alignment
+- Ordered transcript reconstruction
+
+#### Intelligent Transcript Processing
+- Transcript classification
+- Summary generation
+- Meeting Minutes (MoM) generation
+- Action item extraction
+- Long transcript chunking
+- Map-reduce style summarization
+- Local LLM inference via Ollama
+
+#### Persistence
+- Session storage
+- Transcript storage
+- Summary persistence
+- Action item persistence
+- Reprocessing support
+
+#### APIs
+- Upload API
+- Transcript retrieval API
+- Summary retrieval API
+- Action item retrieval API
+- Transcript processing API
+
+#### Testing
+- Upload pipeline tests
+- Transcript processing tests
+- Persistence tests
+- API tests
+
+---
+
+## Architecture
 
 ```mermaid
 flowchart LR
-  U[Upload file] --> P[FFmpeg normalize]
-  S[WebSocket stream] --> B[Rolling buffer + VAD]
-  P --> W[Whisper inference]
-  B --> W
-  W --> D[pyannote diarization]
-  D --> A[Transcript alignment]
-  A --> DB[(PostgreSQL)]
-  DB --> L[Ollama summary + MOM + actions]
+
+A[MP3 / MP4 Upload]
+--> B[FFmpeg Audio Extraction]
+
+B --> C[faster-whisper]
+
+C --> D[pyannote Diarization]
+
+D --> E[Transcript Assembly]
+
+E --> F[(PostgreSQL)]
+
+F --> G[Transcript Classification]
+
+G --> H[Summary Generation]
+
+G --> I[MoM Generation]
+
+G --> J[Action Item Extraction]
+
+H --> K[(PostgreSQL)]
+I --> K
+J --> K
+
+K --> L[Retrieval APIs]
 ```
+
+---
 
 ## Tech Stack
 
-Backend:
+### Backend
+
 - Flask
-- Flask-SocketIO
 - SQLAlchemy
 - PostgreSQL
 
-Speech:
+### Speech Processing
+
 - faster-whisper
-- Silero VAD
 - pyannote.audio
 
-Audio:
+### Audio Processing
+
 - FFmpeg
 - pydub
 
-LLM:
+### Transcript Intelligence
+
 - Ollama
 - phi3:mini
-- llama3.2 fallback
-- bart-large-cnn fallback
 
-Frontend:
-- React + Vite
+### Testing
+
+- pytest
+
+---
 
 ## Repository Structure
 
@@ -59,7 +132,6 @@ speechflow/
   backend/
     app/
       api/
-      websocket/
       services/
         audio/
         transcription/
@@ -67,107 +139,179 @@ speechflow/
         summarization/
         persistence/
         session/
-        utils/
       models/
       schemas/
-      utils/
       config/
-      workers/
       db/
     requirements/
     tests/
     docs/
       phase1/
+      phase2/
   frontend/
   scripts/
-  docker/
 ```
+
+---
 
 ## Local Setup
 
 ### Prerequisites
 
 - Python 3.10+
-- FFmpeg installed and on PATH
-- PostgreSQL running locally
-- Ollama installed locally
-- HuggingFace token for pyannote
+- PostgreSQL
+- FFmpeg
+- Ollama
 
 ### Environment Variables
 
-- DATABASE_URL
-- HF_TOKEN
-- OLLAMA_HOST (optional)
-- SECRET_KEY (optional)
+```bash
+DATABASE_URL=
+OLLAMA_ENDPOINT=
+OLLAMA_TIMEOUT_SECONDS=
+HF_TOKEN=
+```
 
 ### Backend
 
 ```bash
 pip install -r backend/requirements/base.txt
+
 python -m backend.app.main
 ```
 
-### Python Cache Hygiene (Optional, Dev Only)
+---
 
-Python creates `__pycache__` and `.pyc` files to speed up imports. They are
-ignored in git for a cleaner repo.
+## Implemented API Endpoints
 
-- Disable bytecode generation for the current shell session:
+### Upload
 
-```bash
-source scripts/dev-bytecode-off.sh
+```http
+POST /api/upload
 ```
 
-- Clean generated cache artifacts safely (without touching `.git` or virtualenvs):
+Upload MP3/MP4 audio for transcription.
 
-```bash
-./scripts/clean-python-cache.sh
+### Transcript Retrieval
+
+```http
+GET /api/sessions/{id}/transcript
 ```
 
-- Manual equivalents:
+Returns speaker-labeled transcript.
 
-```bash
-find . \( -path "./.git" -o -path "./.sf-env" -o -path "./.venv" -o -path "./venv" -o -path "./env" \) -prune -o -type d -name "__pycache__" -exec rm -rf {} +
-find . \( -path "./.git" -o -path "./.sf-env" -o -path "./.venv" -o -path "./venv" -o -path "./env" \) -prune -o -type f \( -name "*.pyc" -o -name "*.pyo" \) -delete
+### Transcript Processing
+
+```http
+POST /api/sessions/{id}/process
 ```
 
-These are local developer workflows only and are not required for production.
+Generates:
 
-### Frontend
+- Summary
+- Meeting Minutes
+- Action Items
 
-```bash
-cd frontend
-npm install
-npm run dev
+### Summary Retrieval
+
+```http
+GET /api/sessions/{id}/summary
 ```
 
-## Docs
+Returns persisted summary and meeting minutes.
 
-- backend/docs/architecture.md
-- backend/docs/pipeline_flow.md
-- backend/docs/database_schema.md
-- backend/docs/worker_lifecycle.md
-- backend/docs/transition_fastapi_to_flask.md
-- backend/docs/phase1/day4_notes.md
-- backend/docs/phase1/day5_notes.md
-- backend/docs/archive/phase0 (legacy reference)
+### Action Item Retrieval
 
-## Roadmap
+```http
+GET /api/actions/{session_id}
+```
 
-- Phase 0 complete (research, benchmarks, feasibility)
-- Phase 1 current: upload pipeline implementation
-- Phase 2: realtime streaming pipeline
-- Phase 3: session history and exports
+Returns persisted action items.
+
+---
+
+## Documentation
+
+### Phase 1
+
+- Upload pipeline implementation
+- Transcription pipeline
+- Diarization pipeline
+- Persistence layer
+
+### Phase 2
+
+- Ollama integration
+- Transcript intelligence layer
+- Long transcript chunking
+- Classification pipeline
+- Summary persistence
+- Action item persistence
+
+---
 
 ## Known Limitations
 
-- CPU latency can exceed realtime targets on long sessions
-- Diarization quality depends on input audio quality
-- Local LLM context limits require chunking for long transcripts
+### Current Model Limitations
 
-## Docker
+phi3:mini occasionally infers:
 
-Docker support will be added after the local stack is stable.
+- attendees
+- decisions
+- ownership
+- action items
+
+even when prompts explicitly prohibit inference.
+
+Future iterations may introduce:
+
+- structured JSON outputs
+- schema validation
+- rule-based verification
+- stronger local models
+
+### Current Product Limitations
+
+Not yet implemented:
+
+- Realtime microphone streaming
+- Live captions
+- Session history dashboard
+- Session status tracking
+- TXT export
+- JSON export
+- Frontend integration
+- Docker deployment
+
+### Performance
+
+- CPU-only inference can take 30–120 seconds for large transcripts
+- Long transcripts require chunking and merge passes
+- Diarization latency depends on audio length
+
+---
+
+## Roadmap
+
+### Phase 1 — Upload Pipeline
+✅ Complete
+
+### Phase 2 — Intelligent Processing Layer
+✅ Complete
+
+### Phase 3 — Streaming Infrastructure
+🚧 Next
+
+### Phase 4 — Session Management & Retrieval
+Planned
+
+### Phase 5 — Frontend Integration
+Planned
+
+### Phase 6 — Testing, Optimization & Deployment
+Planned
+
+---
 
 ## License
 
