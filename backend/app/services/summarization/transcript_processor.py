@@ -4,6 +4,7 @@ from typing import List, Optional
 
 from ...config.logging import get_logger
 from ...services.session.session_service import get_session_transcript
+from .classify import classify_transcript
 from .ollama import OllamaClient, OllamaClientError
 from .prompts import (
     ACTION_ITEMS_PROMPT,
@@ -116,6 +117,49 @@ class TranscriptProcessor:
 
     def generate_action_items(self, session_id: int) -> str:
         return self._generate(session_id, ACTION_ITEMS_PROMPT, ACTION_ITEMS_MERGE_PROMPT, "action_items")
+
+    def classify(self, session_id: int) -> str:
+        """Classify transcript type using a short excerpt."""
+        transcript = self.assemble_transcript(session_id)
+        return classify_transcript(transcript, self._client, model=self._model)
+
+    def process_session(self, session_id: int) -> dict:
+        """Full intelligence pipeline: classify transcript and generate outputs."""
+
+        transcript_type = self.classify(session_id)
+
+        logger.info(
+            "Transcript classified",
+            extra={
+                "session_id": session_id,
+                "type": transcript_type,
+            },
+        )
+
+        summary = self.generate_summary(session_id)
+
+        summary = (
+            summary
+            .replace("SPEAKER_", "Participant ")
+            .replace("Speaker ", "Participant ")
+        )
+
+        mom = None
+        action_items = None
+
+        # SpeechFlow currently treats MoM and Action Items
+        # as meeting-specific intelligence artifacts.
+        if transcript_type == "meeting":
+            mom = self.generate_mom(session_id)
+            action_items = self.generate_action_items(session_id)
+
+        return {
+            "session_id": session_id,
+            "transcript_type": transcript_type,
+            "summary": summary,
+            "mom": mom,
+            "action_items": action_items,
+        }
 
     def _generate(self, session_id: int, template: str, merge_template: str, output_type: str) -> str:
         chunks = self.assemble_chunks(session_id)

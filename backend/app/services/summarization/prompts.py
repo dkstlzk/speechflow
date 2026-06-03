@@ -1,18 +1,30 @@
 """Prompt templates for transcript intelligence generation."""
 
 SUMMARY_PROMPT = """
-Generate a compressed meeting summary.
+Generate a compressed summary of the transcript.
 
-Rules:
+Internal guidance:
 
 - Use only information present in the transcript.
 - Do not add external knowledge.
 - Do not repeat information.
-- Do not expand information.
+- Output should be substantially shorter than the transcript.
+- Every bullet should represent multiple related statements when possible.
 - Do not narrate the conversation.
-- Organize information by topic.
+- Identify the main topics first.
+- Group related information under the same topic.
+- Create a new topic only when the subject meaningfully changes.
+- Prefer fewer high-quality topics over many small topics.
 - Prefer information compression over explanation.
 - Omit topics with no meaningful content.
+- Do not explain why something happened.
+- Do not infer motivations, causes, intentions, emotions, or outcomes.
+- Report information only.
+
+Do not output prompt instructions.
+Do not output rule names.
+Do not output explanation of formatting decisions.
+Output only the final summary.
 
 Do NOT write phrases such as:
 - "Participants discussed..."
@@ -20,12 +32,43 @@ Do NOT write phrases such as:
 - "The discussion focused on..."
 - "The meeting covered..."
 
+Single-Speaker Handling:
+
+- If the transcript contains only one speaker,
+  do not describe a discussion, meeting,
+  conversation, debate, or exchange.
+
+- Treat the transcript as a monologue,
+  narration, recording, lecture, reading,
+  or statement when appropriate.
+
+Do not use plural nouns unless multiple people
+are explicitly present.
+Avoid:
+- participants
+- attendees
+- speakers
+- they
+when only one speaker exists.
+
 If the transcript contains only one meaningful idea:
 Return a single sentence.
 
-If there is no meaningful discussion:
-Return exactly:
-No substantive discussion identified.
+Transcript Type Handling:
+- Conversations may contain opinions, preferences, stories, or casual discussion.
+- Do not force every conversation into a meeting structure.
+- For conversations, summarize the topics discussed naturally.
+- For recordings with a single subject, prefer a short summary over multiple topics.
+
+If the transcript does not contain a coherent discussion,
+still summarize the content that is present.
+
+Return:
+Overview
+<one sentence>
+
+Key Topics
+...
 
 Otherwise return:
 
@@ -41,12 +84,14 @@ Key Topics
 <Topic Name>
 - point
 
-People Referencing Rules:
-
+Name Handling:
 - Never output SPEAKER_XX identifiers.
-- Prefer real names if explicitly mentioned.
-- Prefer real roles if explicitly mentioned.
-- Otherwise use participant labels already present.
+- Prefer real names if mentioned.
+- Prefer real roles if mentioned.
+
+If no names or roles are explicitly available:
+- Avoid referring to people whenever possible.
+- Focus on the information rather than the speaker.
 
 Transcript:
 {transcript}
@@ -56,7 +101,7 @@ Transcript:
 MOM_PROMPT = """
 Generate meeting minutes.
 
-Rules:
+Internal guidance:
 
 - Extract only information explicitly stated.
 - Do not infer attendees.
@@ -69,19 +114,42 @@ Rules:
 
 Attendees section is OPTIONAL.
 
-Only include attendees if explicitly identified.
+If attendees are not explicitly named,
+omit the Attendees section completely.
+
+Never create participant roles.
+Never infer titles.
+Never infer occupations.
+
+Only include attendees if explicitly identified by name,
+role, or self-introduction in the transcript.
+Speaker labels alone do not identify attendees.
+If attendee identity is unknown:
+omit the Attendees section entirely.
 
 Do NOT:
 - derive attendees from speaker labels
 - derive attendees from diarization speakers
 - create placeholder attendees
 
-People Referencing Rules:
-
+Name Handling:
 - Never output SPEAKER_XX identifiers.
-- Prefer real names if explicitly mentioned.
-- Prefer real roles if explicitly mentioned.
-- Otherwise use participant labels already present.
+- Prefer real names if mentioned.
+- Prefer real roles if mentioned.
+
+If no names or roles are explicitly available:
+- Avoid referring to people whenever possible.
+
+If no explicit decisions exist:
+omit the Decisions section.
+
+If no explicit next steps exist:
+omit the Next Steps section.
+
+If no sections contain information:
+return exactly:
+
+No meeting minutes identified.
 
 Output format:
 
@@ -94,6 +162,19 @@ Decisions
 Next Steps
 - next step
 
+Do not create any sections other than:
+
+Overview
+Key Topics
+
+Do not create:
+- People Referenced
+- Notes
+- Observations
+- Additional Context
+- Rules Applied
+- Metadata
+
 Transcript:
 {transcript}
 """
@@ -102,13 +183,22 @@ Transcript:
 ACTION_ITEMS_PROMPT = """
 Extract action items.
 
-Rules:
+Internal guidance:
 
 - Include only actions that were:
   - assigned
   - agreed upon
   - committed to
   - accepted
+
+If no explicitly assigned or agreed actions exist,
+return exactly:
+
+No action items identified.
+
+Do not convert suggestions into actions.
+Do not assume group agreement.
+Do not assume commitment.
 
 Do NOT extract:
 - suggestions
@@ -122,17 +212,35 @@ Do not infer:
 - owners
 - deadlines
 
+If an action lacks an explicit owner,
+commitment, assignment, or agreement,
+do NOT include it.
+
+When uncertain:
+exclude the action item.
+
+Examples that are NOT action items:
+- "We could..."
+- "Maybe we should..."
+- "Someone suggested..."
+- "It might help to..."
+
+Examples that ARE action items:
+- "Rahul will..."
+- "Priya agreed to..."
+- "The team decided to..."
+- "Action: ..."
+
 Keep items concise.
 
 If no valid action items exist:
 Return exactly:
 No action items identified.
 
-People Referencing Rules:
-
+Name Handling:
 - Never output SPEAKER_XX identifiers.
-- Prefer real names if explicitly mentioned.
-- Prefer real roles if explicitly mentioned.
+- Prefer real names if mentioned.
+- Prefer real roles if mentioned.
 - Otherwise use participant labels already present.
 
 Output format:
@@ -149,7 +257,7 @@ Transcript:
 SUMMARY_MERGE_PROMPT = """
 Merge partial summaries.
 
-Rules:
+Internal guidance:
 
 - Merge duplicate topics.
 - Remove repetition.
@@ -179,7 +287,7 @@ Partial Summaries:
 MOM_MERGE_PROMPT = """
 Merge partial meeting minutes.
 
-Rules:
+Internal guidance:
 
 - Deduplicate attendees.
 - Deduplicate decisions.
@@ -196,7 +304,7 @@ Partial MoMs:
 ACTION_ITEMS_MERGE_PROMPT = """
 Merge partial action-item lists.
 
-Rules:
+Internal guidance:
 
 - Remove duplicates.
 - Merge equivalent actions.

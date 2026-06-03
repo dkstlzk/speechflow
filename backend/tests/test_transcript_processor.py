@@ -60,7 +60,7 @@ def test_transcript_processor_assembles_transcript(monkeypatch):
 
     assert (
         assembled
-        == "SPEAKER_00: Hello everyone.\nSPEAKER_01: Let's begin."
+        == "Participant A: Hello everyone.\nParticipant B: Let's begin."
     )
 
 
@@ -79,10 +79,10 @@ def test_transcript_processor_generation_calls_ollama(monkeypatch):
 
     assert len(client.calls) == 3
     expected_transcript = (
-        "SPEAKER_00: Hello everyone.\nSPEAKER_01: Let's begin."
+        "Participant A: Hello everyone.\nParticipant B: Let's begin."
     )
 
-    assert "Generate a compressed meeting summary" in client.calls[0]["prompt"]
+    assert "Generate a compressed summary" in client.calls[0]["prompt"]
     assert expected_transcript in client.calls[0]["prompt"]
 
     assert "Generate meeting minutes" in client.calls[1]["prompt"]
@@ -151,4 +151,46 @@ def test_transcript_processor_large_transcript_merging(monkeypatch):
     assert "--- PART 1 ---\nsummary_part1" in client.calls[2]["prompt"]
     assert "--- PART 2 ---\nsummary_part2" in client.calls[2]["prompt"]
     assert "Partial Summaries:" in client.calls[2]["prompt"]
+
+
+def test_classify_transcript_returns_type(monkeypatch):
+    monkeypatch.setattr(
+        "backend.app.services.summarization.transcript_processor.get_session_transcript",
+        lambda _session_id: _sample_payload(),
+    )
+    client = QueueOllamaClient(["meeting"])
+    processor = TranscriptProcessor(ollama_client=client)
+    result = processor.classify(1)
+    assert result == "meeting"
+    assert len(client.calls) == 1
+
+
+def test_process_session_meeting(monkeypatch):
+    monkeypatch.setattr(
+        "backend.app.services.summarization.transcript_processor.get_session_transcript",
+        lambda _session_id: _sample_payload(),
+    )
+    # classify -> meeting, summary, mom, action_items
+    client = QueueOllamaClient(["meeting", "the summary", "the mom", "the actions"])
+    processor = TranscriptProcessor(ollama_client=client)
+    result = processor.process_session(1)
+    assert result["transcript_type"] == "meeting"
+    assert result["summary"] == "the summary"
+    assert result["mom"] == "the mom"
+    assert result["action_items"] == "the actions"
+
+
+def test_process_session_lecture_skips_mom_and_actions(monkeypatch):
+    monkeypatch.setattr(
+        "backend.app.services.summarization.transcript_processor.get_session_transcript",
+        lambda _session_id: _sample_payload(),
+    )
+    # classify -> lecture, summary only
+    client = QueueOllamaClient(["lecture", "lecture summary"])
+    processor = TranscriptProcessor(ollama_client=client)
+    result = processor.process_session(1)
+    assert result["transcript_type"] == "lecture"
+    assert result["summary"] == "lecture summary"
+    assert result["mom"] is None
+    assert result["action_items"] is None
 
