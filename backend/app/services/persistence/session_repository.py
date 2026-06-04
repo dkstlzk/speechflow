@@ -1,6 +1,6 @@
 """Session repository for ORM access."""
 
-from typing import Optional
+from typing import List, Optional
 
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import func
@@ -48,3 +48,13 @@ def update_session_status(
 def get_session_by_id(db: Session, session_id: int) -> Optional[SessionModel]:
     """Fetch a session by id."""
     return db.get(SessionModel, session_id)
+
+
+def list_recent_sessions(db: Session, limit: int = 50) -> List[SessionModel]:
+    """Return the most recent sessions ordered by created_at desc."""
+    return (
+        db.query(SessionModel)
+        .order_by(SessionModel.created_at.desc())
+        .limit(limit)
+        .all()
+    )

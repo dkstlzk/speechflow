@@ -1,5 +1,6 @@
 from flask import Blueprint, jsonify
 
+from ..db.session import SessionLocal
 from ..schemas.response import ApiResponse
 from ..services.session.session_service import get_session_transcript
 from ..services.summarization.transcript_processor import (
@@ -10,8 +11,25 @@ from ..services.summarization.transcript_processor import (
 )
 from ..services.persistence.summaries import save_summary, get_summary
 from ..services.persistence.actions import save_action_items
+from ..services.persistence.session_repository import (
+    get_session_by_id,
+    list_recent_sessions,
+)
 
 sessions_bp = Blueprint("sessions", __name__)
+
+
+def _serialize_session(row) -> dict:
+    """Serialize a Session ORM row to the API shape."""
+    status = row.status.value if hasattr(row.status, "value") else row.status
+    return {
+        "id": row.id,
+        "status": status,
+        "session_type": row.session_type,
+        "original_filename": row.original_filename,
+        "duration_seconds": row.duration_seconds,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+    }
 
 
 def _parse_action_items_text(raw: str) -> list[str]:
@@ -34,17 +52,36 @@ def _parse_action_items_text(raw: str) -> list[str]:
 
 @sessions_bp.get("/")
 def list_sessions():
-    # TODO: return recent sessions for history view.
-    return jsonify(ApiResponse.fail("not implemented").to_dict()), 501
+    db = SessionLocal()
+    try:
+        rows = list_recent_sessions(db, limit=50)
+        data = [_serialize_session(r) for r in rows]
+    except Exception as e:
+        return jsonify(ApiResponse.fail(f"failed to list sessions: {e}").to_dict()), 500
+    finally:
+        db.close()
+    return jsonify(ApiResponse.ok(data).to_dict()), 200
 
 
 @sessions_bp.get("/<session_id>")
 def get_session(session_id: str):
-    # TODO: load session, transcript, and summaries from persistence layer.
-    return (
-        jsonify(ApiResponse.fail("not implemented").to_dict()),
-        501,
-    )
+    try:
+        session_id_int = int(session_id)
+    except ValueError:
+        return jsonify(ApiResponse.fail("invalid session id").to_dict()), 400
+
+    db = SessionLocal()
+    try:
+        row = get_session_by_id(db, session_id_int)
+        if row is None:
+            return jsonify(ApiResponse.fail("session not found").to_dict()), 404
+        data = _serialize_session(row)
+    except Exception as e:
+        return jsonify(ApiResponse.fail(f"failed to load session: {e}").to_dict()), 500
+    finally:
+        db.close()
+    return jsonify(ApiResponse.ok(data).to_dict()), 200
+
 
 
 @sessions_bp.get("/<session_id>/transcript")

@@ -1,4 +1,10 @@
-# Python
+# Environment & Secrets
+.env
+.env.*
+!.env.example
+.dev.vars
+
+# Python & Backend
 **/__pycache__/
 *.py[cod]
 *.so
@@ -6,26 +12,29 @@
 .mypy_cache/
 .ruff_cache/
 .cache/
+.coverage
+htmlcov/
 
 # Virtual environments
 .sf-env/
 venv/
 
-# Environment variables
-.env
-.env.*
-!.env.example
-
-# Backend
-*.log
-.coverage
-htmlcov/
-
 # Database
 *.db
 *.sqlite3
 
-# Audio / Video Files
+# Frontend (Node/Vite/Bun)
+node_modules/
+dist/
+dist-ssr/
+build/
+.output/
+.vinxi/
+.tanstack/**
+.nitro/
+*.local
+
+# Media & Uploads
 test_audio/
 *.wav
 *.mp3
@@ -34,47 +43,52 @@ test_audio/
 *.webm
 *.pdf
 
-# Generated outputs
+# App Generated Data
 transcripts/*
 !transcripts/.gitkeep
 exports/*
 !exports/.gitkeep
+tmp/
+temp/*
+!temp/.gitkeep
+uploads/
+processed/
+*.srt
+*.vtt
 
 # AI / ML Weights
 ml_models/*
 !ml_models/.gitkeep
 checkpoints/
 hf_cache/
-
-# PyTorch
 *.pt
 *.pth
 
-# Frontend
-node_modules/
-dist/
-build/
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
 
-# IDE
-.vscode/*
-!.vscode/
-!.vscode/settings.json
-.idea/
-
-# OS Files
+# IDE, OS, & Tools
 .DS_Store
 Thumbs.db
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
 
-# Docker
+# VSCode (Ignore all except specific config files)
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
+
+# Docker & Cloudflare
 docker-data/
-
-# Temporary processing files
-tmp/
-temp/*
-!temp/.gitkeep
-uploads/
-processed/
-
-# Runtime generated transcripts
-*.srt
-*.vtt
+.wrangler/
