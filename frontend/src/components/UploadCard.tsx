@@ -4,7 +4,8 @@ import { uploadFile } from "@/services/api";
 import { StatusBadge } from "./StatusBadge";
 import type { ProcessingStatus } from "@/types";
 
-const ACCEPTED = ".mp3,.mp4,.wav,audio/mpeg,audio/wav,video/mp4";
+const ACCEPTED =
+  ".mp3,.mp4,.wav,.m4a,.webm,audio/mpeg,audio/wav,audio/mp4,audio/webm,video/mp4,video/webm";
 
 function formatBytes(b: number) {
   if (b < 1024) return `${b} B`;
@@ -24,9 +25,9 @@ export function UploadCard() {
   function handleFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
     const f = files[0];
-    const ok = /\.(mp3|mp4|wav)$/i.test(f.name);
+    const ok = /\.(mp3|mp4|wav|m4a|webm)$/i.test(f.name);
     if (!ok) {
-      setError("Unsupported format. Use MP3, MP4, or WAV.");
+      setError("Unsupported format. Use MP3, MP4, WAV, M4A, or WEBM.");
       return;
     }
     setError(null);
@@ -52,10 +53,12 @@ export function UploadCard() {
       const res = await uploadFile(file);
       setStatus("processing");
       setSessionId(res.data.sessionId);
-      setTimeout(() => setStatus("completed"), 1200);
-    } catch {
+      navigate({ to: "/session/$id", params: { id: res.data.sessionId } });
+    } catch (e) {
       setStatus("failed");
-      setError("Upload failed. Please try again.");
+      setError(
+        e instanceof Error ? e.message : "Upload failed. Please try again.",
+      );
     }
   }
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AppLayout } from "@/layouts/AppLayout";
 import { TranscriptViewer } from "@/components/TranscriptViewer";
 import { SummaryPanel } from "@/components/SummaryPanel";
@@ -6,6 +6,7 @@ import { MomPanel } from "@/components/MomPanel";
 import { ActionItemsPanel } from "@/components/ActionItemsPanel";
 import { StatusBadge } from "@/components/StatusBadge";
 import {
+  ApiError,
   getActions,
   getSession,
   getSummary,
@@ -27,50 +28,134 @@ interface State<T> {
 
 const initial = <T,>(): State<T> => ({ loading: true, error: null });
 
+const POLL_INTERVAL_MS = 5000;
+
 export function SessionPage({ id }: { id: string }) {
   const [session, setSession] = useState<State<Session>>(initial());
   const [transcript, setTranscript] = useState<State<TranscriptResponse>>(initial());
   const [summary, setSummary] = useState<State<SummaryResponse>>(initial());
   const [actions, setActions] = useState<State<ActionItem[]>>(initial());
   const [processing, setProcessing] = useState(false);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const fetchSession = useCallback(
+    (showLoading: boolean) => {
+      if (showLoading) setSession(initial());
+      return getSession(id)
+        .then((r) => {
+          setSession({ data: r.data, loading: false, error: null });
+          return r.data;
+        })
+        .catch((e: unknown) => {
+          const msg = e instanceof Error ? e.message : "Failed to load session.";
+          setSession({ loading: false, error: msg });
+          return null;
+        });
+    },
+    [id],
+  );
+
+  const fetchTranscript = useCallback(() => {
+    setTranscript(initial());
+    return getTranscript(id)
+      .then((r) => setTranscript({ data: r.data, loading: false, error: null }))
+      .catch((e: unknown) => {
+        if (e instanceof ApiError && e.status === 404) {
+          setTranscript({ data: undefined, loading: false, error: null });
+        } else {
+          setTranscript({ loading: false, error: "Failed to load transcript." });
+        }
+      });
+  }, [id]);
+
+  const fetchSummary = useCallback(() => {
+    setSummary(initial());
+    return getSummary(id)
+      .then((r) => setSummary({ data: r.data, loading: false, error: null }))
+      .catch((e: unknown) => {
+        if (e instanceof ApiError && e.status === 404) {
+          // Summary not yet generated — empty panel, not an error.
+          setSummary({ data: undefined, loading: false, error: null });
+        } else {
+          setSummary({ loading: false, error: "Failed to load summary." });
+        }
+      });
+  }, [id]);
+
+  const fetchActions = useCallback(() => {
+    setActions(initial());
+    return getActions(id)
+      .then((r) => setActions({ data: r.data, loading: false, error: null }))
+      .catch((e: unknown) => {
+        if (e instanceof ApiError && e.status === 404) {
+          setActions({ data: [], loading: false, error: null });
+        } else {
+          setActions({ loading: false, error: "Failed to load action items." });
+        }
+      });
+  }, [id]);
 
   const load = useCallback(() => {
-    setSession(initial());
-    setTranscript(initial());
-    setSummary(initial());
-    setActions(initial());
-
-    getSession(id)
-      .then((r) => setSession({ data: r.data, loading: false, error: null }))
-      .catch(() =>
-        setSession({ loading: false, error: "Failed to load session." }),
-      );
-    getTranscript(id)
-      .then((r) => setTranscript({ data: r.data, loading: false, error: null }))
-      .catch(() =>
-        setTranscript({ loading: false, error: "Failed to load transcript." }),
-      );
-    getSummary(id)
-      .then((r) => setSummary({ data: r.data, loading: false, error: null }))
-      .catch(() =>
-        setSummary({ loading: false, error: "Failed to load summary." }),
-      );
-    getActions(id)
-      .then((r) => setActions({ data: r.data, loading: false, error: null }))
-      .catch(() =>
-        setActions({ loading: false, error: "Failed to load action items." }),
-      );
-  }, [id]);
+    fetchSession(true);
+    fetchTranscript();
+    fetchSummary();
+    fetchActions();
+  }, [fetchSession, fetchTranscript, fetchSummary, fetchActions]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  const stopPolling = useCallback(() => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  }, []);
+
+  // Poll session status every 5s while processing; refresh data on completion.
+  useEffect(() => {
+    const status = session.data?.status;
+    if (status !== "processing") {
+      stopPolling();
+      return;
+    }
+    if (pollRef.current) return;
+    pollRef.current = setInterval(async () => {
+      const next = await fetchSession(false);
+      if (!next) return;
+      if (next.status === "completed") {
+        stopPolling();
+        fetchTranscript();
+        fetchSummary();
+        fetchActions();
+      } else if (next.status === "failed") {
+        stopPolling();
+      }
+    }, POLL_INTERVAL_MS);
+    return () => stopPolling();
+  }, [
+    session.data?.status,
+    fetchSession,
+    fetchTranscript,
+    fetchSummary,
+    fetchActions,
+    stopPolling,
+  ]);
+
+  useEffect(() => () => stopPolling(), [stopPolling]);
 
   async function onProcess() {
     setProcessing(true);
     try {
       await processSession(id);
       load();
+    } catch (e) {
+      setSummary({
+        loading: false,
+        error:
+          e instanceof Error ? e.message : "Failed to process transcript.",
+      });
     } finally {
       setProcessing(false);
     }

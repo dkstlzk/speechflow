@@ -1,150 +1,229 @@
 /**
- * Mock API layer. Swap implementations with real Flask endpoints later.
+ * Real API layer wired to the Flask backend.
  * Endpoint contract is documented above each function.
  */
 import type {
   ActionItem,
   ApiResponse,
+  ProcessingStatus,
   Session,
   SummaryResponse,
   TranscriptResponse,
 } from "@/types";
 
-const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const API_BASE =
+  (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:5000";
 
-const MOCK_SESSIONS: Session[] = [
-  {
-    id: "sess_001",
-    createdAt: "2026-05-28T10:12:00Z",
-    status: "completed",
-    transcriptType: "meeting",
-    fileName: "weekly-sync.mp3",
-    durationSec: 1820,
-  },
-  {
-    id: "sess_002",
-    createdAt: "2026-05-29T14:45:00Z",
-    status: "completed",
-    transcriptType: "interview",
-    fileName: "candidate-interview.mp4",
-    durationSec: 2640,
-  },
-  {
-    id: "sess_003",
-    createdAt: "2026-05-30T09:00:00Z",
-    status: "processing",
-    transcriptType: "lecture",
-    fileName: "lecture-04.wav",
-    durationSec: 3300,
-  },
-];
+export class ApiError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.status = status;
+  }
+}
 
-const ok = <T>(data: T): ApiResponse<T> => ({ data, ok: true });
+interface FetchOptions extends RequestInit {
+  timeoutMs?: number;
+}
 
-// POST /api/upload
+async function apiFetch<T>(
+  input: string,
+  init: FetchOptions = {},
+): Promise<ApiResponse<T>> {
+  const { timeoutMs, ...rest } = init;
+  const controller = new AbortController();
+  const timer = timeoutMs
+    ? setTimeout(() => controller.abort(), timeoutMs)
+    : null;
+  let res: Response;
+  try {
+    res = await fetch(input, { ...rest, signal: controller.signal });
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+
+  let json: { success?: boolean; data?: unknown; error?: string | null } = {};
+  try {
+    json = await res.json();
+  } catch {
+    // non-JSON response
+  }
+
+  if (!res.ok || json.success === false) {
+    const msg =
+      (json && json.error) ||
+      `Request failed with status ${res.status}`;
+    throw new ApiError(msg, res.status);
+  }
+  return { data: json.data as T, ok: true };
+}
+
+function mapBackendStatus(s: string): ProcessingStatus {
+  const map: Record<string, ProcessingStatus> = {
+    pending: "processing",
+    uploaded: "processing",
+    preprocessing: "processing",
+    transcribing: "processing",
+    diarizing: "processing",
+    processing: "processing",
+    completed: "completed",
+    failed: "failed",
+  };
+  return map[s] ?? "processing";
+}
+
+// POST /api/upload/
 export async function uploadFile(
   file: File,
 ): Promise<ApiResponse<{ sessionId: string }>> {
-  await delay(900);
-  const sessionId = `sess_${Math.random().toString(36).slice(2, 8)}`;
-  MOCK_SESSIONS.unshift({
-    id: sessionId,
-    createdAt: new Date().toISOString(),
-    status: "processing",
-    transcriptType: "meeting",
-    fileName: file.name,
-  });
-  return ok({ sessionId });
+  const fd = new FormData();
+  fd.append("file", file);
+  const raw = await apiFetch<{
+    session_id: number;
+    status: string;
+    filename: string;
+  }>(`${API_BASE}/api/upload/`, { method: "POST", body: fd });
+  return { data: { sessionId: String(raw.data.session_id) }, ok: true };
 }
 
-// GET /api/sessions
+// GET /api/sessions/
 export async function getSessions(): Promise<ApiResponse<Session[]>> {
-  await delay(300);
-  return ok(MOCK_SESSIONS);
+  type BS = {
+    id: number;
+    status: string;
+    session_type?: string;
+    original_filename: string | null;
+    created_at: string;
+  };
+  const raw = await apiFetch<BS[]>(`${API_BASE}/api/sessions/`);
+  const sessions: Session[] = (raw.data ?? []).map((s) => ({
+    id: String(s.id),
+    createdAt: s.created_at,
+    status: mapBackendStatus(s.status),
+    transcriptType: "meeting",
+    fileName: s.original_filename ?? undefined,
+  }));
+  return { data: sessions, ok: true };
 }
 
 // GET /api/sessions/{id}
 export async function getSession(id: string): Promise<ApiResponse<Session>> {
-  await delay(200);
-  const s =
-    MOCK_SESSIONS.find((x) => x.id === id) ?? {
-      id,
-      createdAt: new Date().toISOString(),
-      status: "completed" as const,
-      transcriptType: "meeting" as const,
-    };
-  return ok(s);
+  type BS = {
+    id: number;
+    status: string;
+    original_filename: string | null;
+    created_at: string;
+  };
+  const raw = await apiFetch<BS>(`${API_BASE}/api/sessions/${id}`);
+  return {
+    data: {
+      id: String(raw.data.id),
+      createdAt: raw.data.created_at,
+      status: mapBackendStatus(raw.data.status),
+      transcriptType: "meeting",
+      fileName: raw.data.original_filename ?? undefined,
+    },
+    ok: true,
+  };
 }
 
 // GET /api/sessions/{id}/transcript
 export async function getTranscript(
   id: string,
 ): Promise<ApiResponse<TranscriptResponse>> {
-  await delay(400);
-  const segments = [
-    { speaker: "Participant A", text: "Hello everyone, thanks for joining the call today.", startSec: 0 },
-    { speaker: "Participant B", text: "Happy to be here. Should we start with the roadmap?", startSec: 6 },
-    { speaker: "Participant A", text: "Yes, let's begin by reviewing Q3 deliverables.", startSec: 12 },
-    { speaker: "Participant C", text: "I have a few concerns about the timeline I'd like to discuss.", startSec: 20 },
-    { speaker: "Participant B", text: "Sure, let's open that up after the roadmap section.", startSec: 28 },
-  ];
-  return ok({
-    sessionId: id,
-    segments,
-    rawText: segments.map((s) => `${s.speaker}: ${s.text}`).join("\n"),
-  });
+  type BC = {
+    speaker: string;
+    start: number;
+    end: number;
+    text: string;
+    order: number;
+  };
+  type BP = { session_id: number | string; status: string; transcript: BC[] };
+  const raw = await apiFetch<BP>(`${API_BASE}/api/sessions/${id}/transcript`);
+  const segments = (raw.data.transcript ?? []).map((c) => ({
+    speaker: c.speaker,
+    text: c.text,
+    startSec: c.start,
+    endSec: c.end,
+  }));
+  return {
+    data: {
+      sessionId: String(raw.data.session_id),
+      segments,
+      rawText: segments.map((s) => `${s.speaker}: ${s.text}`).join("\n"),
+    },
+    ok: true,
+  };
 }
 
 // GET /api/sessions/{id}/summary
 export async function getSummary(
   id: string,
 ): Promise<ApiResponse<SummaryResponse>> {
-  await delay(400);
-  return ok({
-    sessionId: id,
-    summary:
-      "The team reviewed Q3 deliverables, discussed concerns around the timeline, and aligned on next steps for the roadmap.",
-    mom: [
-      "Attendees: Participant A, B, C",
-      "Agenda: Q3 roadmap review",
-      "Decisions: Adjust timeline for module 2",
-      "Next meeting: Following week",
-    ].join("\n"),
-  });
+  type BS = {
+    session_id: number;
+    summary: string;
+    mom: string | null;
+    created_at: string | null;
+  };
+  const raw = await apiFetch<BS>(`${API_BASE}/api/sessions/${id}/summary`);
+  return {
+    data: {
+      sessionId: String(raw.data.session_id),
+      summary: raw.data.summary,
+      mom: raw.data.mom,
+    },
+    ok: true,
+  };
 }
 
 // GET /api/actions/{session_id}
 export async function getActions(
   id: string,
 ): Promise<ApiResponse<ActionItem[]>> {
-  await delay(300);
-  return ok([
-    { id: "a1", text: "Share updated roadmap doc", owner: "Participant A", dueDate: "2026-06-05" },
-    { id: "a2", text: "Schedule follow-up with engineering", owner: "Participant B" },
-    { id: "a3", text: "Draft revised timeline proposal", owner: "Participant C", dueDate: "2026-06-07" },
-  ]);
+  type BI = {
+    id: number;
+    text: string;
+    status: string;
+    created_at: string | null;
+  };
+  type BP = { session_id: number; action_items: BI[] };
+  const raw = await apiFetch<BP>(`${API_BASE}/api/actions/${id}`);
+  const items: ActionItem[] = (raw.data.action_items ?? []).map((it) => ({
+    id: String(it.id),
+    text: it.text,
+    completed: it.status === "done",
+  }));
+  return { data: items, ok: true };
 }
 
 // POST /api/sessions/{id}/process
 export async function processSession(
   id: string,
-): Promise<ApiResponse<{ sessionId: string; status: "processing" }>> {
-  await delay(600);
-  return ok({ sessionId: id, status: "processing" });
+): Promise<ApiResponse<{ sessionId: string; status: "completed" }>> {
+  const raw = await apiFetch<{
+    session_id: number;
+    transcript_type: string;
+    summary: string;
+  }>(`${API_BASE}/api/sessions/${id}/process`, {
+    method: "POST",
+    timeoutMs: 300000,
+  });
+  return {
+    data: { sessionId: String(raw.data.session_id), status: "completed" },
+    ok: true,
+  };
 }
 
-// POST /api/realtime/sessions  (placeholder)
+// Realtime placeholders — not integrated in Phase 3
 export async function startRealtimeSession(): Promise<
   ApiResponse<{ sessionId: string }>
 > {
-  await delay(300);
-  return ok({ sessionId: `rt_${Math.random().toString(36).slice(2, 8)}` });
+  return { data: { sessionId: "" }, ok: false };
 }
 
-// POST /api/realtime/sessions/{id}/finalize  (placeholder)
 export async function finalizeRealtimeSession(
   id: string,
 ): Promise<ApiResponse<{ sessionId: string }>> {
-  await delay(400);
-  return ok({ sessionId: id });
+  return { data: { sessionId: id }, ok: false };
 }
