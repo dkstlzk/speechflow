@@ -1,10 +1,29 @@
+import time
+from flask import request
 from flask_socketio import SocketIO, emit
-
 
 def register_events(socketio: SocketIO) -> None:
     @socketio.on("connect")
     def handle_connect():
+        print(f"[Socket.IO] Connected: {request.sid}")
         emit("server_status", {"status": "connected"})
+
+    @socketio.on("disconnect")
+    def handle_disconnect():
+        print(f"[Socket.IO] Disconnected: {request.sid}")
+
+    @socketio.on("ping_test")
+    def handle_ping_test(data):
+        print(f"[Socket.IO] Ping from {request.sid}", data)
+        emit(
+            "pong_test",
+            {
+                "message": "backend_alive",
+                "sid": request.sid,
+                "server_time": time.time(),
+                "echo_client_time": data.get("client_time"),
+            },
+        )
 
     @socketio.on("stream_start")
     def handle_stream_start(_payload):

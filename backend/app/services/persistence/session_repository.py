@@ -4,8 +4,11 @@ from typing import List, Optional
 
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import func
-
+from ...models.action_item import ActionItem
+from ...models.summary import SessionSummary
+from ...models.transcript_chunk import TranscriptChunk
 from ...models.enums import SessionStatus
+from ...models.speaker import Speaker
 from ...models.session import Session as SessionModel
 
 
@@ -58,3 +61,32 @@ def list_recent_sessions(db: Session, limit: int = 50) -> List[SessionModel]:
         .limit(limit)
         .all()
     )
+
+
+def delete_session(db: Session, session_id: int) -> bool:
+    """Delete a session and all dependent records."""
+    session = db.get(SessionModel, session_id)
+
+    if session is None:
+        return False
+
+    db.query(TranscriptChunk).filter(
+        TranscriptChunk.session_id == session_id
+    ).delete(synchronize_session=False)
+
+    db.query(ActionItem).filter(
+        ActionItem.session_id == session_id
+    ).delete(synchronize_session=False)
+
+    db.query(SessionSummary).filter(
+        SessionSummary.session_id == session_id
+    ).delete(synchronize_session=False)
+
+    db.query(Speaker).filter(
+        Speaker.session_id == session_id
+    ).delete(synchronize_session=False)
+
+    db.delete(session)
+    db.commit()
+
+    return True

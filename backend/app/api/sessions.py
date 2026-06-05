@@ -14,6 +14,7 @@ from ..services.persistence.actions import save_action_items
 from ..services.persistence.session_repository import (
     get_session_by_id,
     list_recent_sessions,
+    delete_session,
 )
 
 sessions_bp = Blueprint("sessions", __name__)
@@ -82,6 +83,41 @@ def get_session(session_id: str):
         db.close()
     return jsonify(ApiResponse.ok(data).to_dict()), 200
 
+
+@sessions_bp.delete("/<session_id>")
+def delete_session_endpoint(session_id: str):
+    try:
+        session_id_int = int(session_id)
+    except ValueError:
+        return jsonify(
+            ApiResponse.fail("invalid session id").to_dict()
+        ), 400
+
+    db = SessionLocal()
+
+    try:
+        deleted = delete_session(db, session_id_int)
+
+        if not deleted:
+            return jsonify(
+                ApiResponse.fail("session not found").to_dict()
+            ), 404
+
+    except Exception as e:
+        return jsonify(
+            ApiResponse.fail(
+                f"failed to delete session: {e}"
+            ).to_dict()
+        ), 500
+
+    finally:
+        db.close()
+
+    return jsonify(
+        ApiResponse.ok(
+            {"session_id": session_id_int}
+        ).to_dict()
+    ), 200
 
 
 @sessions_bp.get("/<session_id>/transcript")

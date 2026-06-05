@@ -11,6 +11,7 @@ import { SummaryPanel } from "@/components/SummaryPanel";
 import { MomPanel } from "@/components/MomPanel";
 import { ActionItemsPanel } from "@/components/ActionItemsPanel";
 import {
+  socket,
   connect,
   disconnect,
   startRecording,
@@ -47,7 +48,7 @@ export function RealtimePage() {
   const [summary, setSummary] = useState<SummaryResponse | null>(null);
   const [actions, setActions] = useState<ActionItem[] | null>(null);
   const [processing, setProcessing] = useState(false);
-
+  const [pingLogs, setPingLogs] = useState<string[]>([]);
   const pausedRef = useRef(false);
 
   useEffect(() => {
@@ -55,15 +56,42 @@ export function RealtimePage() {
       if (pausedRef.current) return;
       setSegments((s) => [...s, seg]);
     });
+
     const off2 = subscribeToStatus((ev) => {
       setEvents((e) => [...e, ev]);
-      if (ev.type === "connected") setConn("connected");
-      if (ev.type === "connecting") setConn("connecting");
-      if (ev.type === "disconnected") setConn("disconnected");
+
+      if (ev.type === "connected") {
+        setConn("connected");
+      }
+
+      if (ev.type === "connecting") {
+        setConn("connecting");
+      }
+
+      if (ev.type === "disconnected") {
+        setConn("disconnected");
+      }
     });
+
+    const onPong = (data: any) => {
+      const latency = data.echo_client_time
+        ? Date.now() - data.echo_client_time
+        : "N/A";
+
+      setPingLogs((prev) =>
+        [
+          `PONG: ${data.message} | Latency: ${latency}ms | SID: ${data.sid}`,
+          ...prev,
+        ].slice(0, 3)
+      );
+    };
+
+    socket.on("pong_test", onPong);
+
     return () => {
       off1();
       off2();
+      socket.off("pong_test", onPong);
       disconnect();
     };
   }, []);
@@ -252,6 +280,32 @@ export function RealtimePage() {
           </div>
         </div>
       )}
+
+      <section className="mb-6 rounded-lg border border-border bg-card p-5 shadow-sm flex items-center justify-between">
+        <div>
+          <h3 className="text-sm font-semibold uppercase text-muted-foreground mb-1">
+            Transport Test
+          </h3>
+
+          <div className="font-mono text-xs text-muted-foreground h-4">
+            {pingLogs[0] || "Click ping to test socket latency..."}
+          </div>
+        </div>
+
+        <button
+          onClick={() => {
+            if (!socket.connected) return;
+
+            socket.emit("ping_test", {
+              client_time: Date.now(),
+            });
+          }}
+          disabled={conn !== "connected"}
+          className="rounded-md bg-secondary px-4 py-2 text-sm font-medium hover:bg-secondary/80 disabled:opacity-50"
+        >
+          Send Ping
+        </button>
+      </section>
 
       <StreamingEventLog events={events} />
     </AppLayout>

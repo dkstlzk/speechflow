@@ -227,3 +227,16 @@ export async function finalizeRealtimeSession(
 ): Promise<ApiResponse<{ sessionId: string }>> {
   return { data: { sessionId: id }, ok: false };
 }
+
+export async function deleteSession(
+  id: string,
+): Promise<ApiResponse<{ sessionId: string }>> {
+  await apiFetch(`${API_BASE}/api/sessions/${id}`, {
+    method: "DELETE",
+  });
+
+  return {
+    data: { sessionId: id },
+    ok: true,
+  };
+}
