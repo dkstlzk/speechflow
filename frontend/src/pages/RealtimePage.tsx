@@ -26,6 +26,7 @@ import {
   processSession,
   startRealtimeSession,
 } from "@/services/api";
+import { startAudioCapture, stopAudioCapture } from "@/services/audio";
 import type {
   ActionItem,
   ConnectionStatus,
@@ -121,7 +122,9 @@ export function RealtimePage() {
     setSessionId(res.data.sessionId);
     setRec("recording");
     pausedRef.current = false;
+
     startRecording(res.data.sessionId);
+    await startAudioCapture();
   }
 
   function onPause() {
@@ -136,12 +139,14 @@ export function RealtimePage() {
 
   async function onStop() {
     stopRecording();
+    stopAudioCapture();
     setRec("completed");
     if (sessionId) await finalizeRealtimeSession(sessionId);
   }
 
   function onReset() {
     stopRecording();
+    stopAudioCapture();
     disconnect();
     setConn("disconnected");
     setRec("idle");

@@ -4,8 +4,9 @@ Defines interfaces for file-based and streaming transcription.
 """
 
 from dataclasses import dataclass
-from typing import Dict, Iterable, List, Optional
+from typing import Dict, Iterable, List, Optional, Union
 
+import numpy as np
 from faster_whisper import WhisperModel
 
 from ...config.logging import get_logger
@@ -51,9 +52,9 @@ class WhisperTranscriptionService:
             )
         return self._model
 
-    def transcribe(self, audio_path: str) -> TranscriptionResult:
+    def transcribe(self, audio: Union[str, np.ndarray]) -> TranscriptionResult:
         model = self._get_model()
-        segments, _info = model.transcribe(audio_path)
+        segments, _info = model.transcribe(audio)
 
         ordered_segments: List[Dict] = []
         for index, segment in enumerate(segments):

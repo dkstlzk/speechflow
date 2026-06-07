@@ -1,3 +1,8 @@
+# pyrefly: ignore [missing-import]
+import eventlet
+eventlet.monkey_patch()
+
+import threading
 from flask import Flask, jsonify
 from flask_cors import CORS
 from flask_socketio import SocketIO
@@ -10,11 +15,13 @@ from .websocket import register_socketio_events
 from .db.base import Base
 from .db.session import engine
 
+from .workers.realtime_worker import realtime_worker_loop
+
 configure_logging()
 settings = Settings()
 socketio = SocketIO(
     cors_allowed_origins=settings.CORS_ORIGINS,
-    async_mode=settings.SOCKETIO_ASYNC_MODE,
+    async_mode="eventlet",
 )
 
 
@@ -36,6 +43,12 @@ def create_app() -> Flask:
     socketio.init_app(app)
 
     Base.metadata.create_all(bind=engine)
+
+    threading.Thread(
+        target=realtime_worker_loop,
+        args=(socketio,),
+        daemon=True,
+    ).start()
 
     @app.get("/health")
     def health():
