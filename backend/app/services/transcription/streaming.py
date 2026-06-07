@@ -26,7 +26,11 @@ class StreamingSession:
     created_at: float = field(default_factory=time.time)
     # Track where the worker last left off
     processed_offset: int = 0
-    last_emitted_text: str = ""
+    
+    # The Triple Safety Net Trackers
+    current_transcript: str = ""
+    stability_ticks: int = 0
+    silence_ticks: int = 0  # True acoustic silence tracker
 
 class StreamingSessionManager:
     def __init__(self) -> None:
@@ -86,6 +90,17 @@ class StreamingSessionManager:
         window_size = int(bytes_per_sec * window_seconds)
         
         return bytes(session.audio_buffer[-window_size:])
+
+    # Clear buffer after commit to prevent text duplication
+    # TODO: Replace with VAD sliding window to preserve acoustic context
+    def clear_buffer_for_next_commit(self, sid: str) -> None:
+        session = self.active_sessions.get(sid)
+        if session:
+            session.audio_buffer.clear()
+            session.processed_offset = 0
+            session.current_transcript = ""
+            session.stability_ticks = 0
+            session.silence_ticks = 0
 
     def destroy_session(self, sid: str) -> None:
         if sid in self.active_sessions:

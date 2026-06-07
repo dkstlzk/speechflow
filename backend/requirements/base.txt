@@ -9,6 +9,7 @@ faster-whisper
 torch
 pyannote.audio
 silero-vad
+onnxruntime
 pydub
 ollama
 simple-websocket

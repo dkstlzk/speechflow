@@ -215,7 +215,7 @@ export async function processSession(
   };
 }
 
-// Realtime placeholders — not integrated in Phase 3
+// Realtime placeholders - not integrated in Phase 3
 export async function startRealtimeSession(): Promise<
   ApiResponse<{ sessionId: string }>
 > {

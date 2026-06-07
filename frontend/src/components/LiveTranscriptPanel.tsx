@@ -4,12 +4,14 @@ import { PanelShell } from "./PanelShell";
 
 interface Props {
   segments: TranscriptSegment[];
+  partial?: TranscriptSegment | null; // Accept the new prop
   autoScroll: boolean;
   onToggleAutoScroll: (v: boolean) => void;
 }
 
 export function LiveTranscriptPanel({
   segments,
+  partial,
   autoScroll,
   onToggleAutoScroll,
 }: Props) {
@@ -19,12 +21,12 @@ export function LiveTranscriptPanel({
     if (autoScroll && ref.current) {
       ref.current.scrollTop = ref.current.scrollHeight;
     }
-  }, [segments, autoScroll]);
+  }, [segments, partial, autoScroll]); // Add partial to dependency array
 
   return (
     <PanelShell
       title="Live Transcript"
-      empty={segments.length === 0}
+      empty={segments.length === 0 && !partial}
       emptyMessage="Waiting for transcript chunks…"
       actions={
         <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -45,6 +47,14 @@ export function LiveTranscriptPanel({
               <span className="text-foreground/90">{seg.text}</span>
             </li>
           ))}
+
+          {/* Render the tentative draft in gray/italics */}
+          {partial && partial.text && (
+            <li className="text-sm opacity-60 italic animate-pulse">
+              <span className="font-medium">{partial.speaker}: </span>
+              <span>{partial.text}</span>
+            </li>
+          )}
         </ul>
       </div>
     </PanelShell>

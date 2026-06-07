@@ -26,6 +26,7 @@ export interface TranscriptSegment {
   text: string;
   startSec?: number;
   endSec?: number;
+  is_partial?: boolean;
 }
 
 export interface TranscriptResponse {

@@ -40,7 +40,11 @@ export function RealtimePage() {
   const [conn, setConn] = useState<ConnectionStatus>("disconnected");
   const [rec, setRec] = useState<RecordingStatus>("idle");
   const [sessionId, setSessionId] = useState<string | null>(null);
+
+  // PHASE 4B: Separate states
   const [segments, setSegments] = useState<TranscriptSegment[]>([]);
+  const [partial, setPartial] = useState<TranscriptSegment | null>(null);
+
   const [events, setEvents] = useState<StreamingEvent[]>([]);
   const [autoScroll, setAutoScroll] = useState(true);
   const [resetKey, setResetKey] = useState(0);
@@ -55,7 +59,14 @@ export function RealtimePage() {
   useEffect(() => {
     const off1 = subscribeToTranscript((seg) => {
       if (pausedRef.current) return;
-      setSegments((s) => [...s, seg]);
+
+      // Route to the correct UI state
+      if (seg.is_partial) {
+        setPartial(seg);
+      } else {
+        setSegments((s) => [...s, seg]);
+        setPartial(null); // Clear the live draft once committed
+      }
     });
 
     const off2 = subscribeToStatus((ev) => {
@@ -152,6 +163,7 @@ export function RealtimePage() {
     setRec("idle");
     setSessionId(null);
     setSegments([]);
+    setPartial(null);
     setEvents([]);
     setSummary(null);
     setActions(null);
@@ -247,6 +259,7 @@ export function RealtimePage() {
       <div className="mb-6">
         <LiveTranscriptPanel
           segments={segments}
+          partial={partial}
           autoScroll={autoScroll}
           onToggleAutoScroll={setAutoScroll}
         />
