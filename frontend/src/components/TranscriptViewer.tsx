@@ -45,7 +45,7 @@ export function TranscriptViewer({ segments, loading, error }: Props) {
                 variant="secondary"
                 className={`${getSpeakerColor(seg.speaker)} border-0 font-medium`}
               >
-                {seg.speaker}
+                {seg.speaker === "UNKNOWN" ? "Speaker" : seg.speaker}
               </Badge>
 
               <div className="flex flex-col">

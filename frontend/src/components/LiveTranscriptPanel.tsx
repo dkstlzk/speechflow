@@ -10,14 +10,18 @@ import { formatTranscriptTime } from "@/lib/transcript";
 
 interface Props {
   segments: TranscriptSegment[];
-  partial?: TranscriptSegment | null;
   autoScroll: boolean;
   onToggleAutoScroll: (v: boolean) => void;
 }
 
+/**
+ * LiveTranscriptPanel — Displays committed transcript chunks only.
+ *
+ * Every entry here has already been persisted to the database.
+ * No partial/draft segments are shown — those are handled by LiveCaptionStrip.
+ */
 export function LiveTranscriptPanel({
   segments,
-  partial,
   autoScroll,
   onToggleAutoScroll,
 }: Props) {
@@ -27,12 +31,12 @@ export function LiveTranscriptPanel({
     if (autoScroll && ref.current) {
       ref.current.scrollTop = ref.current.scrollHeight;
     }
-  }, [segments, partial, autoScroll]);
+  }, [segments, autoScroll]);
 
   return (
     <PanelShell
       title="Live Transcript"
-      empty={segments.length === 0 && !partial}
+      empty={segments.length === 0}
       emptyMessage="Waiting for transcript chunks…"
       actions={
         <div className="flex items-center gap-3">
@@ -67,7 +71,7 @@ export function LiveTranscriptPanel({
                 variant="secondary"
                 className={`${getSpeakerColor(seg.speaker)} border-0 font-medium`}
               >
-                {seg.speaker}
+                {seg.speaker === "UNKNOWN" ? "Speaker" : seg.speaker}
               </Badge>
               <div className="flex flex-col">
                 <span className="text-xs text-muted-foreground">
@@ -84,18 +88,6 @@ export function LiveTranscriptPanel({
               </div>
             </li>
           ))}
-
-          {partial && partial.text && (
-            <li className="text-sm flex flex-wrap items-baseline gap-2 opacity-60 italic animate-pulse">
-              <Badge
-                variant="outline"
-                className="border-dashed font-medium text-muted-foreground"
-              >
-                {partial.speaker}
-              </Badge>
-              <span>{partial.text}</span>
-            </li>
-          )}
         </ul>
       </div>
     </PanelShell>

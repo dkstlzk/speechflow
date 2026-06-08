@@ -30,3 +30,4 @@ class Session(Base):
         String(32),
         nullable=True,
     )
+    title = Column(String(255), nullable=True)

@@ -14,6 +14,7 @@ from .websocket import register_socketio_events
 
 from .db.base import Base
 from .db.session import engine
+from .db.migrations import run_migrations
 
 from .workers.realtime_worker import realtime_worker_loop
 
@@ -43,6 +44,7 @@ def create_app() -> Flask:
     socketio.init_app(app)
 
     Base.metadata.create_all(bind=engine)
+    run_migrations(engine)
 
     threading.Thread(
         target=realtime_worker_loop,

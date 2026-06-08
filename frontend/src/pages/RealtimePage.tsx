@@ -12,25 +12,32 @@ import { MomPanel } from "@/components/MomPanel";
 import { ActionItemsPanel } from "@/components/ActionItemsPanel";
 import { AudioVisualizer } from "@/components/AudioVisualizer";
 import { AiGeneratingSkeleton } from "@/components/AiGeneratingSkeleton";
+import { ReviewScreen } from "@/components/ReviewScreen";
 import {
   socket,
   connect,
   disconnect,
   startRecording,
   stopRecording,
+  pauseRecording,
+  resumeRecording,
   subscribeToStatus,
   subscribeToTranscript,
+  subscribeToCaptions,
 } from "@/services/socket";
 import {
+  deleteRealtimeSession,
   finalizeRealtimeSession,
   getActions,
   getSummary,
   processSession,
+  saveRealtimeSession,
   startRealtimeSession,
 } from "@/services/api";
 import { startAudioCapture, stopAudioCapture } from "@/services/audio";
 import type {
   ActionItem,
+  CaptionUpdate,
   ConnectionStatus,
   RecordingStatus,
   StreamingEvent,
@@ -43,9 +50,9 @@ export function RealtimePage() {
   const [rec, setRec] = useState<RecordingStatus>("idle");
   const [sessionId, setSessionId] = useState<string | null>(null);
 
-  // PHASE 4B: Separate states
+  // Separated: captions are disposable, segments are committed
+  const [caption, setCaption] = useState<string>("");
   const [segments, setSegments] = useState<TranscriptSegment[]>([]);
-  const [partial, setPartial] = useState<TranscriptSegment | null>(null);
 
   const [events, setEvents] = useState<StreamingEvent[]>([]);
   const [autoScroll, setAutoScroll] = useState(true);
@@ -55,33 +62,32 @@ export function RealtimePage() {
   const [summary, setSummary] = useState<SummaryResponse | null>(null);
   const [actions, setActions] = useState<ActionItem[] | null>(null);
   const [processing, setProcessing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [savedTitle, setSavedTitle] = useState<string | undefined>();
   const [pingLogs, setPingLogs] = useState<string[]>([]);
-  const pausedRef = useRef(false);
 
   useEffect(() => {
+    // Subscribe to committed transcript chunks (persisted in DB)
     const off1 = subscribeToTranscript((seg) => {
-      if (pausedRef.current) return;
-
-      // Route to the correct UI state
-      if (seg.is_partial) {
-        setPartial(seg);
-      } else {
-        setSegments((s) => [...s, seg]);
-        setPartial(null); // Clear the live draft once committed
-      }
+      setSegments((s) => [...s, seg]);
     });
 
-    const off2 = subscribeToStatus((ev) => {
+    // Subscribe to live captions (disposable, UI only)
+    const off2 = subscribeToCaptions((cap: CaptionUpdate) => {
+      setCaption(cap.text);
+    });
+
+    // Subscribe to status events for the event log
+    const off3 = subscribeToStatus((ev) => {
       setEvents((e) => [...e, ev]);
 
       if (ev.type === "connected") {
         setConn("connected");
       }
-
       if (ev.type === "connecting") {
         setConn("connecting");
       }
-
       if (ev.type === "disconnected") {
         setConn("disconnected");
       }
@@ -105,6 +111,7 @@ export function RealtimePage() {
     return () => {
       off1();
       off2();
+      off3();
       socket.off("pong_test", onPong);
       disconnect();
     };
@@ -134,19 +141,18 @@ export function RealtimePage() {
     const res = await startRealtimeSession();
     setSessionId(res.data.sessionId);
     setRec("recording");
-    pausedRef.current = false;
 
     startRecording(res.data.sessionId);
     await startAudioCapture();
   }
 
   function onPause() {
-    pausedRef.current = true;
+    pauseRecording();
     setRec("paused");
   }
 
   function onResume() {
-    pausedRef.current = false;
+    resumeRecording();
     setRec("recording");
   }
 
@@ -154,13 +160,40 @@ export function RealtimePage() {
     stopRecording();
     stopAudioCapture();
 
+    setRec("finalizing");
+    setCaption(""); // Clear disposable caption
+
     if (sessionId) {
       await finalizeRealtimeSession(sessionId);
     }
 
     disconnect();
     setConn("disconnected");
-    setRec("completed");
+    setRec("review");
+  }
+
+  async function onSave() {
+    if (!sessionId) return;
+    setSaving(true);
+    try {
+      const res = await saveRealtimeSession(sessionId);
+      setSavedTitle(res.data.title);
+      setRec("saved");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function onDelete() {
+    if (!sessionId) return;
+    setDeleting(true);
+    try {
+      await deleteRealtimeSession(sessionId);
+      // Reset to idle after delete
+      onReset();
+    } finally {
+      setDeleting(false);
+    }
   }
 
   function onReset() {
@@ -171,10 +204,11 @@ export function RealtimePage() {
     setRec("idle");
     setSessionId(null);
     setSegments([]);
-    setPartial(null);
+    setCaption("");
     setEvents([]);
     setSummary(null);
     setActions(null);
+    setSavedTitle(undefined);
     setResetKey((k) => k + 1);
   }
 
@@ -193,8 +227,6 @@ export function RealtimePage() {
       setProcessing(false);
     }
   }
-
-  const latest = partial ?? segments[segments.length - 1];
 
   return (
     <AppLayout>
@@ -217,7 +249,7 @@ export function RealtimePage() {
           </div>
           <div>
             <p className="text-xs uppercase tracking-wide text-muted-foreground">
-              Recording
+              Session State
             </p>
             <p className="mt-1.5 text-sm font-medium capitalize">{rec}</p>
           </div>
@@ -261,23 +293,42 @@ export function RealtimePage() {
         </div>
       </section>
 
-      <div className="mb-6">
-        <LiveCaptionStrip latest={latest} />
-      </div>
+      {/* Live caption — only shown during active recording */}
+      {rec === "recording" && (
+        <div className="mb-6">
+          <LiveCaptionStrip caption={caption} />
+        </div>
+      )}
 
+      {/* Committed transcript — always visible once segments exist */}
       <div className="mb-6">
         <LiveTranscriptPanel
           segments={segments}
-          partial={partial}
           autoScroll={autoScroll}
           onToggleAutoScroll={setAutoScroll}
         />
       </div>
 
-      {rec === "completed" && sessionId && (
+      {/* Review screen — shown after stop */}
+      {(rec === "review" || rec === "saved") && sessionId && (
+        <div className="mb-6">
+          <ReviewScreen
+            sessionId={sessionId}
+            segments={segments}
+            onSave={onSave}
+            onDelete={onDelete}
+            saving={saving}
+            deleting={deleting}
+            savedTitle={savedTitle}
+          />
+        </div>
+      )}
+
+      {/* Intelligence generation — only after SAVED */}
+      {rec === "saved" && sessionId && (
         <section className="mb-6 rounded-lg border border-border bg-card p-5 shadow-sm">
           <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            Recording Complete
+            Intelligence
           </h3>
           <div className="mt-3 flex flex-wrap gap-2">
             <button

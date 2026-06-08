@@ -65,6 +65,7 @@ hf_cache/
 *.pth
 
 # Logs
+flask.log
 logs/
 *.log
 npm-debug.log*
@@ -92,3 +93,9 @@ Thumbs.db
 # Docker & Cloudflare
 docker-data/
 .wrangler/
+
+# PostgreSQL dumps/backups
+*.sql
+
+# Runtime artifacts
+*.pid

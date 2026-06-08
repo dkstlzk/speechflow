@@ -54,7 +54,13 @@ class WhisperTranscriptionService:
 
     def transcribe(self, audio: Union[str, np.ndarray]) -> TranscriptionResult:
         model = self._get_model()
-        segments, _info = model.transcribe(audio)
+        segments, _info = model.transcribe(
+            audio,
+            condition_on_previous_text=False,
+            vad_filter=True,
+            beam_size=1,
+            hallucination_silence_threshold=1,
+        )
 
         ordered_segments: List[Dict] = []
         for index, segment in enumerate(segments):

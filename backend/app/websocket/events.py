@@ -2,8 +2,9 @@ import time
 from flask import request
 from flask_socketio import SocketIO, emit
 
-# Import the new session manager (adjust import path if your IDE prefers relative imports)
 from ..services.transcription.streaming import session_manager
+from ..workers.realtime_worker import handle_pause, handle_resume
+
 
 def register_events(socketio: SocketIO) -> None:
     @socketio.on("connect")
@@ -13,9 +14,10 @@ def register_events(socketio: SocketIO) -> None:
 
     @socketio.on("disconnect")
     def handle_disconnect():
-        print(f"[Socket.IO] Disconnected: {request.sid}")
-        # Failsafe: Destroy session and free memory if the user closes the tab unexpectedly
-        session_manager.destroy_session(request.sid)
+        session = session_manager.active_sessions.get(request.sid)
+        if session:
+            session.is_ending = True
+        print(f"[Socket.IO] Disconnect requested: {request.sid}")
 
     @socketio.on("ping_test")
     def handle_ping_test(data):
@@ -33,13 +35,21 @@ def register_events(socketio: SocketIO) -> None:
     @socketio.on("stream_start")
     def handle_stream_start(payload):
         # Extract the session_id sent by the frontend's startRecording()
-        session_id = payload.get("session_id", "unknown_session") if payload else "unknown_session"
+        session_id = (
+            payload.get("session_id", "unknown_session")
+            if payload
+            else "unknown_session"
+        )
         # Extract dynamic sample rate, fallback to 16000
-        sample_rate = payload.get("sample_rate", 16000) if payload else 16000
-        
+        sample_rate = (
+            payload.get("sample_rate", 16000)
+            if payload
+            else 16000
+        )
+
         # Create a dedicated memory buffer for this connection
         session_manager.create_session(request.sid, session_id, sample_rate)
-        
+
         emit(
             "stream_ack",
             {
@@ -56,9 +66,24 @@ def register_events(socketio: SocketIO) -> None:
 
     @socketio.on("stream_end")
     def handle_stream_end(_payload):
-        # The user clicked stop. Clean up the memory tracker.
-        session_manager.destroy_session(request.sid)
-        
-        # TODO: Here is where we will eventually trigger diarization and summarization
-        emit("stream_complete", {"status": "finalizing"})
-        
+        session = session_manager.active_sessions.get(request.sid)
+        if session:
+            session.is_ending = True
+        emit(
+            "stream_complete",
+            {"status": "finalizing"},
+        )
+
+    @socketio.on("stream_pause")
+    def handle_stream_pause(_payload):
+        session = session_manager.active_sessions.get(request.sid)
+        if session and not session.is_paused:
+            handle_pause(socketio, request.sid, session)
+        emit("stream_paused", {"status": "paused"})
+
+    @socketio.on("stream_resume")
+    def handle_stream_resume(_payload):
+        session = session_manager.active_sessions.get(request.sid)
+        if session and session.is_paused:
+            handle_resume(request.sid, session)
+        emit("stream_resumed", {"status": "recording"})

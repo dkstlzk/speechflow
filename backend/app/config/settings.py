@@ -1,8 +1,13 @@
 import os
+from pathlib import Path
 from dataclasses import dataclass
 
-from .constants import DEFAULT_ALLOWED_EXTENSIONS, DEFAULT_MAX_UPLOAD_MB
+from dotenv import load_dotenv
 
+ENV_PATH = Path(__file__).resolve().parents[3] / ".env"
+load_dotenv(ENV_PATH)
+
+from .constants import DEFAULT_ALLOWED_EXTENSIONS, DEFAULT_MAX_UPLOAD_MB
 
 @dataclass(frozen=True)
 class Settings:

@@ -3,7 +3,11 @@ export type ProcessingStatus =
   | "uploading"
   | "processing"
   | "completed"
-  | "failed";
+  | "failed"
+  | "recording"
+  | "finalizing"
+  | "review"
+  | "saved";
 
 export type TranscriptType =
   | "meeting"
@@ -21,6 +25,7 @@ export interface Session {
   transcriptType?: TranscriptType;
   fileName?: string;
   durationSec?: number;
+  title?: string;
 }
 
 export interface TranscriptSegment {
@@ -66,12 +71,18 @@ export type RecordingStatus =
   | "idle"
   | "recording"
   | "paused"
-  | "processing"
-  | "completed";
+  | "finalizing"
+  | "review"
+  | "saved";
 
 export interface StreamingEvent {
   id: string;
   timestamp: string;
   type: string;
   message: string;
+}
+
+export interface CaptionUpdate {
+  text: string;
+  timestamp: number;
 }

@@ -31,6 +31,7 @@ def _serialize_session(row) -> dict:
         "session_type": row.session_type,
         "original_filename": row.original_filename,
         "duration_seconds": row.duration_seconds,
+        "title": row.title,
         "created_at": row.created_at.isoformat()
             if row.created_at
             else None,

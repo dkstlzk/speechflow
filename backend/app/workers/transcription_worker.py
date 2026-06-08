@@ -48,6 +48,8 @@ def process_upload_session(
 
         update_session_status(db, session_id, SessionStatus.TRANSCRIBING)
         result = transcriber.transcribe(wav_path)
+        print(type(result))
+        print(dir(result))
 
         update_session_status(db, session_id, SessionStatus.DIARIZING)
         speaker_segments = diarizer.diarize(wav_path)

@@ -69,6 +69,11 @@ function mapBackendStatus(s: string): ProcessingStatus {
     processing: "processing",
     completed: "completed",
     failed: "failed",
+    // Realtime pipeline statuses
+    recording: "recording",
+    finalizing: "finalizing",
+    review: "review",
+    saved: "saved",
   };
   return map[s] ?? "processing";
 }
@@ -96,6 +101,7 @@ export async function getSessions(): Promise<ApiResponse<Session[]>> {
     original_filename: string | null;
     created_at: string;
     transcript_type?: string | null;
+    title?: string | null;
   };
   const raw = await apiFetch<BS[]>(`${API_BASE}/api/sessions/`);
   const sessions: Session[] = (raw.data ?? []).map((s) => ({
@@ -104,6 +110,7 @@ export async function getSessions(): Promise<ApiResponse<Session[]>> {
     status: mapBackendStatus(s.status),
     transcriptType: (s.transcript_type as TranscriptType) ?? undefined,
     fileName: s.original_filename ?? undefined,
+    title: s.title ?? undefined,
   }));
   return { data: sessions, ok: true };
 }
@@ -261,6 +268,64 @@ export async function finalizeRealtimeSession(
   return {
     data: {
       sessionId: id,
+    },
+    ok: true,
+  };
+}
+
+export async function saveRealtimeSession(
+  id: string,
+): Promise<ApiResponse<{ sessionId: string; title: string }>> {
+  const raw = await apiFetch<{
+    session_id: number;
+    status: string;
+    title: string;
+  }>(`${API_BASE}/api/realtime/session/${id}/save`, {
+    method: "POST",
+  });
+
+  return {
+    data: {
+      sessionId: String(raw.data.session_id),
+      title: raw.data.title,
+    },
+    ok: true,
+  };
+}
+
+export async function deleteRealtimeSession(
+  id: string,
+): Promise<ApiResponse<{ sessionId: string }>> {
+  await apiFetch(
+    `${API_BASE}/api/realtime/session/${id}`,
+    {
+      method: "DELETE",
+    },
+  );
+
+  return {
+    data: { sessionId: id },
+    ok: true,
+  };
+}
+
+export async function updateSessionTitle(
+  id: string,
+  title: string,
+): Promise<ApiResponse<{ sessionId: string; title: string }>> {
+  const raw = await apiFetch<{
+    session_id: number;
+    title: string;
+  }>(`${API_BASE}/api/realtime/session/${id}/title`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title }),
+  });
+
+  return {
+    data: {
+      sessionId: String(raw.data.session_id),
+      title: raw.data.title,
     },
     ok: true,
   };

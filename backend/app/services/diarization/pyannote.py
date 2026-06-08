@@ -3,8 +3,6 @@ from typing import Dict, List, Optional
 
 from pyannote.audio import Pipeline
 
-from backend.app.services import diarization
-
 from ...config.logging import get_logger
 from ...config.settings import Settings
 

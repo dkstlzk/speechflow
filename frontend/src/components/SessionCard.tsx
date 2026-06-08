@@ -42,6 +42,9 @@ export function SessionCard({ session, onDelete }: SessionCardProps) {
     <div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
+          {session.title && (
+            <span className="text-sm font-medium">{session.title}</span>
+          )}
           <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{session.id}</code>
           <span className="rounded-full border border-border px-2 py-0.5 text-xs capitalize text-muted-foreground">
             {session.transcriptType}

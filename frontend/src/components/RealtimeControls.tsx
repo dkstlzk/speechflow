@@ -25,12 +25,13 @@ export function RealtimeControls({
   const recording = status === "recording";
   const paused = status === "paused";
   const idle = status === "idle";
+  const canStart = idle || status === "saved";
 
   return (
     <div className="flex flex-wrap items-center gap-2">
       <button
         onClick={onStart}
-        disabled={!idle && status !== "completed"}
+        disabled={!canStart}
         className={`${btn} bg-primary text-primary-foreground hover:bg-primary/90`}
       >
         Start Recording
@@ -58,6 +59,7 @@ export function RealtimeControls({
       </button>
       <button
         onClick={onReset}
+        disabled={idle}
         className={`${btn} border border-input bg-background hover:bg-accent`}
       >
         Reset Session
