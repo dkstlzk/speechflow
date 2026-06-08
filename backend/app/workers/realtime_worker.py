@@ -5,6 +5,7 @@ from flask_socketio import SocketIO
 
 from ..services.transcription.streaming import session_manager
 from ..services.transcription.whisper_service import WhisperTranscriptionService
+from ..services.persistence.transcripts import save_transcript_chunks
 
 # 1. Load Whisper EXACTLY ONCE outside the loop to preserve VRAM/CPU
 transcriber = WhisperTranscriptionService()
@@ -84,15 +85,20 @@ def realtime_worker_loop(socketio: SocketIO):
                         else:
                             session.current_transcript = text
                             session.stability_ticks = 0
-                            
-                            # Emit TENTATIVE since it's actively changing
-                            socketio.emit("partial_transcript", {
-                                "speaker": "Speaker",
-                                "text": session.current_transcript,
-                                "is_partial": True,
-                                "chunk_index": 0
-                            }, to=sid)
 
+                            socketio.emit(
+                                "partial_transcript",
+                                {
+                                    "speaker": "UNKNOWN",
+                                    "text": session.current_transcript,
+                                    "start_time": session.commit_start_time,
+                                    "end_time": session.commit_start_time,
+                                    "chunk_index": session.chunk_index,
+                                    "is_partial": True,
+                                },
+                                to=sid,
+                            )
+    
                         # --- 2. THE TRIPLE SAFETY NET COMMIT TRIGGER ---
                         # Primary: VAD says you stopped talking for 2 seconds
                         vad_commit = session.silence_ticks >= 2
@@ -104,12 +110,55 @@ def realtime_worker_loop(socketio: SocketIO):
                             reason = "VAD" if vad_commit else "STABILITY" if stability_commit else "FORCED"
                             print(f"[COMMIT | {reason}] {session.current_transcript}")
                             
-                            socketio.emit("partial_transcript", {
-                                "speaker": "Speaker",
-                                "text": session.current_transcript,
-                                "is_partial": False,
-                                "chunk_index": 0
-                            }, to=sid)
+                            try:
+                                now = time.time()
+                                start_time = session.commit_start_time
+
+                                end_time = (
+                                    now
+                                    - session.recording_started_at
+                                )
+
+                                save_transcript_chunks(
+                                    int(session.session_id),
+                                    [
+                                        {
+                                            "session_id": int(session.session_id),
+                                            "speaker_id": None,
+                                            "start_time": start_time,
+                                            "end_time": end_time,
+                                            "text": session.current_transcript,
+                                            "chunk_index": session.chunk_index,
+                                            "is_partial": False,
+                                        }
+                                    ],
+                                )
+
+                                socketio.emit(
+                                    "partial_transcript",
+                                    {
+                                        "speaker": "UNKNOWN",
+                                        "text": session.current_transcript,
+                                        "start_time": start_time,
+                                        "end_time": end_time,
+                                        "chunk_index": session.chunk_index,
+                                        "is_partial": False,
+                                    },
+                                    to=sid,
+                                )
+
+                                session.commit_start_time = end_time
+                                session.chunk_index += 1
+
+                                print(
+                                    f"[RealtimePersistence] Saved chunk #{session.chunk_index - 1}"
+                                    f" ({start_time:.2f}s -> {end_time:.2f}s)"
+                                )
+
+                            except Exception as persist_error:
+                                print(
+                                    f"[RealtimePersistence] Failed to save transcript chunk: {persist_error}"
+                                )
                             
                             # Clean up for the next sentence
                             session_manager.clear_buffer_for_next_commit(sid)

@@ -4,6 +4,7 @@ import { TranscriptViewer } from "@/components/TranscriptViewer";
 import { SummaryPanel } from "@/components/SummaryPanel";
 import { MomPanel } from "@/components/MomPanel";
 import { ActionItemsPanel } from "@/components/ActionItemsPanel";
+import { AiGeneratingSkeleton } from "@/components/AiGeneratingSkeleton";
 import { StatusBadge } from "@/components/StatusBadge";
 import {
   ApiError,
@@ -194,6 +195,12 @@ export function SessionPage({ id }: { id: string }) {
           </button>
         </div>
       </div>
+
+      {processing || (session.data?.status === "processing" && !summary.data && !actions.data?.length) ? (
+        <div className="mb-6">
+          <AiGeneratingSkeleton />
+        </div>
+      ) : null}
 
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="lg:col-span-2">

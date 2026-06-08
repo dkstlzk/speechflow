@@ -40,7 +40,14 @@ def register_events(socketio: SocketIO) -> None:
         # Create a dedicated memory buffer for this connection
         session_manager.create_session(request.sid, session_id, sample_rate)
         
-        emit("stream_ack", {"status": "started"})
+        emit(
+            "stream_ack",
+            {
+                "status": "started",
+                "session_id": session_id,
+                "sample_rate": sample_rate,
+            },
+        )
 
     @socketio.on("audio_chunk")
     def handle_audio_chunk(payload):

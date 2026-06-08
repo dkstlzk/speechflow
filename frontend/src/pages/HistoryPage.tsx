@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { AppLayout } from "@/layouts/AppLayout";
 import { SessionCard } from "@/components/SessionCard";
-import { getSessions } from "@/services/api";
+import { deleteSession, getSessions } from "@/services/api";
 import type { Session, TranscriptType } from "@/types";
 
 const FILTERS: ("all" | TranscriptType)[] = [
@@ -24,6 +24,20 @@ export function HistoryPage() {
       .then((r) => setSessions(r.data))
       .catch(() => setError("Failed to load sessions."));
   }, []);
+
+  const handleDelete = async (id: string) => {
+    setError(null);
+    try {
+      await deleteSession(id);
+      setSessions((prev) => (prev ? prev.filter((s) => s.id !== id) : prev));
+    } catch (e) {
+      setError(
+        e instanceof Error ? e.message : "Failed to delete session. Please try again.",
+      );
+      throw e;
+    }
+  };
+
 
   const filtered = useMemo(() => {
     if (!sessions) return [];
@@ -77,7 +91,7 @@ export function HistoryPage() {
       ) : (
         <div className="space-y-3">
           {filtered.map((s) => (
-            <SessionCard key={s.id} session={s} />
+            <SessionCard key={s.id} session={s} onDelete={handleDelete} />
           ))}
         </div>
       )}

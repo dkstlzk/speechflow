@@ -10,6 +10,8 @@ import { StreamingEventLog } from "@/components/StreamingEventLog";
 import { SummaryPanel } from "@/components/SummaryPanel";
 import { MomPanel } from "@/components/MomPanel";
 import { ActionItemsPanel } from "@/components/ActionItemsPanel";
+import { AudioVisualizer } from "@/components/AudioVisualizer";
+import { AiGeneratingSkeleton } from "@/components/AiGeneratingSkeleton";
 import {
   socket,
   connect,
@@ -231,11 +233,12 @@ export function RealtimePage() {
             <p className="text-xs uppercase tracking-wide text-muted-foreground">
               Duration
             </p>
-            <p className="mt-1.5">
+            <p className="mt-1.5 flex items-center gap-3">
               <RecordingTimer
                 running={rec === "recording"}
                 resetKey={resetKey}
               />
+              <AudioVisualizer isRecording={rec === "recording"} />
             </p>
           </div>
         </div>
@@ -287,6 +290,12 @@ export function RealtimePage() {
             </Link>
           </div>
         </section>
+      )}
+
+      {processing && !summary && !actions && (
+        <div className="mb-6">
+          <AiGeneratingSkeleton />
+        </div>
       )}
 
       {(summary || actions) && (

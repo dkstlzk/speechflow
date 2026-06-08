@@ -127,6 +127,17 @@ export async function getSession(id: string): Promise<ApiResponse<Session>> {
   };
 }
 
+// DELETE /api/sessions/{id}
+export async function deleteSession(
+  id: string,
+): Promise<ApiResponse<{ sessionId: string }>> {
+  const raw = await apiFetch<{ session_id: number }>(
+    `${API_BASE}/api/sessions/${id}`,
+    { method: "DELETE" },
+  );
+  return { data: { sessionId: String(raw.data.session_id) }, ok: true };
+}
+
 // GET /api/sessions/{id}/transcript
 export async function getTranscript(
   id: string,
@@ -226,17 +237,4 @@ export async function finalizeRealtimeSession(
   id: string,
 ): Promise<ApiResponse<{ sessionId: string }>> {
   return { data: { sessionId: id }, ok: false };
-}
-
-export async function deleteSession(
-  id: string,
-): Promise<ApiResponse<{ sessionId: string }>> {
-  await apiFetch(`${API_BASE}/api/sessions/${id}`, {
-    method: "DELETE",
-  });
-
-  return {
-    data: { sessionId: id },
-    ok: true,
-  };
 }

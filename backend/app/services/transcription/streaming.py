@@ -24,6 +24,7 @@ class StreamingSession:
     audio_buffer: bytearray = field(default_factory=bytearray)
     transcript_buffer: list = field(default_factory=list)
     created_at: float = field(default_factory=time.time)
+    recording_started_at: float = field(default_factory=time.time)
     # Track where the worker last left off
     processed_offset: int = 0
     
@@ -31,6 +32,10 @@ class StreamingSession:
     current_transcript: str = ""
     stability_ticks: int = 0
     silence_ticks: int = 0  # True acoustic silence tracker
+    chunk_index: int = 0 
+
+    commit_start_time: float = 0.0
+    recording_seconds: float = 0.0
 
 class StreamingSessionManager:
     def __init__(self) -> None:
