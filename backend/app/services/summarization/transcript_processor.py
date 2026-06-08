@@ -40,7 +40,7 @@ class TranscriptProcessor:
     def __init__(
         self,
         ollama_client: Optional[OllamaClient] = None,
-        model: str = "phi3:mini",
+        model: str = "qwen2.5:3b",
     ) -> None:
         self._client = ollama_client or OllamaClient()
         self._model = model
@@ -79,7 +79,10 @@ class TranscriptProcessor:
                 speaker_map,
             )
 
-            line = f"{normalized_speaker}: {text}"
+            if speaker == "UNKNOWN":
+                line = text
+            else:
+                line = f"{normalized_speaker}: {text}"
             line_len = len(line) + 1
 
             if current_chunk_lines and current_length + line_len > max_chars:
@@ -119,12 +122,18 @@ class TranscriptProcessor:
         return self._generate(session_id, ACTION_ITEMS_PROMPT, ACTION_ITEMS_MERGE_PROMPT, "action_items")
 
     def classify(self, session_id: int) -> str:
-        """Classify transcript type using a short excerpt."""
         transcript = self.assemble_transcript(session_id)
-        return classify_transcript(transcript, self._client, model=self._model)
+
+        if len(transcript.strip()) < 100:
+            return "conversation"
+
+        return classify_transcript(
+            transcript,
+            self._client,
+            model=self._model,
+        )
 
     def process_session(self, session_id: int) -> dict:
-        """Full intelligence pipeline: classify transcript and generate outputs."""
 
         transcript_type = self.classify(session_id)
 
@@ -166,7 +175,9 @@ class TranscriptProcessor:
         
         partial_outputs = []
         for i, chunk in enumerate(chunks):
+
             prompt = template.format(transcript=chunk)
+
             try:
                 out = self._client.generate(prompt, model=self._model)
                 partial_outputs.append(out)

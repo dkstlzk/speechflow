@@ -78,10 +78,11 @@ def get_session_transcript(session_id: int) -> Optional[dict]:
                 "speaker": chunk.speaker.speaker_label
                 if chunk.speaker is not None
                 else "UNKNOWN",
-                "start": float(chunk.start_time),
-                "end": float(chunk.end_time),
+
+                "startSec": float(chunk.start_time),
+                "endSec": float(chunk.end_time),
+                "chunk_index": chunk.chunk_index,
                 "text": chunk.text,
-                "order": chunk.chunk_index,
             }
             for chunk in chunks
         ]

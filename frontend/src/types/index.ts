@@ -10,13 +10,15 @@ export type TranscriptType =
   | "conversation"
   | "interview"
   | "lecture"
-  | "presentation";
+  | "presentation"
+  | "voice_note"
+  | "unknown";
 
 export interface Session {
   id: string;
   createdAt: string;
   status: ProcessingStatus;
-  transcriptType: TranscriptType;
+  transcriptType?: TranscriptType;
   fileName?: string;
   durationSec?: number;
 }
@@ -24,8 +26,12 @@ export interface Session {
 export interface TranscriptSegment {
   speaker: string;
   text: string;
+
+  chunk_index?: number;
+
   startSec?: number;
   endSec?: number;
+
   is_partial?: boolean;
 }
 

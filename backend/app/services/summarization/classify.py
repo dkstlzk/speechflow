@@ -62,7 +62,7 @@ VALID_TYPES = frozenset([
 def classify_transcript(
     transcript: str,
     client: OllamaClient,
-    model: str = "phi3:mini",
+    model: str = "qwen2.5:3b",
     max_excerpt_chars: int = 1500,
 ) -> str:
     """Classify transcript type using a single LLM call on a short excerpt.

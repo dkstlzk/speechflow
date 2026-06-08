@@ -70,7 +70,7 @@ class OllamaClient:
         self.timeout_seconds = config.timeout_seconds
         self._session = session or requests.Session()
 
-    def generate(self, prompt: str, model: str = "phi3:mini") -> str:
+    def generate(self, prompt: str, model: str = "qwen2.5:3b") -> str:
         if not prompt or not prompt.strip():
             raise OllamaClientError("Prompt must not be empty")
 

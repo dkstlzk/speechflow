@@ -9,6 +9,7 @@ import type {
   Session,
   SummaryResponse,
   TranscriptResponse,
+  TranscriptType,
 } from "@/types";
 
 const API_BASE =
@@ -94,13 +95,14 @@ export async function getSessions(): Promise<ApiResponse<Session[]>> {
     session_type?: string;
     original_filename: string | null;
     created_at: string;
+    transcript_type?: string | null;
   };
   const raw = await apiFetch<BS[]>(`${API_BASE}/api/sessions/`);
   const sessions: Session[] = (raw.data ?? []).map((s) => ({
     id: String(s.id),
     createdAt: s.created_at,
     status: mapBackendStatus(s.status),
-    transcriptType: "meeting",
+    transcriptType: (s.transcript_type as TranscriptType) ?? undefined,
     fileName: s.original_filename ?? undefined,
   }));
   return { data: sessions, ok: true };
@@ -111,6 +113,7 @@ export async function getSession(id: string): Promise<ApiResponse<Session>> {
   type BS = {
     id: number;
     status: string;
+    transcript_type?: string | null;
     original_filename: string | null;
     created_at: string;
   };
@@ -120,7 +123,7 @@ export async function getSession(id: string): Promise<ApiResponse<Session>> {
       id: String(raw.data.id),
       createdAt: raw.data.created_at,
       status: mapBackendStatus(raw.data.status),
-      transcriptType: "meeting",
+      transcriptType: raw.data.transcript_type as TranscriptType | undefined,
       fileName: raw.data.original_filename ?? undefined,
     },
     ok: true,
@@ -144,18 +147,19 @@ export async function getTranscript(
 ): Promise<ApiResponse<TranscriptResponse>> {
   type BC = {
     speaker: string;
-    start: number;
-    end: number;
+    startSec: number;
+    endSec: number;
     text: string;
-    order: number;
+    chunk_index: number;
   };
   type BP = { session_id: number | string; status: string; transcript: BC[] };
   const raw = await apiFetch<BP>(`${API_BASE}/api/sessions/${id}/transcript`);
   const segments = (raw.data.transcript ?? []).map((c) => ({
     speaker: c.speaker,
     text: c.text,
-    startSec: c.start,
-    endSec: c.end,
+    chunk_index: c.chunk_index,
+    startSec: c.startSec,
+    endSec: c.endSec,
   }));
   return {
     data: {
@@ -226,15 +230,38 @@ export async function processSession(
   };
 }
 
-// Realtime placeholders - not integrated in Phase 3
 export async function startRealtimeSession(): Promise<
   ApiResponse<{ sessionId: string }>
 > {
-  return { data: { sessionId: "" }, ok: false };
+  const raw = await apiFetch<{
+    session_id: number;
+    status: string;
+  }>(`${API_BASE}/api/realtime/session`, {
+    method: "POST",
+  });
+
+  return {
+    data: {
+      sessionId: String(raw.data.session_id),
+    },
+    ok: true,
+  };
 }
 
 export async function finalizeRealtimeSession(
   id: string,
 ): Promise<ApiResponse<{ sessionId: string }>> {
-  return { data: { sessionId: id }, ok: false };
+  await apiFetch(
+    `${API_BASE}/api/realtime/session/${id}/finalize`,
+    {
+      method: "POST",
+    },
+  );
+
+  return {
+    data: {
+      sessionId: id,
+    },
+    ok: true,
+  };
 }

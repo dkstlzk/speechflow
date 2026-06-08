@@ -153,8 +153,14 @@ export function RealtimePage() {
   async function onStop() {
     stopRecording();
     stopAudioCapture();
+
+    if (sessionId) {
+      await finalizeRealtimeSession(sessionId);
+    }
+
+    disconnect();
+    setConn("disconnected");
     setRec("completed");
-    if (sessionId) await finalizeRealtimeSession(sessionId);
   }
 
   function onReset() {
@@ -188,7 +194,7 @@ export function RealtimePage() {
     }
   }
 
-  const latest = segments[segments.length - 1];
+  const latest = partial ?? segments[segments.length - 1];
 
   return (
     <AppLayout>

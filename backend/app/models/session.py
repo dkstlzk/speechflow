@@ -26,3 +26,7 @@ class Session(Base):
         nullable=False,
     )
     completed_at = Column(DateTime)
+    transcript_type = Column(
+        String(32),
+        nullable=True,
+    )

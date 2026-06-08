@@ -12,7 +12,7 @@ class QueueOllamaClient:
         self.responses = list(responses)
         self.calls = []
 
-    def generate(self, prompt: str, model: str = "phi3:mini") -> str:
+    def generate(self, prompt: str, model: str = "qwen2.5:3b") -> str:
         self.calls.append({"prompt": prompt, "model": model})
         if not self.responses:
             return ""

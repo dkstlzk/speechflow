@@ -6,6 +6,8 @@ import { Badge } from "./ui/badge";
 import { Download } from "lucide-react";
 import { downloadTranscriptAsTxt, getSpeakerColor } from "@/lib/utils";
 
+import { formatTranscriptTime } from "@/lib/transcript";
+
 interface Props {
   segments: TranscriptSegment[];
   partial?: TranscriptSegment | null;
@@ -67,7 +69,19 @@ export function LiveTranscriptPanel({
               >
                 {seg.speaker}
               </Badge>
-              <span className="text-foreground/90">{seg.text}</span>
+              <div className="flex flex-col">
+                <span className="text-xs text-muted-foreground">
+                  #{seg.chunk_index}
+                  {" • "}
+                  {formatTranscriptTime(seg.startSec)}
+                  {" → "}
+                  {formatTranscriptTime(seg.endSec)}
+                </span>
+
+                <span className="text-foreground/90">
+                  {seg.text}
+                </span>
+              </div>
             </li>
           ))}
 

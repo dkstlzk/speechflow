@@ -4,18 +4,12 @@ import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { Download } from "lucide-react";
 import { downloadTranscriptAsTxt, getSpeakerColor } from "@/lib/utils";
+import { formatTranscriptTime } from "@/lib/transcript";
 
 interface Props {
   segments?: TranscriptSegment[];
   loading?: boolean;
   error?: string | null;
-}
-
-function formatTime(s?: number) {
-  if (s === undefined) return "";
-  const m = Math.floor(s / 60);
-  const sec = Math.floor(s % 60);
-  return `${m}:${sec.toString().padStart(2, "0")}`;
 }
 
 export function TranscriptViewer({ segments, loading, error }: Props) {
@@ -43,21 +37,30 @@ export function TranscriptViewer({ segments, loading, error }: Props) {
       <div className="max-h-[480px] overflow-y-auto pr-2">
         <ul className="space-y-4">
           {segments?.map((seg, i) => (
-            <li key={i} className="text-sm">
-              <div className="mb-1 flex items-baseline gap-2">
-                <Badge
-                  variant="secondary"
-                  className={`${getSpeakerColor(seg.speaker)} border-0 font-medium`}
-                >
-                  {seg.speaker}
-                </Badge>
-                {seg.startSec !== undefined && (
-                  <span className="text-xs text-muted-foreground">
-                    {formatTime(seg.startSec)}
-                  </span>
-                )}
+            <li
+              key={i}
+              className="text-sm flex flex-wrap items-baseline gap-2"
+            >
+              <Badge
+                variant="secondary"
+                className={`${getSpeakerColor(seg.speaker)} border-0 font-medium`}
+              >
+                {seg.speaker}
+              </Badge>
+
+              <div className="flex flex-col">
+                <span className="text-xs text-muted-foreground">
+                  #{seg.chunk_index}
+                  {" • "}
+                  {formatTranscriptTime(seg.startSec)}
+                  {" → "}
+                  {formatTranscriptTime(seg.endSec)}
+                </span>
+
+                <span className="text-foreground/90">
+                  {seg.text}
+                </span>
               </div>
-              <p className="text-foreground/90">{seg.text}</p>
             </li>
           ))}
         </ul>

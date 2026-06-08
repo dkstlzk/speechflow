@@ -5,7 +5,6 @@ from ...models.enums import SessionStatus
 from .session_repository import create_session as create_session_record
 from .session_repository import update_session_status as update_session_record
 
-
 def create_session(session_type: str, original_filename: Optional[str] = None) -> int:
     """Create session using repository and return id."""
     db = SessionLocal()

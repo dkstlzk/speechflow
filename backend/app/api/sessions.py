@@ -15,6 +15,7 @@ from ..services.persistence.session_repository import (
     get_session_by_id,
     list_recent_sessions,
     delete_session,
+    update_transcript_type,
 )
 
 sessions_bp = Blueprint("sessions", __name__)
@@ -26,10 +27,13 @@ def _serialize_session(row) -> dict:
     return {
         "id": row.id,
         "status": status,
+        "transcript_type": row.transcript_type,
         "session_type": row.session_type,
         "original_filename": row.original_filename,
         "duration_seconds": row.duration_seconds,
-        "created_at": row.created_at.isoformat() if row.created_at else None,
+        "created_at": row.created_at.isoformat()
+            if row.created_at
+            else None,
     }
 
 
@@ -145,6 +149,18 @@ def process_session(session_id: str):
 
     try:
         result = processor.process_session(session_id_int)
+        
+        db = SessionLocal()
+
+        try:
+            update_transcript_type(
+                db,
+                session_id_int,
+                result["transcript_type"],
+            )
+        finally:
+            db.close()
+        
     except TranscriptNotFoundError as e:
         return jsonify(ApiResponse.fail(str(e)).to_dict()), 404
     except EmptyTranscriptError as e:

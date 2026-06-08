@@ -64,10 +64,14 @@ socket.on("stream_complete", () => {
 
 socket.on("partial_transcript", (data) => {
   const segment: TranscriptSegment = {
-    speaker: data.speaker || "Speaker",
+    speaker: data.speaker || "UNKNOWN",
     text: data.text || data.status || "",
-    // Grab the flag from backend, default to true if missing
-    is_partial: data.is_partial !== undefined ? data.is_partial : true,
+    startSec: data.start_time,
+    endSec: data.end_time,
+    is_partial:
+      data.is_partial !== undefined
+        ? data.is_partial
+        : true,
   };
 
   transcriptListeners.forEach((l) => l(segment));

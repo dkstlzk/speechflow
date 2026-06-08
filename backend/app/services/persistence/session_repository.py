@@ -90,3 +90,23 @@ def delete_session(db: Session, session_id: int) -> bool:
     db.commit()
 
     return True
+
+def update_transcript_type(
+    db: Session,
+    session_id: int,
+    transcript_type: str,
+) -> SessionModel:
+    session = db.get(SessionModel, session_id)
+
+    if session is None:
+        raise ValueError(
+            f"Session not found: {session_id}"
+        )
+
+    session.transcript_type = transcript_type
+
+    db.add(session)
+    db.commit()
+    db.refresh(session)
+
+    return session

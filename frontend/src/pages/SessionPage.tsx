@@ -169,13 +169,11 @@ export function SessionPage({ id }: { id: string }) {
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-2xl font-semibold tracking-tight">Session</h1>
             <code className="rounded bg-muted px-1.5 py-0.5 text-sm">{id}</code>
-            {session.data && (
-              <>
-                <span className="rounded-full border border-border px-2 py-0.5 text-xs capitalize text-muted-foreground">
-                  {session.data.transcriptType}
-                </span>
-                <StatusBadge status={session.data.status} />
-              </>
+            {session.data?.transcriptType && (
+              <span
+                className="rounded-full border border-border px-2 py-0.5 text-xs capitalize text-muted-foreground">
+                {session.data.transcriptType.replace("_", " ")}
+              </span>
             )}
           </div>
         </div>

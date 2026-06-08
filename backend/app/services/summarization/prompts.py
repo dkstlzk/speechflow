@@ -2,6 +2,16 @@
 
 SUMMARY_PROMPT = """
 Generate a compressed summary of the transcript.
+If the transcript contains test phrases,
+microphone checks,
+audio checks,
+or very little meaningful content:
+
+Return a short factual summary.
+
+Do not invent context.
+Do not infer topics.
+Do not fabricate technical subjects.
 
 Internal guidance:
 
@@ -161,19 +171,6 @@ Decisions
 
 Next Steps
 - next step
-
-Do not create any sections other than:
-
-Overview
-Key Topics
-
-Do not create:
-- People Referenced
-- Notes
-- Observations
-- Additional Context
-- Rules Applied
-- Metadata
 
 Transcript:
 {transcript}
