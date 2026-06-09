@@ -6,6 +6,8 @@ import { Badge } from "./ui/badge";
 import { downloadTranscriptAsTxt, getSpeakerColor } from "@/lib/utils";
 import { formatTranscriptTime } from "@/lib/transcript";
 
+import { useMemo } from "react";
+
 interface Props {
   segments?: TranscriptSegment[];
   loading?: boolean;
@@ -14,6 +16,24 @@ interface Props {
 
 export function TranscriptViewer({ segments, loading, error }: Props) {
   const hasSegments = !!segments && segments.length > 0;
+
+  const speakerMapping = useMemo(() => {
+    const map: Record<string, string> = {};
+    if (!segments) return map;
+
+    let speakerIdx = 0;
+    for (const seg of segments) {
+      if (seg.speaker === "UNKNOWN" || !seg.speaker.startsWith("SPEAKER_")) {
+        continue;
+      }
+      if (!map[seg.speaker]) {
+        map[seg.speaker] = `Speaker ${String.fromCharCode(65 + speakerIdx)}`;
+        speakerIdx++;
+      }
+    }
+    return map;
+  }, [segments]);
+
   return (
     <PanelShell
       title="Transcript"
@@ -44,7 +64,7 @@ export function TranscriptViewer({ segments, loading, error }: Props) {
                   variant="secondary"
                   className={`${getSpeakerColor(seg.speaker)} border-0 font-medium`}
                 >
-                  {seg.speaker === "UNKNOWN" ? "Speaker" : seg.speaker}
+                  {speakerMapping[seg.speaker] || (seg.speaker === "UNKNOWN" ? "Speaker" : seg.speaker)}
                 </Badge>
                 <span className="text-[11px] font-mono text-muted-foreground/70">
                   #{i + 1} • {formatTranscriptTime(seg.startSec)} →{" "}

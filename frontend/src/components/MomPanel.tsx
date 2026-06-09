@@ -15,7 +15,7 @@ export function MomPanel({ mom, loading, error }: Props) {
       loading={loading}
       error={error}
       empty={!loading && !error && !mom}
-      emptyMessage="No meeting minutes available."
+      emptyMessage="Meeting minutes unavailable or generation failed."
     >
       <pre className="whitespace-pre-wrap font-sans text-[14px] leading-7 text-foreground/90">
         {mom}

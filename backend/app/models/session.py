@@ -31,3 +31,4 @@ class Session(Base):
         nullable=True,
     )
     title = Column(String(255), nullable=True)
+    audio_path = Column(String(512), nullable=True)

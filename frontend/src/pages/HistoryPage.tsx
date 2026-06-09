@@ -21,10 +21,35 @@ export function HistoryPage() {
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>("all");
 
   useEffect(() => {
-    getSessions()
-      .then((r) => setSessions(r.data))
-      .catch(() => setError("Failed to load sessions."));
+    // mounted
   }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    const timer = setTimeout(() => {
+      setSessions(null); // Show loading skeleton on new search
+      setError(null);    // Clear previous errors
+
+      getSessions(query, controller.signal)
+        .then((r) => {
+          if (!controller.signal.aborted) {
+            setSessions(r.data);
+          }
+        })
+        .catch((e) => {
+          if (!controller.signal.aborted) {
+            setError("Failed to load sessions.");
+            setSessions([]); // Prevent staying stuck in loading skeleton
+          }
+        });
+    }, 300);
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [query]);
 
   const handleDelete = async (id: string) => {
     setError(null);
@@ -40,15 +65,11 @@ export function HistoryPage() {
   const filtered = useMemo(() => {
     if (!sessions) return [];
     return sessions.filter((s) => {
-      const matchesQuery =
-        !query ||
-        s.id.toLowerCase().includes(query.toLowerCase()) ||
-        s.fileName?.toLowerCase().includes(query.toLowerCase()) ||
-        s.title?.toLowerCase().includes(query.toLowerCase());
+      // Local filtering is still applied for 'filter' dropdown (TranscriptType)
       const matchesFilter = filter === "all" || s.transcriptType === filter;
-      return matchesQuery && matchesFilter;
+      return matchesFilter;
     });
-  }, [sessions, query, filter]);
+  }, [sessions, filter]);
 
   return (
     <AppLayout>
@@ -70,7 +91,7 @@ export function HistoryPage() {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search by title, file name, or ID"
+            placeholder="Search by title, file name, ID, or transcript content..."
             className="w-full rounded-md border border-input bg-surface py-2 pl-9 pr-3 text-sm placeholder:text-muted-foreground/70 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/20"
           />
         </div>

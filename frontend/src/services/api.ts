@@ -30,17 +30,28 @@ async function apiFetch<T>(input: string, init: FetchOptions = {}): Promise<ApiR
   const { timeoutMs, ...rest } = init;
   const controller = new AbortController();
   const timer = timeoutMs ? setTimeout(() => controller.abort(), timeoutMs) : null;
+
+  const abortHandler = () => controller.abort();
+  if (init.signal) {
+    init.signal.addEventListener("abort", abortHandler);
+  }
+
   let res: Response;
   try {
     res = await fetch(input, { ...rest, signal: controller.signal });
+  } catch (err) {
+    throw err;
   } finally {
     if (timer) clearTimeout(timer);
+    if (init.signal) {
+      init.signal.removeEventListener("abort", abortHandler);
+    }
   }
 
   let json: { success?: boolean; data?: unknown; error?: string | null } = {};
   try {
     json = await res.json();
-  } catch {
+  } catch (err) {
     // non-JSON response
   }
 
@@ -83,7 +94,7 @@ export async function uploadFile(file: File): Promise<ApiResponse<{ sessionId: s
 }
 
 // GET /api/sessions/
-export async function getSessions(): Promise<ApiResponse<Session[]>> {
+export async function getSessions(query?: string, signal?: AbortSignal): Promise<ApiResponse<Session[]>> {
   type BS = {
     id: number;
     status: string;
@@ -92,8 +103,11 @@ export async function getSessions(): Promise<ApiResponse<Session[]>> {
     created_at: string;
     transcript_type?: string | null;
     title?: string | null;
+    has_audio?: boolean;
+    audio_url?: string;
   };
-  const raw = await apiFetch<BS[]>(`${API_BASE}/api/sessions/`);
+  const url = query ? `${API_BASE}/api/sessions/?q=${encodeURIComponent(query)}` : `${API_BASE}/api/sessions/`;
+  const raw = await apiFetch<BS[]>(url, { signal });
   const sessions: Session[] = (raw.data ?? []).map((s) => ({
     id: String(s.id),
     createdAt: s.created_at,
@@ -101,20 +115,25 @@ export async function getSessions(): Promise<ApiResponse<Session[]>> {
     transcriptType: (s.transcript_type as TranscriptType) ?? undefined,
     fileName: s.original_filename ?? undefined,
     title: s.title ?? undefined,
+    has_audio: s.has_audio,
+    audio_url: s.audio_url ? `${API_BASE}${s.audio_url}` : undefined,
   }));
   return { data: sessions, ok: true };
 }
 
 // GET /api/sessions/{id}
-export async function getSession(id: string): Promise<ApiResponse<Session>> {
+export async function getSession(id: string, signal?: AbortSignal): Promise<ApiResponse<Session>> {
   type BS = {
     id: number;
     status: string;
     transcript_type?: string | null;
     original_filename: string | null;
     created_at: string;
+    has_audio?: boolean;
+    audio_url?: string;
+    title?: string | null;
   };
-  const raw = await apiFetch<BS>(`${API_BASE}/api/sessions/${id}`);
+  const raw = await apiFetch<BS>(`${API_BASE}/api/sessions/${id}`, { signal });
   return {
     data: {
       id: String(raw.data.id),
@@ -122,6 +141,9 @@ export async function getSession(id: string): Promise<ApiResponse<Session>> {
       status: mapBackendStatus(raw.data.status),
       transcriptType: raw.data.transcript_type as TranscriptType | undefined,
       fileName: raw.data.original_filename ?? undefined,
+      title: raw.data.title ?? undefined,
+      has_audio: raw.data.has_audio,
+      audio_url: raw.data.audio_url ? `${API_BASE}${raw.data.audio_url}` : undefined,
     },
     ok: true,
   };
@@ -136,7 +158,7 @@ export async function deleteSession(id: string): Promise<ApiResponse<{ sessionId
 }
 
 // GET /api/sessions/{id}/transcript
-export async function getTranscript(id: string): Promise<ApiResponse<TranscriptResponse>> {
+export async function getTranscript(id: string, signal?: AbortSignal): Promise<ApiResponse<TranscriptResponse>> {
   type BC = {
     speaker: string;
     startSec: number;
@@ -145,7 +167,7 @@ export async function getTranscript(id: string): Promise<ApiResponse<TranscriptR
     chunk_index: number;
   };
   type BP = { session_id: number | string; status: string; transcript: BC[]; exists?: boolean };
-  const raw = await apiFetch<BP>(`${API_BASE}/api/sessions/${id}/transcript`);
+  const raw = await apiFetch<BP>(`${API_BASE}/api/sessions/${id}/transcript`, { signal });
   if (raw.data && raw.data.exists === false) {
     throw new ApiError("Not found", 404);
   }
@@ -167,7 +189,7 @@ export async function getTranscript(id: string): Promise<ApiResponse<TranscriptR
 }
 
 // GET /api/sessions/{id}/summary
-export async function getSummary(id: string): Promise<ApiResponse<SummaryResponse>> {
+export async function getSummary(id: string, signal?: AbortSignal): Promise<ApiResponse<SummaryResponse>> {
   type BS = {
     session_id: number;
     summary: string;
@@ -175,7 +197,7 @@ export async function getSummary(id: string): Promise<ApiResponse<SummaryRespons
     created_at: string | null;
     exists?: boolean;
   };
-  const raw = await apiFetch<BS>(`${API_BASE}/api/sessions/${id}/summary`);
+  const raw = await apiFetch<BS>(`${API_BASE}/api/sessions/${id}/summary`, { signal });
   if (raw.data && raw.data.exists === false) {
     throw new ApiError("Not found", 404);
   }
@@ -190,7 +212,7 @@ export async function getSummary(id: string): Promise<ApiResponse<SummaryRespons
 }
 
 // GET /api/actions/{session_id}
-export async function getActions(id: string): Promise<ApiResponse<ActionItem[]>> {
+export async function getActions(id: string, signal?: AbortSignal): Promise<ApiResponse<ActionItem[]>> {
   type BI = {
     id: number;
     text: string;
@@ -198,7 +220,7 @@ export async function getActions(id: string): Promise<ApiResponse<ActionItem[]>>
     created_at: string | null;
   };
   type BP = { session_id: number; action_items: BI[] };
-  const raw = await apiFetch<BP>(`${API_BASE}/api/actions/${id}`);
+  const raw = await apiFetch<BP>(`${API_BASE}/api/actions/${id}`, { signal });
   const items: ActionItem[] = (raw.data.action_items ?? []).map((it) => ({
     id: String(it.id),
     text: it.text,

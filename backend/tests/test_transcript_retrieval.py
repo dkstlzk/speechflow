@@ -92,6 +92,7 @@ def test_transcript_retrieval_endpoint_invalid_session_id(client):
 
 def test_transcript_retrieval_endpoint_not_found(client):
     response = client.get("/api/sessions/999999/transcript")
-    assert response.status_code == 404
+    assert response.status_code == 200
     payload = response.get_json()
-    assert payload["success"] is False
+    assert payload["success"] is True
+    assert payload["data"]["exists"] is False

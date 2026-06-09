@@ -58,6 +58,20 @@ def finalize_realtime_session(session_id: str):
             ApiResponse.fail("invalid session id").to_dict()
         ), 400
 
+    import time
+    from ..services.transcription.streaming import session_manager
+    
+    # Wait up to 5 seconds for background audio processing to finish destroying
+    for _ in range(50):
+        is_active = False
+        for active_sid, s in session_manager.active_sessions.items():
+            if str(s.session_id) == str(session_id_int):
+                is_active = True
+                break
+        if not is_active:
+            break
+        time.sleep(0.1)
+
     db = SessionLocal()
 
     try:

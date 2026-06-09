@@ -46,7 +46,6 @@ def ensure_columns(engine: Engine) -> None:
     if engine.dialect.name != "postgresql":
         return
 
-    # Check for sessions.title column
     if inspector.has_table("sessions"):
         columns = {col["name"] for col in inspector.get_columns("sessions")}
         if "title" not in columns:
@@ -56,6 +55,14 @@ def ensure_columns(engine: Engine) -> None:
                 )
                 conn.commit()
                 logger.info("Added 'title' column to sessions table")
+
+        if "audio_path" not in columns:
+            with engine.connect() as conn:
+                conn.execute(
+                    text("ALTER TABLE sessions ADD COLUMN audio_path VARCHAR(512)")
+                )
+                conn.commit()
+                logger.info("Added 'audio_path' column to sessions table")
 
 
 def run_migrations(engine: Engine) -> None:

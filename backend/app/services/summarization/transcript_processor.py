@@ -145,13 +145,20 @@ class TranscriptProcessor:
             },
         )
 
-        summary = self.generate_summary(session_id)
-
-        summary = (
-            summary
-            .replace("SPEAKER_", "Participant ")
-            .replace("Speaker ", "Participant ")
-        )
+        try:
+            summary = self.generate_summary(session_id)
+            if not summary or not summary.strip():
+                logger.error("Empty summary generated", extra={"session_id": session_id})
+                summary = None
+            else:
+                summary = (
+                    summary
+                    .replace("SPEAKER_", "Participant ")
+                    .replace("Speaker ", "Participant ")
+                )
+        except Exception as e:
+            logger.error(f"Summary generation failed: {e}", extra={"session_id": session_id})
+            summary = None
 
         mom = None
         action_items = None
@@ -159,8 +166,23 @@ class TranscriptProcessor:
         # SpeechFlow currently treats MoM and Action Items
         # as meeting-specific intelligence artifacts.
         if transcript_type == "meeting":
-            mom = self.generate_mom(session_id)
-            action_items = self.generate_action_items(session_id)
+            try:
+                mom = self.generate_mom(session_id)
+                if not mom or not mom.strip():
+                    logger.error("Empty MoM generated", extra={"session_id": session_id})
+                    mom = None
+            except Exception as e:
+                logger.error(f"MoM generation failed: {e}", extra={"session_id": session_id})
+                mom = None
+
+            try:
+                action_items = self.generate_action_items(session_id)
+                if not action_items or not action_items.strip():
+                    logger.error("Empty Action Items generated", extra={"session_id": session_id})
+                    action_items = None
+            except Exception as e:
+                logger.error(f"Action Items generation failed: {e}", extra={"session_id": session_id})
+                action_items = None
 
         return {
             "session_id": session_id,

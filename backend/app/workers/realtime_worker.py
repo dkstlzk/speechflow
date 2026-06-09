@@ -15,12 +15,16 @@ import torch
 import numpy as np
 from flask_socketio import SocketIO
 
+from ..config.logging import get_logger
+
 from ..services.transcription.streaming import (
     SpeechSegment,
     session_manager,
 )
 from ..services.transcription.whisper_service import WhisperTranscriptionService
 from ..services.persistence.transcripts import save_transcript_chunks
+
+logger = get_logger(__name__)
 
 # ── Configuration Constants ────────────────────────────────────────────
 
@@ -40,9 +44,9 @@ transcriber = WhisperTranscriptionService()
 try:
     from silero_vad import load_silero_vad
     vad_model = load_silero_vad(onnx=True)
-    print("[VAD] Silero VAD loaded successfully (ONNX CPU Mode).")
+    logger.info("[VAD] Silero VAD loaded successfully (ONNX CPU Mode).")
 except Exception as e:
-    print(f"[VAD] Error loading Silero VAD. Running without VAD. Error: {e}")
+    logger.error(f"[VAD] Error loading Silero VAD. Running without VAD. Error: {e}")
     vad_model = None
 
 
@@ -84,7 +88,7 @@ def emit_caption_update(socketio: SocketIO, sid: str, session) -> None:
                 to=sid,
             )
     except Exception as e:
-        print(f"[CaptionEngine] Inference error for {sid}: {e}")
+        logger.error(f"[CaptionEngine] Inference error for {sid}: {e}")
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -118,7 +122,7 @@ def _check_vad_speaking(audio_np: np.ndarray, sample_rate: int) -> bool:
         return False
 
     except Exception as e:
-        print(f"[VAD Warning] {e}")
+        logger.warning(f"[VAD Warning] {e}")
         return True  # Fail open — assume speech
 
 
@@ -181,7 +185,7 @@ def check_segment_boundary(
         end_time=end_time,
     )
 
-    print(
+    logger.info(
         f"[Segmenter] Segment closed | Reason: {reason} "
         f"| Duration: {segment_duration:.1f}s "
         f"| Chunk #{session.chunk_index}"
@@ -222,12 +226,11 @@ def transcribe_and_persist_segment(
 
         # Task 2: Skip empty/silent segments purely based on text
         if not text.strip():
-            print(
+            logger.info(
                 f"[TranscriptEngine] Empty transcription for "
                 f"chunk #{session.chunk_index} — skipping"
             )
-            # Still advance segment so we don't re-process
-            session_manager.advance_segment(sid, segment.end_time)
+            session_manager.advance_segment(sid, segment.end_time, segment.end_offset)
             return
 
         # Persist to database immediately
@@ -248,7 +251,7 @@ def transcribe_and_persist_segment(
 
         session.persisted_chunk_indices.add(session.chunk_index)
 
-        print(
+        logger.info(
             f"[TranscriptEngine] Persisted chunk #{session.chunk_index} "
             f"({segment.start_time:.2f}s → {segment.end_time:.2f}s): "
             f"{text[:80]}..."
@@ -268,17 +271,17 @@ def transcribe_and_persist_segment(
         )
 
         # Advance segment cursor
-        session_manager.advance_segment(sid, segment.end_time)
+        session_manager.advance_segment(sid, segment.end_time, segment.end_offset)
 
         # Trim old audio to prevent unbounded memory growth
         session_manager.trim_buffer_after_persist(
             sid, keep_seconds=TRIM_KEEP_SECONDS
         )
 
-    except Exception as e:
-        print(
+    except Exception:
+        logger.exception(
             f"[TranscriptEngine] Error for {sid} "
-            f"chunk #{session.chunk_index}: {e}"
+            f"chunk #{session.chunk_index}"
         )
 
 
@@ -305,7 +308,7 @@ def handle_session_end(
         )
         transcribe_and_persist_segment(socketio, sid, session, segment)
 
-    print(f"[RealtimeWorker] Session {session.session_id} finalized")
+    logger.info(f"[RealtimeWorker] Session {session.session_id} finalized")
 
     socketio.emit(
         "stream_finalized",
@@ -320,22 +323,23 @@ def handle_pause(
     socketio: SocketIO, sid: str, session
 ) -> None:
     """Force-close the current segment and pause the session."""
-    current_buf_len = len(session.audio_buffer)
-    segment_bytes = current_buf_len - session.segment_start_offset
-    bytes_per_sec = session.sample_rate * 2
-
-    if segment_bytes > bytes_per_sec * 0.3:
-        segment_duration = segment_bytes / bytes_per_sec
-        segment = SpeechSegment(
-            start_offset=session.segment_start_offset,
-            end_offset=current_buf_len,
-            start_time=session.segment_start_time,
-            end_time=session.segment_start_time + segment_duration,
-        )
-        transcribe_and_persist_segment(socketio, sid, session, segment)
-
-    session.is_paused = True
-    print(f"[RealtimeWorker] Session {session.session_id} paused")
+    with session.lock:
+        current_buf_len = len(session.audio_buffer)
+        segment_bytes = current_buf_len - session.segment_start_offset
+        bytes_per_sec = session.sample_rate * 2
+    
+        if segment_bytes > bytes_per_sec * 0.3:
+            segment_duration = segment_bytes / bytes_per_sec
+            segment = SpeechSegment(
+                start_offset=session.segment_start_offset,
+                end_offset=current_buf_len,
+                start_time=session.segment_start_time,
+                end_time=session.segment_start_time + segment_duration,
+            )
+            transcribe_and_persist_segment(socketio, sid, session, segment)
+    
+        session.is_paused = True
+    logger.info(f"[RealtimeWorker] Session {session.session_id} paused")
 
 
 def handle_resume(sid: str, session) -> None:
@@ -343,7 +347,7 @@ def handle_resume(sid: str, session) -> None:
     session.is_paused = False
     session.segment_start_offset = len(session.audio_buffer)
     session.last_speech_time = time.time()
-    print(f"[RealtimeWorker] Session {session.session_id} resumed")
+    logger.info(f"[RealtimeWorker] Session {session.session_id} resumed")
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -356,7 +360,7 @@ def realtime_worker_loop(socketio: SocketIO):
     Runs continuously in a daemon thread. Processes all active sessions
     each tick (~200ms).
     """
-    print("[RealtimeWorker] Background loop started. AI is ready.")
+    logger.info("[RealtimeWorker] Background loop started. AI is ready.")
 
     while True:
         for sid, session in list(session_manager.active_sessions.items()):
@@ -378,18 +382,19 @@ def realtime_worker_loop(socketio: SocketIO):
             # --- LAYER 2: LIVE CAPTIONS (throttled to ~1s) ---
             emit_caption_update(socketio, sid, session)
 
-            # --- LAYER 3: SPEECH SEGMENTATION ---
-            closed_segment = check_segment_boundary(sid, session)
-
-            # --- LAYER 4: TRANSCRIPT ENGINE ---
-            if closed_segment:
-                transcribe_and_persist_segment(
-                    socketio, sid, session, closed_segment
-                )
-
-            # Handle session ending
-            if session.is_ending:
-                handle_session_end(socketio, sid, session)
-                continue  # Session destroyed, move on
+            with session.lock:
+                # --- LAYER 3: SPEECH SEGMENTATION ---
+                closed_segment = check_segment_boundary(sid, session)
+    
+                # --- LAYER 4: TRANSCRIPT ENGINE ---
+                if closed_segment:
+                    transcribe_and_persist_segment(
+                        socketio, sid, session, closed_segment
+                    )
+    
+                # Handle session ending
+                if session.is_ending:
+                    handle_session_end(socketio, sid, session)
+                    continue  # Session destroyed, move on
 
         time.sleep(WORKER_SLEEP_SECONDS)

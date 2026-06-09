@@ -11,7 +11,7 @@ class DummySegment:
 
 
 class DummyModel:
-    def transcribe(self, _audio_path):
+    def transcribe(self, _audio_path, **kwargs):
         segments = [
             DummySegment(start=0.0, end=1.0, text=" hello"),
             DummySegment(start=1.0, end=2.0, text="world "),

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { ArrowUpRight, Clock, FileAudio, Trash2 } from "lucide-react";
+import { ArrowUpRight, Clock, FileAudio, Trash2, Music } from "lucide-react";
 import type { Session } from "@/types";
 import { StatusBadge } from "./StatusBadge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -29,8 +29,10 @@ function formatDuration(sec?: number) {
   return `${m}m ${s.toString().padStart(2, "0")}s`;
 }
 
-function formatRelative(iso: string) {
+function formatRelative(iso?: string) {
+  if (!iso) return "Just now";
   const d = new Date(iso);
+  if (isNaN(d.getTime())) return "Just now";
   const diff = (Date.now() - d.getTime()) / 1000;
   if (diff < 60) return "just now";
   if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
@@ -55,7 +57,7 @@ export function SessionCard({ session, onDelete }: SessionCardProps) {
   };
 
   const duration = formatDuration(session.durationSec);
-  const title = session.title || session.fileName || `Session ${session.id.slice(0, 8)}`;
+  const title = session.title || session.fileName || `Session ${session.id?.toString().slice(0, 8)}`;
 
   return (
     <div className="group relative flex flex-col gap-4 rounded-xl border border-border/70 bg-card p-5 transition-all hover:border-border-strong hover:shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_-12px_rgba(0,0,0,0.08)] sm:flex-row sm:items-center sm:justify-between">
@@ -70,6 +72,12 @@ export function SessionCard({ session, onDelete }: SessionCardProps) {
             {session.transcriptType && (
               <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium capitalize text-muted-foreground">
                 {session.transcriptType.replace("_", " ")}
+              </span>
+            )}
+            {session.has_audio && (
+              <span className="flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                <Music className="h-3 w-3" />
+                Recording Available
               </span>
             )}
           </div>

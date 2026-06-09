@@ -1,7 +1,7 @@
 """Prompt templates for transcript intelligence generation."""
 
 SUMMARY_PROMPT = """
-Generate a compressed summary of the transcript.
+Generate a structured executive summary of the transcript.
 If the transcript contains test phrases,
 microphone checks,
 audio checks,
@@ -36,72 +36,30 @@ Do not output rule names.
 Do not output explanation of formatting decisions.
 Output only the final summary.
 
-Do NOT write phrases such as:
-- "Participants discussed..."
-- "During the meeting..."
-- "The discussion focused on..."
-- "The meeting covered..."
-
 Single-Speaker Handling:
 
-- If the transcript contains only one speaker,
-  do not describe a discussion, meeting,
-  conversation, debate, or exchange.
+- Treat single-speaker transcripts as monologues or statements.
 
-- Treat the transcript as a monologue,
-  narration, recording, lecture, reading,
-  or statement when appropriate.
+Output format MUST be EXACTLY:
 
-Do not use plural nouns unless multiple people
-are explicitly present.
-Avoid:
-- participants
-- attendees
-- speakers
-- they
-when only one speaker exists.
+Brief Overview
+<2-4 sentence executive summary>
 
-If the transcript contains only one meaningful idea:
-Return a single sentence.
+Key Points
 
-Transcript Type Handling:
-- Conversations may contain opinions, preferences, stories, or casual discussion.
-- Do not force every conversation into a meeting structure.
-- For conversations, summarize the topics discussed naturally.
-- For recordings with a single subject, prefer a short summary over multiple topics.
+• <Topic>
+  - <supporting detail>
+  - <supporting detail>
 
-If the transcript does not contain a coherent discussion,
-still summarize the content that is present.
+• <Topic>
+  - <supporting detail>
 
-Return:
-Overview
-<one sentence>
-
-Key Topics
-...
-
-Otherwise return:
-
-Overview
-<one sentence>
-
-Key Topics
-
-<Topic Name>
-- point
-- point
-
-<Topic Name>
-- point
+If the transcript does not contain a coherent discussion, still summarize the content that is present under Brief Overview and omit Key Points if necessary.
 
 Name Handling:
 - Never output SPEAKER_XX identifiers.
 - Prefer real names if mentioned.
-- Prefer real roles if mentioned.
-
-If no names or roles are explicitly available:
-- Avoid referring to people whenever possible.
-- Focus on the information rather than the speaker.
+- Avoid referring to people if no names are available.
 
 Transcript:
 {transcript}
@@ -109,68 +67,26 @@ Transcript:
 
 
 MOM_PROMPT = """
-Generate meeting minutes.
+Generate concise bullet-point takeaways from the discussion.
 
 Internal guidance:
 
 - Extract only information explicitly stated.
-- Do not infer attendees.
-- Do not infer decisions.
-- Do not infer next steps.
-- Do not infer ownership.
-- Do not infer deadlines.
+- Focus on conclusions reached, important observations, and key discussion outcomes.
 - Prefer omission over guessing.
 - Omit empty sections entirely.
-
-Attendees section is OPTIONAL.
-
-If attendees are not explicitly named,
-omit the Attendees section completely.
-
-Never create participant roles.
-Never infer titles.
-Never infer occupations.
-
-Only include attendees if explicitly identified by name,
-role, or self-introduction in the transcript.
-Speaker labels alone do not identify attendees.
-If attendee identity is unknown:
-omit the Attendees section entirely.
-
-Do NOT:
-- derive attendees from speaker labels
-- derive attendees from diarization speakers
-- create placeholder attendees
-
-Name Handling:
 - Never output SPEAKER_XX identifiers.
-- Prefer real names if mentioned.
-- Prefer real roles if mentioned.
+- Do not generate attendee lists, action items, or task assignments.
 
-If no names or roles are explicitly available:
-- Avoid referring to people whenever possible.
+Output format MUST be exactly:
 
-If no explicit decisions exist:
-omit the Decisions section.
+Meeting Takeaways
+• <takeaway>
+• <takeaway>
+• <takeaway>
 
-If no explicit next steps exist:
-omit the Next Steps section.
-
-If no sections contain information:
-return exactly:
-
+If no takeaways exist, return exactly:
 No meeting minutes identified.
-
-Output format:
-
-Attendees
-- attendee
-
-Decisions
-- decision
-
-Next Steps
-- next step
 
 Transcript:
 {transcript}
@@ -178,73 +94,23 @@ Transcript:
 
 
 ACTION_ITEMS_PROMPT = """
-Extract action items.
+Extract action items from the transcript.
 
 Internal guidance:
 
-- Include only actions that were:
-  - assigned
-  - agreed upon
-  - committed to
-  - accepted
-
-If no explicitly assigned or agreed actions exist,
-return exactly:
-
-No action items identified.
-
-Do not convert suggestions into actions.
-Do not assume group agreement.
-Do not assume commitment.
-
-Do NOT extract:
-- suggestions
-- recommendations
-- possibilities
-- ideas under discussion
-- hypothetical actions
-
-Do not infer:
-- tasks
-- owners
-- deadlines
-
-If an action lacks an explicit owner,
-commitment, assignment, or agreement,
-do NOT include it.
-
-When uncertain:
-exclude the action item.
-
-Examples that are NOT action items:
-- "We could..."
-- "Maybe we should..."
-- "Someone suggested..."
-- "It might help to..."
-
-Examples that ARE action items:
-- "Rahul will..."
-- "Priya agreed to..."
-- "The team decided to..."
-- "Action: ..."
-
-Keep items concise.
-
-If no valid action items exist:
-Return exactly:
-No action items identified.
-
-Name Handling:
+- Include only actions that were assigned, agreed upon, committed to, or accepted.
+- Do not convert suggestions into actions.
+- Keep items concise.
 - Never output SPEAKER_XX identifiers.
-- Prefer real names if mentioned.
-- Prefer real roles if mentioned.
-- Otherwise use participant labels already present.
 
-Output format:
+Output format MUST be exactly:
 
 Action Items
-- action
-- action
+• [Owner Name] -> [Actionable Task]
+• [Actionable Task] (if no explicit owner)
+
+If no valid action items exist, return exactly:
+No action items identified.
 
 Transcript:
 {transcript}
@@ -255,26 +121,20 @@ SUMMARY_MERGE_PROMPT = """
 Merge partial summaries.
 
 Internal guidance:
-
 - Merge duplicate topics.
 - Remove repetition.
-- Remove filler.
 - Keep only unique information.
-- Do not add information.
-- Do not narrate the conversation.
-- Preserve topic structure.
-- Final output must be shorter than the combined inputs.
 
-Output format:
+Output format MUST be EXACTLY:
 
-Overview
-<one sentence>
+Brief Overview
+<2-4 sentence executive summary>
 
-Key Topics
+Key Points
 
-<Topic Name>
-- point
-- point
+• <Topic>
+  - <supporting detail>
+  - <supporting detail>
 
 Partial Summaries:
 {partial_outputs}
@@ -282,16 +142,18 @@ Partial Summaries:
 
 
 MOM_MERGE_PROMPT = """
-Merge partial meeting minutes.
+Merge partial meeting takeaways.
 
 Internal guidance:
-
-- Deduplicate attendees.
-- Deduplicate decisions.
-- Deduplicate next steps.
+- Deduplicate takeaways.
+- Focus on conclusions reached, important observations, and key discussion outcomes.
 - Omit empty sections.
-- Do not add information.
-- Prefer omission over guessing.
+
+Output format MUST be exactly:
+
+Meeting Takeaways
+• <takeaway>
+• <takeaway>
 
 Partial MoMs:
 {partial_outputs}
@@ -302,22 +164,13 @@ ACTION_ITEMS_MERGE_PROMPT = """
 Merge partial action-item lists.
 
 Internal guidance:
+- Remove duplicates and merge equivalent actions.
 
-- Remove duplicates.
-- Merge equivalent actions.
-- Keep wording concise.
-- Do not invent actions.
-- Preserve only agreed or assigned actions.
-
-If no actions remain:
-Return exactly:
-No action items identified.
-
-Output format:
+Output format MUST be exactly:
 
 Action Items
-- action
-- action
+• [Owner] -> [Task]
+• [Task]
 
 Partial Action Items:
 {partial_outputs}

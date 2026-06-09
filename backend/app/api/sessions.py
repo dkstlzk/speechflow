@@ -1,4 +1,5 @@
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, send_file
+import os
 
 from ..db.session import SessionLocal
 from ..schemas.response import ApiResponse
@@ -35,6 +36,8 @@ def _serialize_session(row) -> dict:
         "created_at": row.created_at.isoformat()
             if row.created_at
             else None,
+        "has_audio": bool(getattr(row, "audio_path", None)),
+        "audio_url": f"/api/sessions/{row.id}/audio" if getattr(row, "audio_path", None) else None,
     }
 
 
@@ -58,9 +61,11 @@ def _parse_action_items_text(raw: str) -> list[str]:
 
 @sessions_bp.get("/")
 def list_sessions():
+    from flask import request
+    query = request.args.get("q")
     db = SessionLocal()
     try:
-        rows = list_recent_sessions(db, limit=50)
+        rows = list_recent_sessions(db, limit=50, query=query)
         data = [_serialize_session(r) for r in rows]
     except Exception as e:
         return jsonify(ApiResponse.fail(f"failed to list sessions: {e}").to_dict()), 500
@@ -87,6 +92,26 @@ def get_session(session_id: str):
     finally:
         db.close()
     return jsonify(ApiResponse.ok(data).to_dict()), 200
+
+
+@sessions_bp.get("/<session_id>/audio")
+def get_session_audio(session_id: str):
+    try:
+        session_id_int = int(session_id)
+    except ValueError:
+        return jsonify(ApiResponse.fail("invalid session id").to_dict()), 400
+
+    db = SessionLocal()
+    try:
+        session = get_session_by_id(db, session_id_int)
+        if not session or not getattr(session, "audio_path", None) or not os.path.exists(session.audio_path):
+            return jsonify(ApiResponse.fail("audio not found").to_dict()), 404
+        
+        return send_file(session.audio_path, mimetype="audio/wav")
+    except Exception as e:
+        return jsonify(ApiResponse.fail(f"failed to load audio: {e}").to_dict()), 500
+    finally:
+        db.close()
 
 
 @sessions_bp.delete("/<session_id>")

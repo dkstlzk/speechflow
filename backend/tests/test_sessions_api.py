@@ -21,6 +21,7 @@ def test_process_session_success(client, monkeypatch):
     monkeypatch.setattr("backend.app.api.sessions.TranscriptProcessor", DummyProcessor)
     monkeypatch.setattr("backend.app.api.sessions.save_summary", lambda *a, **kw: None)
     monkeypatch.setattr("backend.app.api.sessions.save_action_items", lambda *a, **kw: None)
+    monkeypatch.setattr("backend.app.api.sessions.update_transcript_type", lambda *a, **kw: None)
 
     response = client.post("/api/sessions/12/process")
     assert response.status_code == 200
@@ -94,7 +95,8 @@ def test_get_summary_found(client, monkeypatch):
 def test_get_summary_not_found(client, monkeypatch):
     monkeypatch.setattr("backend.app.api.sessions.get_summary", lambda sid: None)
     response = client.get("/api/sessions/1/summary")
-    assert response.status_code == 404
+    assert response.status_code == 200
+    assert response.get_json()["data"]["exists"] is False
 
 
 def test_parse_action_items_text():

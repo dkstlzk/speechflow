@@ -42,7 +42,7 @@ def _sample_payload():
                 "speaker": "SPEAKER_02",
                 "start": 2.4,
                 "end": 2.9,
-                "text": "",
+                "text": " We should also review the recent progress on the API integration so that everyone is up to date.",
                 "order": 2,
             },
         ],
@@ -60,7 +60,7 @@ def test_transcript_processor_assembles_transcript(monkeypatch):
 
     assert (
         assembled
-        == "Participant A: Hello everyone.\nParticipant B: Let's begin."
+        == "Participant A: Hello everyone.\nParticipant B: Let's begin.\nParticipant C: We should also review the recent progress on the API integration so that everyone is up to date."
     )
 
 
@@ -79,13 +79,13 @@ def test_transcript_processor_generation_calls_ollama(monkeypatch):
 
     assert len(client.calls) == 3
     expected_transcript = (
-        "Participant A: Hello everyone.\nParticipant B: Let's begin."
+        "Participant A: Hello everyone.\nParticipant B: Let's begin.\nParticipant C: We should also review the recent progress on the API integration so that everyone is up to date."
     )
 
-    assert "Generate a compressed summary" in client.calls[0]["prompt"]
+    assert "Generate a structured executive summary" in client.calls[0]["prompt"]
     assert expected_transcript in client.calls[0]["prompt"]
 
-    assert "Generate meeting minutes" in client.calls[1]["prompt"]
+    assert "Generate concise bullet-point takeaways" in client.calls[1]["prompt"]
     assert expected_transcript in client.calls[1]["prompt"]
 
     assert "Extract action items" in client.calls[2]["prompt"]

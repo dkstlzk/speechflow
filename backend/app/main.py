@@ -13,12 +13,15 @@ from .config.settings import Settings
 from .websocket import register_socketio_events
 
 from .db.base import Base
-from .db.session import engine
+from .db.session import engine, SessionLocal
 from .db.migrations import run_migrations
 
 from .workers.realtime_worker import realtime_worker_loop
 
+from .config.logging import configure_logging, get_logger
+
 configure_logging()
+logger = get_logger(__name__)
 settings = Settings()
 socketio = SocketIO(
     cors_allowed_origins=settings.CORS_ORIGINS,
@@ -45,6 +48,19 @@ def create_app() -> Flask:
 
     Base.metadata.create_all(bind=engine)
     run_migrations(engine)
+
+    # Recover stale sessions
+    try:
+        from .services.persistence.session_repository import recover_stale_sessions
+        db = SessionLocal()
+        recovered = recover_stale_sessions(db)
+        logger.info(
+            f"Stale session recovery completed. Recovered={recovered}"
+        )
+    except Exception as e:
+        logger.error(f"Failed to recover stale sessions: {e}")
+    finally:
+        db.close()
 
     threading.Thread(
         target=realtime_worker_loop,

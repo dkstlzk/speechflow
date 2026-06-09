@@ -2,14 +2,17 @@ import time
 from flask import request
 from flask_socketio import SocketIO, emit
 
+from ..config.logging import get_logger
 from ..services.transcription.streaming import session_manager
 from ..workers.realtime_worker import handle_pause, handle_resume
+
+logger = get_logger(__name__)
 
 
 def register_events(socketio: SocketIO) -> None:
     @socketio.on("connect")
     def handle_connect():
-        print(f"[Socket.IO] Connected: {request.sid}")
+        logger.info(f"[Socket.IO] Connected: {request.sid}")
         emit("server_status", {"status": "connected"})
 
     @socketio.on("disconnect")
@@ -17,11 +20,11 @@ def register_events(socketio: SocketIO) -> None:
         session = session_manager.active_sessions.get(request.sid)
         if session:
             session.is_ending = True
-        print(f"[Socket.IO] Disconnect requested: {request.sid}")
+        logger.info(f"[Socket.IO] Disconnect requested: {request.sid}")
 
     @socketio.on("ping_test")
     def handle_ping_test(data):
-        print(f"[Socket.IO] Ping from {request.sid}", data)
+        # Ping test log is intentionally removed as an obvious debug artifact
         emit(
             "pong_test",
             {

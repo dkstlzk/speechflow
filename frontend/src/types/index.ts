@@ -26,6 +26,8 @@ export interface Session {
   fileName?: string;
   durationSec?: number;
   title?: string;
+  has_audio?: boolean;
+  audio_url?: string;
 }
 
 export interface TranscriptSegment {

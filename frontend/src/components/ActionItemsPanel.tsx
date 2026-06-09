@@ -16,7 +16,7 @@ export function ActionItemsPanel({ items, loading, error }: Props) {
       loading={loading}
       error={error}
       empty={!loading && !error && (!items || items.length === 0)}
-      emptyMessage="No action items extracted."
+      emptyMessage="Action items unavailable or generation failed."
     >
       <ul className="divide-y divide-border/70">
         {items?.map((it) => (

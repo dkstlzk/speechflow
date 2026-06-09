@@ -20,8 +20,8 @@ export function UploadPage() {
       </div>
 
       <div className="mb-10 grid gap-4 sm:grid-cols-2">
-        <Link
-          to="/"
+        <a
+          href="#upload"
           className="group relative flex flex-col gap-3 rounded-xl border border-border/70 bg-card p-6 transition-all hover:border-border-strong hover:shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_-12px_rgba(0,0,0,0.08)]"
         >
           <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
@@ -37,7 +37,7 @@ export function UploadPage() {
             Open workflow
             <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
           </span>
-        </Link>
+        </a>
 
         <Link
           to="/realtime"

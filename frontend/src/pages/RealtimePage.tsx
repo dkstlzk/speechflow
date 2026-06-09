@@ -351,33 +351,37 @@ export function RealtimePage() {
         </div>
       )}
 
-      <section className="mb-6 rounded-lg border border-border bg-card p-5 shadow-sm flex items-center justify-between">
-        <div>
-          <h3 className="text-sm font-semibold uppercase text-muted-foreground mb-1">
-            Transport Test
-          </h3>
+      {import.meta.env.DEV && (
+        <>
+          <section className="mb-6 rounded-lg border border-border bg-card p-5 shadow-sm flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-semibold uppercase text-muted-foreground mb-1">
+                Transport Test
+              </h3>
 
-          <div className="font-mono text-xs text-muted-foreground h-4">
-            {pingLogs[0] || "Click ping to test socket latency..."}
-          </div>
-        </div>
+              <div className="font-mono text-xs text-muted-foreground h-4">
+                {pingLogs[0] || "Click ping to test socket latency..."}
+              </div>
+            </div>
 
-        <button
-          onClick={() => {
-            if (!socket.connected) return;
+            <button
+              onClick={() => {
+                if (!socket.connected) return;
 
-            socket.emit("ping_test", {
-              client_time: Date.now(),
-            });
-          }}
-          disabled={conn !== "connected"}
-          className="rounded-md bg-secondary px-4 py-2 text-sm font-medium hover:bg-secondary/80 disabled:opacity-50"
-        >
-          Send Ping
-        </button>
-      </section>
+                socket.emit("ping_test", {
+                  client_time: Date.now(),
+                });
+              }}
+              disabled={conn !== "connected"}
+              className="rounded-md bg-secondary px-4 py-2 text-sm font-medium hover:bg-secondary/80 disabled:opacity-50"
+            >
+              Send Ping
+            </button>
+          </section>
 
-      <StreamingEventLog events={events} />
+          <StreamingEventLog events={events} />
+        </>
+      )}
     </AppLayout>
   );
 }
