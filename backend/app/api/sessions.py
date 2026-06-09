@@ -134,7 +134,7 @@ def get_session_transcript_endpoint(session_id: str):
 
     payload = get_session_transcript(session_id_int)
     if payload is None:
-        return jsonify(ApiResponse.fail("session not found").to_dict()), 404
+        return jsonify(ApiResponse.ok({"exists": False}).to_dict()), 200
 
     return jsonify(ApiResponse.ok(payload).to_dict()), 200
 
@@ -193,6 +193,6 @@ def get_session_summary(session_id: str):
 
     data = get_summary(session_id_int)
     if data is None:
-        return jsonify(ApiResponse.fail("no summary found").to_dict()), 404
+        return jsonify(ApiResponse.ok({"exists": False}).to_dict()), 200
 
     return jsonify(ApiResponse.ok(data).to_dict()), 200

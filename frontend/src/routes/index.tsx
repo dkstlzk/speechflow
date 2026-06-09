@@ -7,8 +7,7 @@ export const Route = createFileRoute("/")({
       { title: "SpeechFlow — Upload" },
       {
         name: "description",
-        content:
-          "Upload audio/video recordings for transcription and intelligent processing.",
+        content: "Upload audio/video recordings for transcription and intelligent processing.",
       },
     ],
   }),

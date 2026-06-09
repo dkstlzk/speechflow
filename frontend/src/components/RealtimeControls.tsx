@@ -66,12 +66,7 @@ export function RealtimeControls({
       </button>
 
       <span className="ml-auto text-xs text-muted-foreground">
-        Microphone:{" "}
-        {micGranted === null
-          ? "not requested"
-          : micGranted
-            ? "granted"
-            : "denied"}
+        Microphone: {micGranted === null ? "not requested" : micGranted ? "granted" : "denied"}
       </span>
     </div>
   );

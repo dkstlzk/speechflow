@@ -56,9 +56,7 @@ export function UploadCard() {
       navigate({ to: "/session/$id", params: { id: res.data.sessionId } });
     } catch (e) {
       setStatus("failed");
-      setError(
-        e instanceof Error ? e.message : "Upload failed. Please try again.",
-      );
+      setError(e instanceof Error ? e.message : "Upload failed. Please try again.");
     }
   }
 
@@ -74,9 +72,7 @@ export function UploadCard() {
     <div className="rounded-lg border border-border bg-card p-6 shadow-sm">
       <div className="mb-4">
         <h2 className="text-lg font-semibold">Upload Recording</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Supported formats: MP3, MP4, WAV
-        </p>
+        <p className="mt-1 text-sm text-muted-foreground">Supported formats: MP3, MP4, WAV</p>
       </div>
 
       <div
@@ -88,15 +84,11 @@ export function UploadCard() {
         onDrop={onDrop}
         onClick={() => inputRef.current?.click()}
         className={`flex cursor-pointer flex-col items-center justify-center rounded-md border-2 border-dashed px-6 py-10 text-center transition-colors ${
-          dragOver
-            ? "border-primary bg-accent"
-            : "border-border hover:bg-accent/50"
+          dragOver ? "border-primary bg-accent" : "border-border hover:bg-accent/50"
         }`}
       >
         <p className="text-sm font-medium">Drag & drop a file here</p>
-        <p className="mt-1 text-xs text-muted-foreground">
-          or click to select from your computer
-        </p>
+        <p className="mt-1 text-xs text-muted-foreground">or click to select from your computer</p>
         <input
           ref={inputRef}
           type="file"
@@ -144,13 +136,10 @@ export function UploadCard() {
       {sessionId && status === "completed" && (
         <div className="mt-4 rounded-md border border-border bg-background p-4">
           <p className="text-sm">
-            Session ID:{" "}
-            <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{sessionId}</code>
+            Session ID: <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{sessionId}</code>
           </p>
           <button
-            onClick={() =>
-              navigate({ to: "/session/$id", params: { id: sessionId } })
-            }
+            onClick={() => navigate({ to: "/session/$id", params: { id: sessionId } })}
             className="mt-3 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90"
           >
             Open Session

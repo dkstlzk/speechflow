@@ -26,7 +26,7 @@ class AudioCaptureProcessor extends AudioWorkletProcessor {
     const int16Buffer = new Int16Array(this.bufferSize);
     for (let i = 0; i < this.bufferSize; i++) {
       let s = Math.max(-1, Math.min(1, this.buffer[i]));
-      int16Buffer[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+      int16Buffer[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
     }
     this.port.postMessage(int16Buffer.buffer, [int16Buffer.buffer]);
     this.bufferIndex = 0;

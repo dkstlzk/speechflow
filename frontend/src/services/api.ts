@@ -12,8 +12,7 @@ import type {
   TranscriptType,
 } from "@/types";
 
-const API_BASE =
-  (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:5000";
+const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:5000";
 
 export class ApiError extends Error {
   status: number;
@@ -27,15 +26,10 @@ interface FetchOptions extends RequestInit {
   timeoutMs?: number;
 }
 
-async function apiFetch<T>(
-  input: string,
-  init: FetchOptions = {},
-): Promise<ApiResponse<T>> {
+async function apiFetch<T>(input: string, init: FetchOptions = {}): Promise<ApiResponse<T>> {
   const { timeoutMs, ...rest } = init;
   const controller = new AbortController();
-  const timer = timeoutMs
-    ? setTimeout(() => controller.abort(), timeoutMs)
-    : null;
+  const timer = timeoutMs ? setTimeout(() => controller.abort(), timeoutMs) : null;
   let res: Response;
   try {
     res = await fetch(input, { ...rest, signal: controller.signal });
@@ -51,9 +45,7 @@ async function apiFetch<T>(
   }
 
   if (!res.ok || json.success === false) {
-    const msg =
-      (json && json.error) ||
-      `Request failed with status ${res.status}`;
+    const msg = (json && json.error) || `Request failed with status ${res.status}`;
     throw new ApiError(msg, res.status);
   }
   return { data: json.data as T, ok: true };
@@ -79,9 +71,7 @@ function mapBackendStatus(s: string): ProcessingStatus {
 }
 
 // POST /api/upload/
-export async function uploadFile(
-  file: File,
-): Promise<ApiResponse<{ sessionId: string }>> {
+export async function uploadFile(file: File): Promise<ApiResponse<{ sessionId: string }>> {
   const fd = new FormData();
   fd.append("file", file);
   const raw = await apiFetch<{
@@ -138,20 +128,15 @@ export async function getSession(id: string): Promise<ApiResponse<Session>> {
 }
 
 // DELETE /api/sessions/{id}
-export async function deleteSession(
-  id: string,
-): Promise<ApiResponse<{ sessionId: string }>> {
-  const raw = await apiFetch<{ session_id: number }>(
-    `${API_BASE}/api/sessions/${id}`,
-    { method: "DELETE" },
-  );
+export async function deleteSession(id: string): Promise<ApiResponse<{ sessionId: string }>> {
+  const raw = await apiFetch<{ session_id: number }>(`${API_BASE}/api/sessions/${id}`, {
+    method: "DELETE",
+  });
   return { data: { sessionId: String(raw.data.session_id) }, ok: true };
 }
 
 // GET /api/sessions/{id}/transcript
-export async function getTranscript(
-  id: string,
-): Promise<ApiResponse<TranscriptResponse>> {
+export async function getTranscript(id: string): Promise<ApiResponse<TranscriptResponse>> {
   type BC = {
     speaker: string;
     startSec: number;
@@ -159,8 +144,11 @@ export async function getTranscript(
     text: string;
     chunk_index: number;
   };
-  type BP = { session_id: number | string; status: string; transcript: BC[] };
+  type BP = { session_id: number | string; status: string; transcript: BC[]; exists?: boolean };
   const raw = await apiFetch<BP>(`${API_BASE}/api/sessions/${id}/transcript`);
+  if (raw.data && raw.data.exists === false) {
+    throw new ApiError("Not found", 404);
+  }
   const segments = (raw.data.transcript ?? []).map((c) => ({
     speaker: c.speaker,
     text: c.text,
@@ -179,16 +167,18 @@ export async function getTranscript(
 }
 
 // GET /api/sessions/{id}/summary
-export async function getSummary(
-  id: string,
-): Promise<ApiResponse<SummaryResponse>> {
+export async function getSummary(id: string): Promise<ApiResponse<SummaryResponse>> {
   type BS = {
     session_id: number;
     summary: string;
     mom: string | null;
     created_at: string | null;
+    exists?: boolean;
   };
   const raw = await apiFetch<BS>(`${API_BASE}/api/sessions/${id}/summary`);
+  if (raw.data && raw.data.exists === false) {
+    throw new ApiError("Not found", 404);
+  }
   return {
     data: {
       sessionId: String(raw.data.session_id),
@@ -200,9 +190,7 @@ export async function getSummary(
 }
 
 // GET /api/actions/{session_id}
-export async function getActions(
-  id: string,
-): Promise<ApiResponse<ActionItem[]>> {
+export async function getActions(id: string): Promise<ApiResponse<ActionItem[]>> {
   type BI = {
     id: number;
     text: string;
@@ -237,9 +225,7 @@ export async function processSession(
   };
 }
 
-export async function startRealtimeSession(): Promise<
-  ApiResponse<{ sessionId: string }>
-> {
+export async function startRealtimeSession(): Promise<ApiResponse<{ sessionId: string }>> {
   const raw = await apiFetch<{
     session_id: number;
     status: string;
@@ -258,12 +244,9 @@ export async function startRealtimeSession(): Promise<
 export async function finalizeRealtimeSession(
   id: string,
 ): Promise<ApiResponse<{ sessionId: string }>> {
-  await apiFetch(
-    `${API_BASE}/api/realtime/session/${id}/finalize`,
-    {
-      method: "POST",
-    },
-  );
+  await apiFetch(`${API_BASE}/api/realtime/session/${id}/finalize`, {
+    method: "POST",
+  });
 
   return {
     data: {
@@ -296,12 +279,9 @@ export async function saveRealtimeSession(
 export async function deleteRealtimeSession(
   id: string,
 ): Promise<ApiResponse<{ sessionId: string }>> {
-  await apiFetch(
-    `${API_BASE}/api/realtime/session/${id}`,
-    {
-      method: "DELETE",
-    },
-  );
+  await apiFetch(`${API_BASE}/api/realtime/session/${id}`, {
+    method: "DELETE",
+  });
 
   return {
     data: { sessionId: id },

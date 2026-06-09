@@ -38,7 +38,7 @@ export function ReviewScreen({
 
   const totalWords = segments.reduce(
     (acc, seg) => acc + seg.text.split(/\s+/).filter(Boolean).length,
-    0
+    0,
   );
 
   const duration =
@@ -56,37 +56,21 @@ export function ReviewScreen({
 
   return (
     <section className="rounded-lg border border-border bg-card p-6 shadow-sm">
-      <h3 className="text-lg font-semibold tracking-tight">
-        Recording Complete
-      </h3>
-      <p className="mt-1 text-sm text-muted-foreground">
-        Review your recording before saving.
-      </p>
+      <h3 className="text-lg font-semibold tracking-tight">Recording Complete</h3>
+      <p className="mt-1 text-sm text-muted-foreground">Review your recording before saving.</p>
 
       <div className="mt-4 grid grid-cols-3 gap-4">
         <div className="rounded-md bg-muted/50 p-3">
-          <p className="text-xs uppercase tracking-wide text-muted-foreground">
-            Duration
-          </p>
-          <p className="mt-1 text-xl font-semibold tabular-nums">
-            {formatDuration(duration)}
-          </p>
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">Duration</p>
+          <p className="mt-1 text-xl font-semibold tabular-nums">{formatDuration(duration)}</p>
         </div>
         <div className="rounded-md bg-muted/50 p-3">
-          <p className="text-xs uppercase tracking-wide text-muted-foreground">
-            Segments
-          </p>
-          <p className="mt-1 text-xl font-semibold tabular-nums">
-            {segments.length}
-          </p>
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">Segments</p>
+          <p className="mt-1 text-xl font-semibold tabular-nums">{segments.length}</p>
         </div>
         <div className="rounded-md bg-muted/50 p-3">
-          <p className="text-xs uppercase tracking-wide text-muted-foreground">
-            Word Count
-          </p>
-          <p className="mt-1 text-xl font-semibold tabular-nums">
-            {totalWords.toLocaleString()}
-          </p>
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">Word Count</p>
+          <p className="mt-1 text-xl font-semibold tabular-nums">{totalWords.toLocaleString()}</p>
         </div>
       </div>
 
@@ -98,10 +82,7 @@ export function ReviewScreen({
           <div className="space-y-1 text-sm text-foreground/80">
             {previewLines.map((seg, i) => (
               <p key={i} className="line-clamp-1">
-                <span className="text-muted-foreground">
-                  #{seg.chunk_index}
-                </span>{" "}
-                {seg.text}
+                <span className="text-muted-foreground">#{seg.chunk_index}</span> {seg.text}
               </p>
             ))}
             {segments.length > 5 && (
@@ -133,10 +114,7 @@ export function ReviewScreen({
 
             <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
               <AlertDialogTrigger asChild>
-                <Button
-                  variant="destructive"
-                  disabled={saving || deleting}
-                >
+                <Button variant="destructive" disabled={saving || deleting}>
                   {deleting ? "Deleting…" : "Delete Recording"}
                 </Button>
               </AlertDialogTrigger>
@@ -144,23 +122,19 @@ export function ReviewScreen({
                 <AlertDialogHeader>
                   <AlertDialogTitle>Delete Recording?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    This action cannot be undone. All transcript data for this
-                    recording will be permanently deleted.
+                    This action cannot be undone. All transcript data for this recording will be
+                    permanently deleted.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
-                  <AlertDialogCancel disabled={deleting}>
-                    Cancel
-                  </AlertDialogCancel>
+                  <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
                   <AlertDialogAction
                     onClick={(e) => {
                       e.preventDefault();
                       onDelete();
                     }}
                     disabled={deleting}
-                    className={cn(
-                      buttonVariants({ variant: "destructive" })
-                    )}
+                    className={cn(buttonVariants({ variant: "destructive" }))}
                   >
                     {deleting ? "Deleting…" : "Delete"}
                   </AlertDialogAction>

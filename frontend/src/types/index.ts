@@ -67,13 +67,7 @@ export interface ApiResponse<T> {
 }
 
 export type ConnectionStatus = "connected" | "connecting" | "disconnected";
-export type RecordingStatus =
-  | "idle"
-  | "recording"
-  | "paused"
-  | "finalizing"
-  | "review"
-  | "saved";
+export type RecordingStatus = "idle" | "recording" | "paused" | "finalizing" | "review" | "saved";
 
 export interface StreamingEvent {
   id: string;

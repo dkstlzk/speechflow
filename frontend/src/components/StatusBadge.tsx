@@ -1,22 +1,39 @@
 import type { ProcessingStatus } from "@/types";
 
-const STYLES: Record<ProcessingStatus, string> = {
-  idle: "bg-muted text-muted-foreground",
-  uploading: "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-200",
-  processing: "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200",
-  completed: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200",
-  failed: "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-200",
-  recording: "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-200",
-  finalizing: "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200",
-  review: "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-200",
-  saved: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200",
+const STYLES: Record<ProcessingStatus, { wrap: string; dot: string }> = {
+  idle: { wrap: "bg-muted text-muted-foreground", dot: "bg-muted-foreground/60" },
+  uploading: { wrap: "bg-blue-500/10 text-blue-700 dark:text-blue-300", dot: "bg-blue-500" },
+  processing: {
+    wrap: "bg-amber-500/10 text-amber-700 dark:text-amber-300",
+    dot: "bg-amber-500 animate-pulse",
+  },
+  completed: {
+    wrap: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+    dot: "bg-emerald-500",
+  },
+  failed: { wrap: "bg-red-500/10 text-red-700 dark:text-red-300", dot: "bg-red-500" },
+  recording: {
+    wrap: "bg-red-500/10 text-red-700 dark:text-red-300",
+    dot: "bg-red-500 animate-pulse",
+  },
+  finalizing: {
+    wrap: "bg-amber-500/10 text-amber-700 dark:text-amber-300",
+    dot: "bg-amber-500 animate-pulse",
+  },
+  review: { wrap: "bg-blue-500/10 text-blue-700 dark:text-blue-300", dot: "bg-blue-500" },
+  saved: {
+    wrap: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+    dot: "bg-emerald-500",
+  },
 };
 
 export function StatusBadge({ status }: { status: ProcessingStatus }) {
+  const s = STYLES[status];
   return (
     <span
-      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${STYLES[status]}`}
+      className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium capitalize ring-1 ring-inset ring-current/10 ${s.wrap}`}
     >
+      <span className={`h-1.5 w-1.5 rounded-full ${s.dot}`} />
       {status}
     </span>
   );

@@ -93,16 +93,18 @@ export function RealtimePage() {
       }
     });
 
-    const onPong = (data: any) => {
-      const latency = data.echo_client_time
-        ? Date.now() - data.echo_client_time
-        : "N/A";
+    type PongPayload = {
+      message: string;
+      sid: string;
+      echo_client_time?: number;
+    };
+
+    const onPong = (data: PongPayload) => {
+      const latency =
+        typeof data.echo_client_time === "number" ? Date.now() - data.echo_client_time : "N/A";
 
       setPingLogs((prev) =>
-        [
-          `PONG: ${data.message} | Latency: ${latency}ms | SID: ${data.sid}`,
-          ...prev,
-        ].slice(0, 3)
+        [`PONG: ${data.message} | Latency: ${latency}ms | SID: ${data.sid}`, ...prev].slice(0, 3),
       );
     };
 
@@ -217,10 +219,7 @@ export function RealtimePage() {
     setProcessing(true);
     try {
       await processSession(sessionId);
-      const [s, a] = await Promise.all([
-        getSummary(sessionId),
-        getActions(sessionId),
-      ]);
+      const [s, a] = await Promise.all([getSummary(sessionId), getActions(sessionId)]);
       setSummary(s.data);
       setActions(a.data);
     } finally {
@@ -240,42 +239,29 @@ export function RealtimePage() {
       <section className="mb-6 rounded-lg border border-border bg-card p-5 shadow-sm">
         <div className="grid gap-4 sm:grid-cols-4">
           <div>
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">
-              Connection
-            </p>
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">Connection</p>
             <div className="mt-1.5">
               <ConnectionStatusBadge status={conn} />
             </div>
           </div>
           <div>
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">
-              Session State
-            </p>
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">Session State</p>
             <p className="mt-1.5 text-sm font-medium capitalize">{rec}</p>
           </div>
           <div>
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">
-              Session ID
-            </p>
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">Session ID</p>
             <p className="mt-1.5 text-sm">
               {sessionId ? (
-                <code className="rounded bg-muted px-1.5 py-0.5 text-xs">
-                  {sessionId}
-                </code>
+                <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{sessionId}</code>
               ) : (
                 <span className="text-muted-foreground">—</span>
               )}
             </p>
           </div>
           <div>
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">
-              Duration
-            </p>
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">Duration</p>
             <p className="mt-1.5 flex items-center gap-3">
-              <RecordingTimer
-                running={rec === "recording"}
-                resetKey={resetKey}
-              />
+              <RecordingTimer running={rec === "recording"} resetKey={resetKey} />
               <AudioVisualizer isRecording={rec === "recording"} />
             </p>
           </div>

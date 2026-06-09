@@ -6,10 +6,7 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function downloadTranscriptAsTxt(
-  segments: TranscriptSegment[],
-  filename: string,
-) {
+export function downloadTranscriptAsTxt(segments: TranscriptSegment[], filename: string) {
   const body = segments
     .filter((s) => !s.is_partial)
     .map((s) => `${s.speaker}: ${s.text}`)

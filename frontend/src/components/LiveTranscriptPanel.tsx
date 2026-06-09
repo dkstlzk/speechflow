@@ -20,11 +20,7 @@ interface Props {
  * Every entry here has already been persisted to the database.
  * No partial/draft segments are shown — those are handled by LiveCaptionStrip.
  */
-export function LiveTranscriptPanel({
-  segments,
-  autoScroll,
-  onToggleAutoScroll,
-}: Props) {
+export function LiveTranscriptPanel({ segments, autoScroll, onToggleAutoScroll }: Props) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -52,9 +48,7 @@ export function LiveTranscriptPanel({
             <Button
               variant="outline"
               size="sm"
-              onClick={() =>
-                downloadTranscriptAsTxt(segments, "live-transcript.txt")
-              }
+              onClick={() => downloadTranscriptAsTxt(segments, "live-transcript.txt")}
             >
               <Download className="h-4 w-4" />
               Download TXT
@@ -64,7 +58,7 @@ export function LiveTranscriptPanel({
       }
     >
       <div ref={ref} className="max-h-[420px] overflow-y-auto pr-2">
-        <ul className="space-y-3">
+        <ul className="space-y-6">
           {segments.map((seg, i) => (
             <li key={i} className="text-sm flex flex-wrap items-baseline gap-2">
               <Badge
@@ -75,16 +69,14 @@ export function LiveTranscriptPanel({
               </Badge>
               <div className="flex flex-col">
                 <span className="text-xs text-muted-foreground">
-                  #{seg.chunk_index}
+                  #{i + 1}
                   {" • "}
                   {formatTranscriptTime(seg.startSec)}
                   {" → "}
                   {formatTranscriptTime(seg.endSec)}
                 </span>
 
-                <span className="text-foreground/90">
-                  {seg.text}
-                </span>
+                <span className="text-foreground/90 leading-relaxed mt-1">{seg.text}</span>
               </div>
             </li>
           ))}
