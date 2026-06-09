@@ -224,7 +224,6 @@ export async function getActions(id: string, signal?: AbortSignal): Promise<ApiR
   const items: ActionItem[] = (raw.data.action_items ?? []).map((it) => ({
     id: String(it.id),
     text: it.text,
-    completed: it.status === "done",
   }));
   return { data: items, ok: true };
 }
@@ -318,7 +317,7 @@ export async function updateSessionTitle(
   const raw = await apiFetch<{
     session_id: number;
     title: string;
-  }>(`${API_BASE}/api/realtime/session/${id}/title`, {
+  }>(`${API_BASE}/api/sessions/${id}/title`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ title }),

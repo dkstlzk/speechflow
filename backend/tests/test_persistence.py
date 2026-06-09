@@ -8,7 +8,13 @@ from backend.app.services.persistence.actions import (
 )
 
 
-def test_summary_roundtrip():
+from backend.app.services.persistence.session_repository import create_session
+
+def test_summary_roundtrip(db_session):
+    session = create_session(db_session, "test", "test.wav")
+    session.id = 9999
+    db_session.commit()
+
     save_summary(
         9999,
         "test summary",
@@ -22,7 +28,11 @@ def test_summary_roundtrip():
     assert result["mom"] == "test mom"
 
 
-def test_action_items_roundtrip():
+def test_action_items_roundtrip(db_session):
+    session = create_session(db_session, "test", "test.wav")
+    session.id = 9998
+    db_session.commit()
+
     save_action_items(
         9998,
         [

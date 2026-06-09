@@ -27,7 +27,8 @@ def get_pipeline_stages() -> List[str]:
 
 def start_upload_pipeline(session_id: int, temp_path: str) -> None:
     """Launch the upload pipeline in a background process."""
-    p = multiprocessing.Process(
+    ctx = multiprocessing.get_context("spawn")
+    p = ctx.Process(
         target=process_upload_session,
         args=(session_id, temp_path)
     )

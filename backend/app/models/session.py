@@ -1,4 +1,4 @@
-from sqlalchemy import Column, DateTime, Enum as SAEnum, Float, Integer, String, Text
+from sqlalchemy import Column, DateTime, Enum as SAEnum, Float, Integer, String, Text, Index
 from sqlalchemy.sql import func
 
 from ..db.base import Base
@@ -7,6 +7,9 @@ from .enums import SessionStatus
 
 class Session(Base):
     __tablename__ = "sessions"
+    __table_args__ = (
+        Index("idx_sessions_created_at", "created_at", postgresql_using="btree", postgresql_ops={"created_at": "DESC"}),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     session_type = Column(String(32), nullable=False)

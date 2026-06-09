@@ -4,7 +4,7 @@ from flask_socketio import SocketIO, emit
 
 from ..config.logging import get_logger
 from ..services.transcription.streaming import session_manager
-from ..workers.realtime_worker import handle_pause, handle_resume
+from ..workers.realtime.worker import handle_pause, handle_resume
 
 logger = get_logger(__name__)
 

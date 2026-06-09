@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import { Link } from "@tanstack/react-router";
 import { AppLayout } from "@/layouts/AppLayout";
 import { ConnectionStatusBadge } from "@/components/ConnectionStatusBadge";
@@ -137,15 +138,24 @@ export function RealtimePage() {
 
   async function onStart() {
     const granted = await requestMic();
-    if (!granted) return;
+    if (!granted) {
+      toast.error("Microphone access denied. Please allow microphone access to start recording.");
+      return;
+    }
     setConn("connecting");
-    await connect();
-    const res = await startRealtimeSession();
-    setSessionId(res.data.sessionId);
-    setRec("recording");
+    try {
+      await connect();
+      const res = await startRealtimeSession();
+      setSessionId(res.data.sessionId);
+      setRec("recording");
 
-    startRecording(res.data.sessionId);
-    await startAudioCapture();
+      startRecording(res.data.sessionId);
+      await startAudioCapture();
+    } catch (err: any) {
+      setConn("disconnected");
+      setRec("idle");
+      toast.error(err.message || "Failed to start session. Please try again.");
+    }
   }
 
   function onPause() {
@@ -165,13 +175,17 @@ export function RealtimePage() {
     setRec("finalizing");
     setCaption(""); // Clear disposable caption
 
-    if (sessionId) {
-      await finalizeRealtimeSession(sessionId);
+    try {
+      if (sessionId) {
+        await finalizeRealtimeSession(sessionId);
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Failed to finalize session. It may be partially saved.");
+    } finally {
+      disconnect();
+      setConn("disconnected");
+      setRec("review");
     }
-
-    disconnect();
-    setConn("disconnected");
-    setRec("review");
   }
 
   async function onSave() {
@@ -181,6 +195,9 @@ export function RealtimePage() {
       const res = await saveRealtimeSession(sessionId);
       setSavedTitle(res.data.title);
       setRec("saved");
+      toast.success("Session saved successfully!");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to save session. Please try again.");
     } finally {
       setSaving(false);
     }

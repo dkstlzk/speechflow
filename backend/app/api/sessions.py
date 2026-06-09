@@ -18,6 +18,8 @@ from ..services.persistence.session_repository import (
     delete_session,
     update_transcript_type,
 )
+from ..services.persistence.speaker_repository import update_speaker_display_name
+from flask import request as flask_request
 
 sessions_bp = Blueprint("sessions", __name__)
 
@@ -148,6 +150,73 @@ def delete_session_endpoint(session_id: str):
             {"session_id": session_id_int}
         ).to_dict()
     ), 200
+
+
+@sessions_bp.patch("/<session_id>/title")
+def update_session_title_endpoint(session_id: str):
+    try:
+        session_id_int = int(session_id)
+    except ValueError:
+        return jsonify(ApiResponse.fail("invalid session id").to_dict()), 400
+
+    body = flask_request.get_json(silent=True) or {}
+    title = body.get("title", "").strip()
+
+    if not title:
+        return jsonify(ApiResponse.fail("title is required").to_dict()), 400
+
+    db = SessionLocal()
+    try:
+        session = get_session_by_id(db, session_id_int)
+        if not session:
+            return jsonify(ApiResponse.fail("session not found").to_dict()), 404
+
+        session.title = title
+        db.add(session)
+        db.commit()
+        db.refresh(session)
+
+        return jsonify(
+            ApiResponse.ok({"session_id": session_id_int, "title": session.title}).to_dict()
+        ), 200
+    except Exception as e:
+        return jsonify(ApiResponse.fail(f"failed to update session title: {e}").to_dict()), 500
+    finally:
+        db.close()
+
+
+@sessions_bp.patch("/<session_id>/speakers/<speaker_label>")
+def update_speaker_endpoint(session_id: str, speaker_label: str):
+    try:
+        session_id_int = int(session_id)
+    except ValueError:
+        return jsonify(ApiResponse.fail("invalid session id").to_dict()), 400
+
+    body = flask_request.get_json(silent=True) or {}
+    display_name = body.get("display_name", "").strip()
+
+    db = SessionLocal()
+    try:
+        session = get_session_by_id(db, session_id_int)
+        if not session:
+            return jsonify(ApiResponse.fail("session not found").to_dict()), 404
+
+        speaker = update_speaker_display_name(
+            db, session_id_int, speaker_label, display_name
+        )
+
+        return jsonify(
+            ApiResponse.ok(
+                {
+                    "speaker_label": speaker.speaker_label,
+                    "display_name": speaker.display_name,
+                }
+            ).to_dict()
+        ), 200
+    except Exception as e:
+        return jsonify(ApiResponse.fail(f"failed to update speaker: {e}").to_dict()), 500
+    finally:
+        db.close()
 
 
 @sessions_bp.get("/<session_id>/transcript")

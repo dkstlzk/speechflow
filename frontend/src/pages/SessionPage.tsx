@@ -79,6 +79,7 @@ export function SessionPage({ id }: { id: string }) {
           return r.data;
         })
         .catch((e: unknown) => {
+          if (e instanceof Error && (e.name === "AbortError" || e.message.includes("aborted"))) return null;
           const msg = e instanceof Error ? e.message : "Failed to load session.";
           setSession({ loading: false, error: msg });
           return null;
@@ -92,6 +93,7 @@ export function SessionPage({ id }: { id: string }) {
     return getTranscript(id, abortControllerRef.current.signal)
       .then((r) => setTranscript({ data: r.data, loading: false, error: null }))
       .catch((e: unknown) => {
+        if (e instanceof Error && (e.name === "AbortError" || e.message.includes("aborted"))) return;
         if (e instanceof ApiError && e.status === 404) {
           setTranscript({ data: undefined, loading: false, error: null });
         } else {
@@ -105,6 +107,7 @@ export function SessionPage({ id }: { id: string }) {
     return getSummary(id, abortControllerRef.current.signal)
       .then((r) => setSummary({ data: r.data, loading: false, error: null }))
       .catch((e: unknown) => {
+        if (e instanceof Error && (e.name === "AbortError" || e.message.includes("aborted"))) return;
         if (e instanceof ApiError && e.status === 404) {
           setSummary({ data: undefined, loading: false, error: null });
         } else {
@@ -118,6 +121,7 @@ export function SessionPage({ id }: { id: string }) {
     return getActions(id, abortControllerRef.current.signal)
       .then((r) => setActions({ data: r.data, loading: false, error: null }))
       .catch((e: unknown) => {
+        if (e instanceof Error && (e.name === "AbortError" || e.message.includes("aborted"))) return;
         if (e instanceof ApiError && e.status === 404) {
           setActions({ data: [], loading: false, error: null });
         } else {

@@ -43,16 +43,14 @@ function buildMarkdown(data: SessionData): string {
   if (actions && actions.length > 0) {
     md += `## Action Items\n\n`;
     actions.forEach((a) => {
-      // If status exists on type, show it. Otherwise just print the text.
-      const statusStr = (a as any).status === "completed" ? "x" : " ";
-      md += `- [${statusStr}] ${a.text}\n`;
+      md += `- ${a.text}\n`;
     });
     md += `\n---\n\n`;
   }
 
   md += `## Full Transcript\n\n`;
   const speakerMap = buildSpeakerMap(transcript);
-  
+
   transcript.forEach((t) => {
     const time = `[${formatTranscriptTime(t.startSec)} -> ${formatTranscriptTime(t.endSec)}]`;
     const speakerName = speakerMap[t.speaker] || (t.speaker === "UNKNOWN" ? "Speaker" : t.speaker);
@@ -84,8 +82,7 @@ function buildTxt(data: SessionData): string {
   if (actions && actions.length > 0) {
     txt += `[ ACTION ITEMS ]\n\n`;
     actions.forEach((a) => {
-      const status = (a as any).status || "open";
-      txt += ` - ${a.text} (${status})\n`;
+      txt += ` - ${a.text}\n`;
     });
     txt += `\n`;
   }

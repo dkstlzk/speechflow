@@ -59,7 +59,6 @@ export interface ActionItem {
   text: string;
   owner?: string;
   dueDate?: string;
-  completed?: boolean;
 }
 
 export interface ApiResponse<T> {

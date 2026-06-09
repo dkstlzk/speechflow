@@ -83,21 +83,7 @@ def delete_session(db: Session, session_id: int) -> bool:
     if session is None:
         return False
 
-    db.query(TranscriptChunk).filter(
-        TranscriptChunk.session_id == session_id
-    ).delete(synchronize_session=False)
-
-    db.query(ActionItem).filter(
-        ActionItem.session_id == session_id
-    ).delete(synchronize_session=False)
-
-    db.query(SessionSummary).filter(
-        SessionSummary.session_id == session_id
-    ).delete(synchronize_session=False)
-
-    db.query(Speaker).filter(
-        Speaker.session_id == session_id
-    ).delete(synchronize_session=False)
+    # Children are automatically deleted via SQLAlchemy cascade
 
     audio_path = getattr(session, 'audio_path', None)
 

@@ -64,11 +64,76 @@ def ensure_columns(engine: Engine) -> None:
                 conn.commit()
                 logger.info("Added 'audio_path' column to sessions table")
 
+                logger.info("Added 'audio_path' column to sessions table")
+
+
+def ensure_foreign_key_cascades(engine: Engine) -> None:
+    """Ensure foreign keys on child tables have ON DELETE CASCADE/SET NULL."""
+    if engine.dialect.name != "postgresql":
+        return
+
+    expected_rules = {
+        "transcript_chunks_session_id_fkey": "c",  # CASCADE
+        "transcript_chunks_speaker_id_fkey": "n",  # SET NULL
+        "action_items_session_id_fkey": "c",
+        "session_summaries_session_id_fkey": "c",
+        "speakers_session_id_fkey": "c",
+    }
+
+    with engine.connect() as conn:
+        result = conn.execute(
+            text("SELECT conname, confdeltype FROM pg_constraint WHERE conname = ANY(:names)"),
+            {"names": list(expected_rules.keys())}
+        )
+        existing_rules = {row[0]: row[1] for row in result}
+
+        queries = []
+
+        # transcript_chunks
+        if existing_rules.get("transcript_chunks_session_id_fkey") != "c":
+            queries.extend([
+                "ALTER TABLE transcript_chunks DROP CONSTRAINT IF EXISTS transcript_chunks_session_id_fkey;",
+                "ALTER TABLE transcript_chunks ADD CONSTRAINT transcript_chunks_session_id_fkey FOREIGN KEY (session_id) REFERENCES sessions (id) ON DELETE CASCADE;"
+            ])
+        if existing_rules.get("transcript_chunks_speaker_id_fkey") != "n":
+            queries.extend([
+                "ALTER TABLE transcript_chunks DROP CONSTRAINT IF EXISTS transcript_chunks_speaker_id_fkey;",
+                "ALTER TABLE transcript_chunks ADD CONSTRAINT transcript_chunks_speaker_id_fkey FOREIGN KEY (speaker_id) REFERENCES speakers (id) ON DELETE SET NULL;"
+            ])
+
+        # action_items
+        if existing_rules.get("action_items_session_id_fkey") != "c":
+            queries.extend([
+                "ALTER TABLE action_items DROP CONSTRAINT IF EXISTS action_items_session_id_fkey;",
+                "ALTER TABLE action_items ADD CONSTRAINT action_items_session_id_fkey FOREIGN KEY (session_id) REFERENCES sessions (id) ON DELETE CASCADE;"
+            ])
+
+        # session_summaries
+        if existing_rules.get("session_summaries_session_id_fkey") != "c":
+            queries.extend([
+                "ALTER TABLE session_summaries DROP CONSTRAINT IF EXISTS session_summaries_session_id_fkey;",
+                "ALTER TABLE session_summaries ADD CONSTRAINT session_summaries_session_id_fkey FOREIGN KEY (session_id) REFERENCES sessions (id) ON DELETE CASCADE;"
+            ])
+
+        # speakers
+        if existing_rules.get("speakers_session_id_fkey") != "c":
+            queries.extend([
+                "ALTER TABLE speakers DROP CONSTRAINT IF EXISTS speakers_session_id_fkey;",
+                "ALTER TABLE speakers ADD CONSTRAINT speakers_session_id_fkey FOREIGN KEY (session_id) REFERENCES sessions (id) ON DELETE CASCADE;"
+            ])
+
+        if queries:
+            for q in queries:
+                conn.execute(text(q))
+            conn.commit()
+            logger.info("Ensured ON DELETE CASCADE for all session child tables")
+
 
 def run_migrations(engine: Engine) -> None:
     """Run all additive migrations. Safe to call on every startup."""
     try:
         ensure_enum_values(engine)
         ensure_columns(engine)
+        ensure_foreign_key_cascades(engine)
     except Exception as e:
         logger.warning(f"Migration helper encountered an error (non-fatal): {e}")

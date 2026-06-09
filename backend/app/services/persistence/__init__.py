@@ -1,9 +1,9 @@
 from .actions import list_action_items, save_action_items
 from .session_repository import create_session as create_session_record
+from .session_repository import create_session, update_session_status
 from .session_repository import get_session_by_id
 from .session_repository import update_session_status as update_session_record
 from .speaker_repository import get_or_create_speaker
-from .sessions import create_session, update_session_status
 from .summaries import get_summary, save_summary
 from .transcript_repository import (
 	bulk_insert_chunks,

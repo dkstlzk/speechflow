@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { History, Search } from "lucide-react";
 import { AppLayout } from "@/layouts/AppLayout";
 import { SessionCard } from "@/components/SessionCard";
@@ -20,6 +20,13 @@ export function HistoryPage() {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>("all");
 
+  const retryCountRef = useRef(0);
+  const [retryTrigger, setRetryTrigger] = useState(0);
+
+  useEffect(() => {
+    retryCountRef.current = 0;
+  }, [query]);
+
   useEffect(() => {
     // mounted
   }, []);
@@ -28,19 +35,32 @@ export function HistoryPage() {
     const controller = new AbortController();
 
     const timer = setTimeout(() => {
-      setSessions(null); // Show loading skeleton on new search
-      setError(null);    // Clear previous errors
+      if (retryCountRef.current === 0) {
+        setSessions(null); // Show loading skeleton on new search
+        setError(null);    // Clear previous errors
+      }
 
       getSessions(query, controller.signal)
         .then((r) => {
           if (!controller.signal.aborted) {
             setSessions(r.data);
+            retryCountRef.current = 0; // Reset on success
           }
         })
         .catch((e) => {
           if (!controller.signal.aborted) {
-            setError("Failed to load sessions.");
-            setSessions([]); // Prevent staying stuck in loading skeleton
+            if (e instanceof Error && (e.name === "AbortError" || e.message.includes("aborted"))) return;
+
+            if (retryCountRef.current < 3) {
+              retryCountRef.current += 1;
+              setTimeout(() => {
+                if (!controller.signal.aborted) setRetryTrigger((rt) => rt + 1);
+              }, 1500);
+            } else {
+              setError("Failed to load sessions.");
+              setSessions([]); // Prevent staying stuck in loading skeleton
+              retryCountRef.current = 0; // Reset for future manual queries
+            }
           }
         });
     }, 300);
@@ -49,7 +69,7 @@ export function HistoryPage() {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [query]);
+  }, [query, retryTrigger]);
 
   const handleDelete = async (id: string) => {
     setError(null);

@@ -11,11 +11,14 @@ from .constants import DEFAULT_ALLOWED_EXTENSIONS, DEFAULT_MAX_UPLOAD_MB
 
 @dataclass(frozen=True)
 class Settings:
-    SECRET_KEY: str = os.getenv("SECRET_KEY", "dev")
-    DATABASE_URL: str = os.getenv(
-        "DATABASE_URL",
-        "postgresql+psycopg2://dkstlzk:speechflow123@localhost:5432/speechflow",
-    )
+    SECRET_KEY: str = os.getenv("SECRET_KEY")
+    DATABASE_URL: str = os.getenv("DATABASE_URL")
+
+    def __post_init__(self):
+        if not self.SECRET_KEY:
+            raise RuntimeError("SECRET_KEY environment variable must be set")
+        if not self.DATABASE_URL:
+            raise RuntimeError("DATABASE_URL environment variable is required")
     SOCKETIO_ASYNC_MODE: str = os.getenv("SOCKETIO_ASYNC_MODE", "threading")
     CORS_ORIGINS: str = os.getenv("CORS_ORIGINS", "*")
     UPLOAD_DIR: str = os.getenv("UPLOAD_DIR", "temp")

@@ -16,15 +16,17 @@ from .db.base import Base
 from .db.session import engine, SessionLocal
 from .db.migrations import run_migrations
 
-from .workers.realtime_worker import realtime_worker_loop
+from .workers.realtime import realtime_worker_loop
 
 from .config.logging import configure_logging, get_logger
 
 configure_logging()
 logger = get_logger(__name__)
 settings = Settings()
+cors_origins = [o.strip() for o in settings.CORS_ORIGINS.split(",")] if settings.CORS_ORIGINS and settings.CORS_ORIGINS != "*" else "*"
+
 socketio = SocketIO(
-    cors_allowed_origins=settings.CORS_ORIGINS,
+    cors_allowed_origins=cors_origins,
     async_mode="eventlet",
 )
 
@@ -40,7 +42,7 @@ def create_app() -> Flask:
     app.config["MAX_CONTENT_LENGTH"] = settings.MAX_CONTENT_LENGTH
     app.config["ALLOWED_EXTENSIONS"] = settings.ALLOWED_EXTENSIONS
 
-    CORS(app, resources={r"/api/*": {"origins": settings.CORS_ORIGINS}})
+    CORS(app, resources={r"/api/*": {"origins": cors_origins}})
 
     register_blueprints(app)
     register_socketio_events(socketio)
