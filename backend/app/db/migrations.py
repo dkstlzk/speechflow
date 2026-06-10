@@ -129,11 +129,49 @@ def ensure_foreign_key_cascades(engine: Engine) -> None:
             logger.info("Ensured ON DELETE CASCADE for all session child tables")
 
 
+def ensure_fts_indexes(engine: Engine) -> None:
+    """Add Full Text Search generated columns and GIN indexes for PostgreSQL."""
+    if engine.dialect.name != "postgresql":
+        return
+
+    with engine.connect() as conn:
+        # Transcript chunks FTS
+        conn.execute(
+            text("ALTER TABLE transcript_chunks ADD COLUMN IF NOT EXISTS search_vector tsvector GENERATED ALWAYS AS (to_tsvector('english', text)) STORED")
+        )
+        conn.execute(
+            text("CREATE INDEX IF NOT EXISTS transcript_chunks_search_idx ON transcript_chunks USING GIN(search_vector)")
+        )
+
+        # Sessions FTS
+        conn.execute(
+            text("ALTER TABLE sessions ADD COLUMN IF NOT EXISTS search_vector tsvector GENERATED ALWAYS AS (to_tsvector('english', coalesce(title, '') || ' ' || coalesce(original_filename, ''))) STORED")
+        )
+        conn.execute(
+            text("CREATE INDEX IF NOT EXISTS sessions_search_idx ON sessions USING GIN(search_vector)")
+        )
+        
+        conn.commit()
+
+
 def run_migrations(engine: Engine) -> None:
     """Run all additive migrations. Safe to call on every startup."""
     try:
         ensure_enum_values(engine)
+    except Exception as e:
+        logger.warning(f"ensure_enum_values failed (non-fatal): {e}")
+
+    try:
         ensure_columns(engine)
+    except Exception as e:
+        logger.warning(f"ensure_columns failed (non-fatal): {e}")
+
+    try:
         ensure_foreign_key_cascades(engine)
     except Exception as e:
-        logger.warning(f"Migration helper encountered an error (non-fatal): {e}")
+        logger.warning(f"ensure_foreign_key_cascades failed (non-fatal): {e}")
+
+    try:
+        ensure_fts_indexes(engine)
+    except Exception as e:
+        logger.warning(f"ensure_fts_indexes failed (non-fatal): {e}")

@@ -1,12 +1,13 @@
 # SpeechFlow
 
-SpeechFlow is a Flask-first speech-to-text and intelligent transcript processing MVP.
+SpeechFlow is a Flask-first speech-to-text and intelligent transcript processing platform.
 
-It converts uploaded audio/video files into structured outputs including:
+It converts both uploaded audio/video files and real-time streaming audio into structured outputs including:
 
 - Speaker-labeled transcripts
+- Live transcript streaming
 - Summaries
-- Minutes of Meeting (MoM)
+- Meeting Minutes (MoM)
 - Action items
 
 The project is designed around fully local, CPU-only inference using open-source models.
@@ -18,139 +19,94 @@ The project is designed around fully local, CPU-only inference using open-source
 ### Completed
 
 #### Upload Processing Pipeline
-- MP3 upload support
-- MP4 upload support
-- File validation
-- FFmpeg audio extraction
-- Audio normalization
+- MP3 and MP4 upload support
+- FFmpeg audio extraction and normalization
 - Background processing workflow
 
-#### Speech Processing
-- faster-whisper transcription
-- pyannote speaker diarization
-- Transcript chunk persistence
-- Speaker alignment
-- Ordered transcript reconstruction
+#### Realtime Reliability Features
+- Session watchdog recovery
+- Browser disconnect recovery
+- Stale session cleanup
+- Transcript ownership isolation
+- Delta stabilization
+- Microphone privacy lifecycle
+
+#### Realtime Streaming Infrastructure
+- Bidirectional Socket.IO transport
+- In-browser microphone capture via `AudioWorkletNode`
+- Chunk-based VAD (Voice Activity Detection) segmentation
+- Live Faster-Whisper transcription with rolling acoustic context
+- Delta-based transcript stabilization (Tentative vs Committed text)
+- Resilient watchdog architecture for dropped connections
+- Strict hardware privacy lifecycle (microphone teardown on pause)
 
 #### Intelligent Transcript Processing
-- Transcript classification
-- Summary generation
-- Meeting Minutes (MoM) generation
+- Transcript classification (e.g., Meeting, Lecture, Brainstorm)
+- Summary and Meeting Minutes (MoM) generation
 - Action item extraction
-- Long transcript chunking
-- Map-reduce style summarization
-- Local LLM inference via Ollama
+- Local LLM inference via Ollama (phi3:mini)
 
-#### Persistence
-- Session storage
-- Transcript storage
-- Summary persistence
-- Action item persistence
-- Reprocessing support
+#### Persistence & Management
+- Unified session and transcript chunk storage
+- Support for streaming real-time persistence
+- History tracking, session deletion, and cascading cleanup
+- Indexed session discovery using PostgreSQL FTS
 
-#### APIs
-- Upload API
-- Transcript retrieval API
-- Summary retrieval API
-- Action item retrieval API
-- Transcript processing API
-
-#### Testing
-- Upload pipeline tests
-- Transcript processing tests
-- Persistence tests
-- API tests
+#### Frontend UI
+- Modern React + TypeScript interface
+- Real-time live transcript timeline rendering
+- Intelligent loading skeletons and state management
+- Session editing and dashboarding
 
 ---
 
 ## Architecture
 
 ```mermaid
-flowchart LR
+flowchart TD
 
-A[MP3 / MP4 Upload]
---> B[FFmpeg Audio Extraction]
+    subgraph Client
+        A[Browser Mic] --> B[AudioWorklet]
+        B --> C[Socket.IO Client]
+    end
 
-B --> C[faster-whisper]
+    subgraph Backend Transport
+        C -->|Raw PCM| D[Session Manager]
+        D --> E[Realtime Worker]
+    end
 
-C --> D[pyannote Diarization]
+    subgraph Speech Pipeline
+        E --> F[Silero VAD]
+        F -->|Segments| G[Faster-Whisper]
+    end
 
-D --> E[Transcript Assembly]
+    subgraph Database
+        G -->|Transcript Chunks| H[(PostgreSQL)]
+    end
 
-E --> F[(PostgreSQL)]
+    subgraph Intelligence Layer
+        H --> I[Ollama Classifier]
+        I --> J[Summary & Action Items]
+        J --> H
+    end
 
-F --> G[Transcript Classification]
-
-G --> H[Summary Generation]
-
-G --> I[MoM Generation]
-
-G --> J[Action Item Extraction]
-
-H --> K[(PostgreSQL)]
-I --> K
-J --> K
-
-K --> L[Retrieval APIs]
+    H --> K[Frontend UI]
 ```
 
 ---
 
 ## Tech Stack
 
-### Backend
-
-- Flask
-- SQLAlchemy
-- PostgreSQL
-
-### Speech Processing
-
-- faster-whisper
-- pyannote.audio
-
-### Audio Processing
-
-- FFmpeg
-- pydub
-
-### Transcript Intelligence
-
-- Ollama
-- phi3:mini
-
-### Testing
-
-- pytest
-
----
-
-## Repository Structure
-
-```text
-speechflow/
-  backend/
-    app/
-      api/
-      services/
-        audio/
-        transcription/
-        diarization/
-        summarization/
-        persistence/
-        session/
-      models/
-      schemas/
-      config/
-      db/
-    requirements/
-    tests/
-    docs/
-      phase1/
-      phase2/
-  frontend/
-  scripts/
-```
+| Layer | Technology |
+| :--- | :--- |
+| **Realtime Transport** | Socket.IO (Flask-SocketIO) |
+| **Backend Framework** | Flask, SQLAlchemy |
+| **Frontend Framework** | React, TypeScript, Vite |
+| **Speech Recognition** | Faster-Whisper |
+| **Voice Activity Detection** | Silero VAD |
+| **Database** | PostgreSQL |
+| **Intelligence Generation** | Ollama (phi3:mini) |
+| **Audio Processing** | FFmpeg, pydub, AudioWorkletNode |
 
 ---
 
@@ -166,128 +122,24 @@ speechflow/
 ### Environment Variables
 
 ```bash
-DATABASE_URL=
-OLLAMA_ENDPOINT=
-OLLAMA_TIMEOUT_SECONDS=
-HF_TOKEN=
+DATABASE_URL=postgresql://user:pass@localhost/speechflow
+OLLAMA_ENDPOINT=http://localhost:11434
+OLLAMA_TIMEOUT_SECONDS=120
+HF_TOKEN=your_huggingface_token
 ```
 
-### Backend
+### Backend & Frontend
 
 ```bash
+# Backend
 pip install -r backend/requirements/base.txt
-
 python -m backend.app.main
+
+# Frontend
+cd frontend
+npm install
+npm run dev
 ```
-
----
-
-## Implemented API Endpoints
-
-### Upload
-
-```http
-POST /api/upload
-```
-
-Upload MP3/MP4 audio for transcription.
-
-### Transcript Retrieval
-
-```http
-GET /api/sessions/{id}/transcript
-```
-
-Returns speaker-labeled transcript.
-
-### Transcript Processing
-
-```http
-POST /api/sessions/{id}/process
-```
-
-Generates:
-
-- Summary
-- Meeting Minutes
-- Action Items
-
-### Summary Retrieval
-
-```http
-GET /api/sessions/{id}/summary
-```
-
-Returns persisted summary and meeting minutes.
-
-### Action Item Retrieval
-
-```http
-GET /api/actions/{session_id}
-```
-
-Returns persisted action items.
-
----
-
-## Documentation
-
-### Phase 1
-
-- Upload pipeline implementation
-- Transcription pipeline
-- Diarization pipeline
-- Persistence layer
-
-### Phase 2
-
-- Ollama integration
-- Transcript intelligence layer
-- Long transcript chunking
-- Classification pipeline
-- Summary persistence
-- Action item persistence
-
----
-
-## Known Limitations
-
-### Current Model Limitations
-
-phi3:mini occasionally infers:
-
-- attendees
-- decisions
-- ownership
-- action items
-
-even when prompts explicitly prohibit inference.
-
-Future iterations may introduce:
-
-- structured JSON outputs
-- schema validation
-- rule-based verification
-- stronger local models
-
-### Current Product Limitations
-
-Not yet implemented:
-
-- Realtime microphone streaming
-- Live captions
-- Session history dashboard
-- Session status tracking
-- TXT export
-- JSON export
-- Frontend integration
-- Docker deployment
-
-### Performance
-
-- CPU-only inference can take 30–120 seconds for large transcripts
-- Long transcripts require chunking and merge passes
-- Diarization latency depends on audio length
 
 ---
 
@@ -300,16 +152,26 @@ Not yet implemented:
 ✅ Complete
 
 ### Phase 3 — Streaming Infrastructure
-🚧 Next
+✅ Complete
 
 ### Phase 4 — Session Management & Retrieval
-Planned
+🚧 Core session management complete; Advanced retrieval in progress
 
 ### Phase 5 — Frontend Integration
-Planned
+✅ Complete
 
 ### Phase 6 — Testing, Optimization & Deployment
-Planned
+🚧 In Progress (Demo Ready / Controlled User Testing)
+
+---
+
+## Current Limitations
+
+- **Infrastructure**: Single backend instance; no horizontal scaling or Redis adapter.
+- **State Management**: Realtime session manager operates entirely in-memory.
+- **Performance**: CPU-only transcription introduces latency on older hardware.
+- **Features**: Advanced semantic retrieval is not yet implemented. Speaker diarization is currently optimized for the batch upload pipeline only.
+- **Intent**: Realtime transcription is currently optimized for MVP demonstrations and controlled user testing rather than massive concurrency.
 
 ---
 

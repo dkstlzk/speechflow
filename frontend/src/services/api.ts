@@ -169,6 +169,7 @@ export async function getTranscript(
 ): Promise<ApiResponse<TranscriptResponse>> {
   type BC = {
     speaker: string;
+    display_name?: string | null;
     startSec: number;
     endSec: number;
     text: string;
@@ -181,6 +182,7 @@ export async function getTranscript(
   }
   const segments = (raw.data.transcript ?? []).map((c) => ({
     speaker: c.speaker,
+    displayName: c.display_name ?? undefined,
     text: c.text,
     chunk_index: c.chunk_index,
     startSec: c.startSec,
@@ -323,6 +325,31 @@ export async function updateSessionTitle(
     data: {
       sessionId: String(raw.data.session_id),
       title: raw.data.title,
+    },
+    ok: true,
+  };
+}
+
+export async function updateSpeaker(
+  id: string,
+  speakerLabel: string,
+  displayName: string,
+): Promise<ApiResponse<{ sessionId: string; speakerLabel: string; displayName: string }>> {
+  const raw = await apiFetch<{
+    session_id: number;
+    speaker_label: string;
+    display_name: string;
+  }>(`${API_BASE}/api/sessions/${id}/speakers/${encodeURIComponent(speakerLabel)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ display_name: displayName }),
+  });
+
+  return {
+    data: {
+      sessionId: String(raw.data.session_id),
+      speakerLabel: raw.data.speaker_label,
+      displayName: raw.data.display_name,
     },
     ok: true,
   };

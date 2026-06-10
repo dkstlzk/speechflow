@@ -30,6 +30,7 @@ export interface Session {
 
 export interface TranscriptSegment {
   speaker: string;
+  displayName?: string;
   text: string;
 
   chunk_index?: number;

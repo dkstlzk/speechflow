@@ -73,12 +73,18 @@ def get_session_transcript(session_id: int) -> Optional[dict]:
                 chunk.id,
             ),
         )
+        from ...services.persistence.speaker_repository import get_or_create_speaker
+        unknown_speaker = get_or_create_speaker(db, session_id, "UNKNOWN")
+        unknown_display_name = unknown_speaker.display_name
+
         transcript = [
             {
                 "speaker": chunk.speaker.speaker_label
                 if chunk.speaker is not None
                 else "UNKNOWN",
-
+                "display_name": chunk.speaker.display_name
+                if chunk.speaker is not None
+                else unknown_display_name,
                 "startSec": float(chunk.start_time),
                 "endSec": float(chunk.end_time),
                 "chunk_index": chunk.chunk_index,

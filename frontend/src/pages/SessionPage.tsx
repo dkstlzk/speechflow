@@ -18,9 +18,11 @@ import {
   getTranscript,
   processSession,
   updateSessionTitle,
+  updateSpeaker,
 } from "@/services/api";
 import type { ActionItem, Session, SummaryResponse, TranscriptResponse } from "@/types";
 import { exportAsMarkdown, exportAsTxt, printAsPdf } from "@/lib/export";
+import { toast } from "sonner";
 
 interface State<T> {
   data?: T;
@@ -62,14 +64,36 @@ export function SessionPage({ id }: { id: string }) {
       setSession((prev) =>
         prev.data ? { ...prev, data: { ...prev.data, title: editTitleValue.trim() } } : prev,
       );
+      toast.success("Session title updated");
       setIsEditingTitle(false);
     } catch (err) {
-      alert("Failed to update session title.");
+      toast.error("Failed to update session title.");
     } finally {
       setIsSavingTitle(false);
     }
   };
 
+
+  const handleRenameSpeaker = async (speaker: string, newName: string) => {
+    try {
+      await updateSpeaker(id, speaker, newName);
+      setTranscript((prev) => {
+        if (!prev.data) return prev;
+        return {
+          ...prev,
+          data: {
+            ...prev.data,
+            segments: prev.data.segments.map((seg) =>
+              seg.speaker === speaker ? { ...seg, displayName: newName } : seg
+            ),
+          },
+        };
+      });
+      toast.success("Speaker renamed");
+    } catch (err) {
+      toast.error("Failed to rename speaker.");
+    }
+  };
 
   const fetchSession = useCallback(
     (showLoading: boolean, signal?: AbortSignal) => {
@@ -373,6 +397,7 @@ export function SessionPage({ id }: { id: string }) {
             loading={transcript.loading}
             error={transcript.error}
             session={session.data ?? undefined}
+            onRenameSpeaker={handleRenameSpeaker}
           />
         </div>
       </div>

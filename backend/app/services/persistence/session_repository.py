@@ -63,8 +63,26 @@ def list_recent_sessions(db: Session, limit: int = 50, query: Optional[str] = No
 
     q = db.query(SessionModel)
     if query:
-        search_pattern = f"%{query}%"
         q = q.outerjoin(TranscriptChunk, SessionModel.id == TranscriptChunk.session_id)
+        if db.bind.dialect.name == "postgresql":
+            try:
+                from sqlalchemy import func, literal_column
+                search_query = func.plainto_tsquery('english', query)
+                q_fts = q.filter(
+                    or_(
+                        literal_column("sessions.search_vector").op("@@")(search_query),
+                        literal_column("transcript_chunks.search_vector").op("@@")(search_query),
+                    )
+                ).distinct()
+                return q_fts.order_by(SessionModel.created_at.desc()).limit(limit).all()
+            except Exception as e:
+                import logging
+                logging.getLogger("session_repository").warning(f"FTS search failed: {e}. Falling back to ILIKE.")
+                db.rollback()
+                # Fall through to ILIKE
+
+        # ILIKE Fallback
+        search_pattern = f"%{query}%"
         q = q.filter(
             or_(
                 SessionModel.title.ilike(search_pattern),
