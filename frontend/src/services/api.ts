@@ -75,8 +75,8 @@ function mapBackendStatus(s: string): ProcessingStatus {
     // Realtime pipeline statuses
     recording: "recording",
     finalizing: "finalizing",
-    review: "review",
-    saved: "saved",
+    review: "processing", // Legacy alias
+    saved: "completed", // Legacy alias
   };
   return map[s] ?? "processing";
 }
@@ -94,7 +94,10 @@ export async function uploadFile(file: File): Promise<ApiResponse<{ sessionId: s
 }
 
 // GET /api/sessions/
-export async function getSessions(query?: string, signal?: AbortSignal): Promise<ApiResponse<Session[]>> {
+export async function getSessions(
+  query?: string,
+  signal?: AbortSignal,
+): Promise<ApiResponse<Session[]>> {
   type BS = {
     id: number;
     status: string;
@@ -106,7 +109,9 @@ export async function getSessions(query?: string, signal?: AbortSignal): Promise
     has_audio?: boolean;
     audio_url?: string;
   };
-  const url = query ? `${API_BASE}/api/sessions/?q=${encodeURIComponent(query)}` : `${API_BASE}/api/sessions/`;
+  const url = query
+    ? `${API_BASE}/api/sessions/?q=${encodeURIComponent(query)}`
+    : `${API_BASE}/api/sessions/`;
   const raw = await apiFetch<BS[]>(url, { signal });
   const sessions: Session[] = (raw.data ?? []).map((s) => ({
     id: String(s.id),
@@ -158,7 +163,10 @@ export async function deleteSession(id: string): Promise<ApiResponse<{ sessionId
 }
 
 // GET /api/sessions/{id}/transcript
-export async function getTranscript(id: string, signal?: AbortSignal): Promise<ApiResponse<TranscriptResponse>> {
+export async function getTranscript(
+  id: string,
+  signal?: AbortSignal,
+): Promise<ApiResponse<TranscriptResponse>> {
   type BC = {
     speaker: string;
     startSec: number;
@@ -189,7 +197,10 @@ export async function getTranscript(id: string, signal?: AbortSignal): Promise<A
 }
 
 // GET /api/sessions/{id}/summary
-export async function getSummary(id: string, signal?: AbortSignal): Promise<ApiResponse<SummaryResponse>> {
+export async function getSummary(
+  id: string,
+  signal?: AbortSignal,
+): Promise<ApiResponse<SummaryResponse>> {
   type BS = {
     session_id: number;
     summary: string;
@@ -212,7 +223,10 @@ export async function getSummary(id: string, signal?: AbortSignal): Promise<ApiR
 }
 
 // GET /api/actions/{session_id}
-export async function getActions(id: string, signal?: AbortSignal): Promise<ApiResponse<ActionItem[]>> {
+export async function getActions(
+  id: string,
+  signal?: AbortSignal,
+): Promise<ApiResponse<ActionItem[]>> {
   type BI = {
     id: number;
     text: string;
@@ -277,25 +291,7 @@ export async function finalizeRealtimeSession(
   };
 }
 
-export async function saveRealtimeSession(
-  id: string,
-): Promise<ApiResponse<{ sessionId: string; title: string }>> {
-  const raw = await apiFetch<{
-    session_id: number;
-    status: string;
-    title: string;
-  }>(`${API_BASE}/api/realtime/session/${id}/save`, {
-    method: "POST",
-  });
 
-  return {
-    data: {
-      sessionId: String(raw.data.session_id),
-      title: raw.data.title,
-    },
-    ok: true,
-  };
-}
 
 export async function deleteRealtimeSession(
   id: string,

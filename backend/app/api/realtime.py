@@ -46,7 +46,7 @@ def create_realtime_session():
 
 @realtime_bp.post("/session/<session_id>/finalize")
 def finalize_realtime_session(session_id: str):
-    """Move session from RECORDING → REVIEW.
+    """Move session from RECORDING → COMPLETED.
 
     Called when the user presses Stop and the backend has finished
     persisting the final segment.
@@ -75,69 +75,29 @@ def finalize_realtime_session(session_id: str):
     db = SessionLocal()
 
     try:
-        update_session_status(
-            db,
-            session_id_int,
-            SessionStatus.REVIEW,
-        )
-
-        return jsonify(
-            ApiResponse.ok(
-                {
-                    "session_id": session_id_int,
-                    "status": "review",
-                }
-            ).to_dict()
-        ), 200
-
-    finally:
-        db.close()
-
-
-@realtime_bp.post("/session/<session_id>/save")
-def save_realtime_session(session_id: str):
-    """Save a reviewed recording.
-
-    Moves session from REVIEW → SAVED and assigns a default title
-    if none is provided.
-    """
-    try:
-        session_id_int = int(session_id)
-    except ValueError:
-        return jsonify(
-            ApiResponse.fail("invalid session id").to_dict()
-        ), 400
-
-    db = SessionLocal()
-
-    try:
         session = get_session_by_id(db, session_id_int)
-        if session is None:
-            return jsonify(
-                ApiResponse.fail("session not found").to_dict()
-            ), 404
-
-        # Assign default title: Recording_001, Recording_002, etc.
-        if not session.title:
-            session.title = f"Recording_{session_id_int:03d}"
-
-        session.status = SessionStatus.SAVED
-        db.add(session)
-        db.commit()
-        db.refresh(session)
+        if session:
+            if not session.title:
+                session.title = f"Recording_{session_id_int:03d}"
+            
+            session.status = SessionStatus.COMPLETED
+            db.add(session)
+            db.commit()
+            db.refresh(session)
 
         return jsonify(
             ApiResponse.ok(
                 {
                     "session_id": session_id_int,
-                    "status": "saved",
-                    "title": session.title,
+                    "status": "completed",
                 }
             ).to_dict()
         ), 200
 
     finally:
         db.close()
+
+
 
 
 @realtime_bp.delete("/session/<session_id>")

@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from typing import Dict, Optional, BinaryIO
 import threading
 from ...config.logging import get_logger
+from ...models.enums import SessionStatus
 
 logger = get_logger(__name__)
 
@@ -35,6 +36,8 @@ class StreamingSession:
     segment_start_offset: int = 0
     segment_start_time: float = 0.0  # recording-relative seconds
     last_speech_time: float = field(default_factory=time.time)  # wall clock
+    last_activity_time: float = field(default_factory=time.time)  # wall clock
+    has_speech: bool = False  # Track if current segment has had speech
 
     # Caption throttle
     last_caption_time: float = 0.0
@@ -46,6 +49,7 @@ class StreamingSession:
     # Lifecycle
     is_ending: bool = False
     is_paused: bool = False
+    pause_pending: bool = False
 
     # Persistence
     raw_audio_path: Optional[str] = None
@@ -138,8 +142,10 @@ class StreamingSessionManager:
                             db_session = db.query(SessionModel).filter(SessionModel.id == int(session.session_id)).first()
                             if db_session:
                                 db_session.audio_path = wav_path
+                                db_session.status = SessionStatus.COMPLETED
+                                db_session.duration_seconds = duration
                                 db.commit()
-                                logger.info("[Playback] audio_path updated")
+                                logger.info(f"[Playback] audio_path, status, and duration updated for session {session.session_id}")
                         finally:
                             db.close()
                     else:
@@ -160,9 +166,11 @@ class StreamingSessionManager:
     def append_audio(self, sid: str, chunk: bytes) -> None:
         session = self.active_sessions.get(sid)
         if session:
-            session.audio_buffer.extend(chunk)
-            if session.raw_file_handle:
-                session.raw_file_handle.write(chunk)
+            with session.lock:
+                session.last_activity_time = time.time()
+                session.audio_buffer.extend(chunk)
+                if session.raw_file_handle:
+                    session.raw_file_handle.write(chunk)
         else:
             logger.warning(
                 f"[SessionManager] WARNING: Audio chunk received "
@@ -174,11 +182,12 @@ class StreamingSessionManager:
         session = self.active_sessions.get(sid)
         if not session:
             return False
-        unread = len(session.audio_buffer) - session.processed_offset
-        if unread >= min_bytes:
-            session.processed_offset = len(session.audio_buffer)
-            return True
-        return False
+        with session.lock:
+            unread = len(session.audio_buffer) - session.processed_offset
+            if unread >= min_bytes:
+                session.processed_offset = len(session.audio_buffer)
+                return True
+            return False
 
     # ── Caption Window ─────────────────────────────────────────────────
 
@@ -285,6 +294,7 @@ class StreamingSessionManager:
         session.segment_start_time = end_time
         session.chunk_index += 1
         session.last_speech_time = time.time()
+        session.has_speech = False
 
 
 # Global singleton — imported by websocket events and workers

@@ -5,9 +5,7 @@ export type ProcessingStatus =
   | "completed"
   | "failed"
   | "recording"
-  | "finalizing"
-  | "review"
-  | "saved";
+  | "finalizing";
 
 export type TranscriptType =
   | "meeting"
@@ -40,6 +38,7 @@ export interface TranscriptSegment {
   endSec?: number;
 
   is_partial?: boolean;
+  sessionId?: string;
 }
 
 export interface TranscriptResponse {
@@ -68,16 +67,25 @@ export interface ApiResponse<T> {
 }
 
 export type ConnectionStatus = "connected" | "connecting" | "disconnected";
-export type RecordingStatus = "idle" | "recording" | "paused" | "finalizing" | "review" | "saved";
+export type RecordingStatus = "idle" | "recording" | "paused" | "finalizing" | "completed";
+export type MicrophoneState =
+  | "initializing"
+  | "not_requested"
+  | "ready"
+  | "recording"
+  | "paused"
+  | "denied";
 
 export interface StreamingEvent {
   id: string;
   timestamp: string;
   type: string;
   message: string;
+  sessionId?: string;
 }
 
 export interface CaptionUpdate {
   text: string;
   timestamp: number;
+  sessionId?: string;
 }

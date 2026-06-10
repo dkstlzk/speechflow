@@ -57,7 +57,8 @@ export function SessionCard({ session, onDelete }: SessionCardProps) {
   };
 
   const duration = formatDuration(session.durationSec);
-  const title = session.title || session.fileName || `Session ${session.id?.toString().slice(0, 8)}`;
+  const title =
+    session.title || session.fileName || `Session ${session.id?.toString().slice(0, 8)}`;
 
   return (
     <div className="group relative flex flex-col gap-4 rounded-xl border border-border/70 bg-card p-5 transition-all hover:border-border-strong hover:shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_-12px_rgba(0,0,0,0.08)] sm:flex-row sm:items-center sm:justify-between">

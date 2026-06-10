@@ -1,6 +1,28 @@
 import type { ActionItem, Session, TranscriptSegment } from "@/types";
 import { formatTranscriptTime } from "./transcript";
 
+export function generateExportFilename(
+  session: Session,
+  extension: string,
+  suffix?: string,
+): string {
+  const rawTitle = session.title || session.fileName || "SpeechFlow_Session";
+
+  const safeTitle = rawTitle
+    .replace(/\.[^/.]+$/, "")
+    .replace(/[<>:"/\\|?*#]/g, "")
+    .trim()
+    .replace(/\s+/g, "_");
+
+  const date = session.createdAt
+    ? new Date(session.createdAt).toISOString().split("T")[0]
+    : new Date().toISOString().split("T")[0];
+
+  const artifact = suffix ? `_${suffix}` : "";
+
+  return `${safeTitle}_${date}${artifact}.${extension}`;
+}
+
 export interface SessionData {
   session: Session;
   transcript: TranscriptSegment[];
@@ -111,14 +133,16 @@ function downloadFile(content: string, filename: string, mimeType: string) {
   URL.revokeObjectURL(url);
 }
 
-export function exportAsMarkdown(data: SessionData, filename: string = "export.md") {
+export function exportAsMarkdown(data: SessionData) {
   const md = buildMarkdown(data);
-  downloadFile(md, filename, "text/markdown;charset=utf-8;");
+
+  downloadFile(md, generateExportFilename(data.session, "md"), "text/markdown;charset=utf-8;");
 }
 
-export function exportAsTxt(data: SessionData, filename: string = "export.txt") {
+export function exportAsTxt(data: SessionData) {
   const txt = buildTxt(data);
-  downloadFile(txt, filename, "text/plain;charset=utf-8;");
+
+  downloadFile(txt, generateExportFilename(data.session, "txt"), "text/plain;charset=utf-8;");
 }
 
 export function printAsPdf() {

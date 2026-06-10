@@ -15,9 +15,10 @@ def emit_caption_update(socketio: SocketIO, sid: str, session) -> None:
     if (now - session.last_caption_time) < CAPTION_INTERVAL_SECONDS:
         return
 
-    audio_window = session_manager.get_caption_window(
-        sid, window_seconds=CAPTION_WINDOW_SECONDS
-    )
+    with session.lock:
+        audio_window = session_manager.get_caption_window(
+            sid, window_seconds=CAPTION_WINDOW_SECONDS
+        )
     if not audio_window:
         return
 
@@ -34,7 +35,7 @@ def emit_caption_update(socketio: SocketIO, sid: str, session) -> None:
         if text:
             socketio.emit(
                 "caption_update",
-                {"text": text, "timestamp": now},
+                {"text": text, "timestamp": now, "session_id": session.session_id},
                 to=sid,
             )
     except Exception as e:

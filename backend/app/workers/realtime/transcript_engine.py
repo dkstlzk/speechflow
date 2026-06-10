@@ -16,13 +16,17 @@ def transcribe_and_persist_segment(
     session,
     segment: SpeechSegment,
 ) -> None:
-    audio_bytes = session_manager.get_segment_audio(
-        sid, segment, context_seconds=CONTEXT_OVERLAP_SECONDS
-    )
+    with session.lock:
+        audio_bytes = session_manager.get_segment_audio(
+            sid, segment, context_seconds=CONTEXT_OVERLAP_SECONDS
+        )
     if not audio_bytes:
         return
 
-    if session.chunk_index in session.persisted_chunk_indices:
+    # We capture chunk_index upfront outside the lock
+    # (Safe because this is the only thread modifying it)
+    current_chunk_index = session.chunk_index
+    if current_chunk_index in session.persisted_chunk_indices:
         return
 
     try:
@@ -37,9 +41,10 @@ def transcribe_and_persist_segment(
         if not text.strip():
             logger.info(
                 f"[TranscriptEngine] Empty transcription for "
-                f"chunk #{session.chunk_index} — skipping"
+                f"chunk #{current_chunk_index} — skipping"
             )
-            session_manager.advance_segment(sid, segment.end_time, segment.end_offset)
+            with session.lock:
+                session_manager.advance_segment(sid, segment.end_time, segment.end_offset)
             return
 
         save_transcript_chunks(
@@ -51,16 +56,17 @@ def transcribe_and_persist_segment(
                     "start_time": segment.start_time,
                     "end_time": segment.end_time,
                     "text": text,
-                    "chunk_index": session.chunk_index,
+                    "chunk_index": current_chunk_index,
                     "is_partial": False,
                 }
             ],
         )
 
-        session.persisted_chunk_indices.add(session.chunk_index)
+        with session.lock:
+            session.persisted_chunk_indices.add(current_chunk_index)
 
         logger.info(
-            f"[TranscriptEngine] Persisted chunk #{session.chunk_index} "
+            f"[TranscriptEngine] Persisted chunk #{current_chunk_index} "
             f"({segment.start_time:.2f}s → {segment.end_time:.2f}s): "
             f"{text[:80]}..."
         )
@@ -72,19 +78,20 @@ def transcribe_and_persist_segment(
                 "text": text,
                 "start_time": segment.start_time,
                 "end_time": segment.end_time,
-                "chunk_index": session.chunk_index,
+                "chunk_index": current_chunk_index,
+                "session_id": session.session_id,
             },
             to=sid,
         )
 
-        session_manager.advance_segment(sid, segment.end_time, segment.end_offset)
-
-        session_manager.trim_buffer_after_persist(
-            sid, keep_seconds=TRIM_KEEP_SECONDS
-        )
+        with session.lock:
+            session_manager.advance_segment(sid, segment.end_time, segment.end_offset)
+            session_manager.trim_buffer_after_persist(
+                sid, keep_seconds=TRIM_KEEP_SECONDS
+            )
 
     except Exception:
         logger.exception(
             f"[TranscriptEngine] Error for {sid} "
-            f"chunk #{session.chunk_index}"
+            f"chunk #{current_chunk_index}"
         )

@@ -21,9 +21,7 @@ export function ActionItemsPanel({ items, loading, error }: Props) {
       <ul className="divide-y divide-border/70">
         {items?.map((it) => (
           <li key={it.id} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
-            <CheckCircle2
-              className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/50"
-            />
+            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/50" />
             <div className="min-w-0 flex-1">
               <p className="text-sm leading-6 text-foreground">{it.text}</p>
               <p className="mt-0.5 text-xs text-muted-foreground">

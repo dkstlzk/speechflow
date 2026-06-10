@@ -72,21 +72,23 @@ def register_events(socketio: SocketIO) -> None:
         session = session_manager.active_sessions.get(request.sid)
         if session:
             session.is_ending = True
-        emit(
-            "stream_complete",
-            {"status": "finalizing"},
-        )
+            emit(
+                "stream_complete",
+                {"status": "finalizing", "session_id": session.session_id},
+            )
 
     @socketio.on("stream_pause")
     def handle_stream_pause(_payload):
         session = session_manager.active_sessions.get(request.sid)
         if session and not session.is_paused:
             handle_pause(socketio, request.sid, session)
-        emit("stream_paused", {"status": "paused"})
+        if session:
+            emit("stream_paused", {"status": "paused", "session_id": session.session_id})
 
     @socketio.on("stream_resume")
     def handle_stream_resume(_payload):
         session = session_manager.active_sessions.get(request.sid)
         if session and session.is_paused:
             handle_resume(request.sid, session)
-        emit("stream_resumed", {"status": "recording"})
+        if session:
+            emit("stream_resumed", {"status": "recording", "session_id": session.session_id})

@@ -37,7 +37,7 @@ export function HistoryPage() {
     const timer = setTimeout(() => {
       if (retryCountRef.current === 0) {
         setSessions(null); // Show loading skeleton on new search
-        setError(null);    // Clear previous errors
+        setError(null); // Clear previous errors
       }
 
       getSessions(query, controller.signal)
@@ -49,7 +49,8 @@ export function HistoryPage() {
         })
         .catch((e) => {
           if (!controller.signal.aborted) {
-            if (e instanceof Error && (e.name === "AbortError" || e.message.includes("aborted"))) return;
+            if (e instanceof Error && (e.name === "AbortError" || e.message.includes("aborted")))
+              return;
 
             if (retryCountRef.current < 3) {
               retryCountRef.current += 1;
@@ -135,8 +136,14 @@ export function HistoryPage() {
           {[0, 1, 2].map((i) => (
             <div
               key={i}
-              className="h-[88px] animate-pulse rounded-xl border border-border/70 bg-card"
-            />
+              className="flex h-[88px] items-center gap-4 rounded-xl border border-border/70 bg-card p-4"
+            >
+              <div className="h-10 w-10 animate-pulse rounded-full bg-muted" />
+              <div className="flex-1 space-y-2">
+                <div className="h-4 w-1/3 animate-pulse rounded bg-muted" />
+                <div className="h-3 w-1/4 animate-pulse rounded bg-muted" />
+              </div>
+            </div>
           ))}
         </div>
       ) : filtered.length === 0 ? (

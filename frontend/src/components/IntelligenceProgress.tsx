@@ -65,8 +65,8 @@ export function IntelligenceProgress({ mode = "intelligence" }: Props) {
                   isComplete
                     ? "text-foreground"
                     : isCurrent
-                    ? "text-primary font-semibold"
-                    : "text-muted-foreground"
+                      ? "text-primary font-semibold"
+                      : "text-muted-foreground"
                 }
               >
                 {stage.label}

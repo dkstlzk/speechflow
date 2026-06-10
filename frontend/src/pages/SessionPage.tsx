@@ -59,7 +59,9 @@ export function SessionPage({ id }: { id: string }) {
     setIsSavingTitle(true);
     try {
       await updateSessionTitle(id, editTitleValue.trim());
-      setSession(prev => prev.data ? { ...prev, data: { ...prev.data, title: editTitleValue.trim() } } : prev);
+      setSession((prev) =>
+        prev.data ? { ...prev, data: { ...prev.data, title: editTitleValue.trim() } } : prev,
+      );
       setIsEditingTitle(false);
     } catch (err) {
       alert("Failed to update session title.");
@@ -68,18 +70,18 @@ export function SessionPage({ id }: { id: string }) {
     }
   };
 
-  const abortControllerRef = useRef<AbortController>(new AbortController());
 
   const fetchSession = useCallback(
-    (showLoading: boolean) => {
+    (showLoading: boolean, signal?: AbortSignal) => {
       if (showLoading) setSession(initial());
-      return getSession(id, abortControllerRef.current.signal)
+      return getSession(id, signal)
         .then((r) => {
           setSession({ data: r.data, loading: false, error: null });
           return r.data;
         })
         .catch((e: unknown) => {
-          if (e instanceof Error && (e.name === "AbortError" || e.message.includes("aborted"))) return null;
+          if (e instanceof Error && (e.name === "AbortError" || e.message.includes("aborted")))
+            return null;
           const msg = e instanceof Error ? e.message : "Failed to load session.";
           setSession({ loading: false, error: msg });
           return null;
@@ -88,12 +90,13 @@ export function SessionPage({ id }: { id: string }) {
     [id],
   );
 
-  const fetchTranscript = useCallback(() => {
+  const fetchTranscript = useCallback((signal?: AbortSignal) => {
     setTranscript(initial());
-    return getTranscript(id, abortControllerRef.current.signal)
+    return getTranscript(id, signal)
       .then((r) => setTranscript({ data: r.data, loading: false, error: null }))
       .catch((e: unknown) => {
-        if (e instanceof Error && (e.name === "AbortError" || e.message.includes("aborted"))) return;
+        if (e instanceof Error && (e.name === "AbortError" || e.message.includes("aborted")))
+          return;
         if (e instanceof ApiError && e.status === 404) {
           setTranscript({ data: undefined, loading: false, error: null });
         } else {
@@ -102,12 +105,13 @@ export function SessionPage({ id }: { id: string }) {
       });
   }, [id]);
 
-  const fetchSummary = useCallback(() => {
+  const fetchSummary = useCallback((signal?: AbortSignal) => {
     setSummary(initial());
-    return getSummary(id, abortControllerRef.current.signal)
+    return getSummary(id, signal)
       .then((r) => setSummary({ data: r.data, loading: false, error: null }))
       .catch((e: unknown) => {
-        if (e instanceof Error && (e.name === "AbortError" || e.message.includes("aborted"))) return;
+        if (e instanceof Error && (e.name === "AbortError" || e.message.includes("aborted")))
+          return;
         if (e instanceof ApiError && e.status === 404) {
           setSummary({ data: undefined, loading: false, error: null });
         } else {
@@ -116,12 +120,13 @@ export function SessionPage({ id }: { id: string }) {
       });
   }, [id]);
 
-  const fetchActions = useCallback(() => {
+  const fetchActions = useCallback((signal?: AbortSignal) => {
     setActions(initial());
-    return getActions(id, abortControllerRef.current.signal)
+    return getActions(id, signal)
       .then((r) => setActions({ data: r.data, loading: false, error: null }))
       .catch((e: unknown) => {
-        if (e instanceof Error && (e.name === "AbortError" || e.message.includes("aborted"))) return;
+        if (e instanceof Error && (e.name === "AbortError" || e.message.includes("aborted")))
+          return;
         if (e instanceof ApiError && e.status === 404) {
           setActions({ data: [], loading: false, error: null });
         } else {
@@ -130,15 +135,17 @@ export function SessionPage({ id }: { id: string }) {
       });
   }, [id]);
 
-  const load = useCallback(() => {
-    fetchSession(true);
-    fetchTranscript();
-    fetchSummary();
-    fetchActions();
+  const load = useCallback((signal?: AbortSignal) => {
+    fetchSession(true, signal);
+    fetchTranscript(signal);
+    fetchSummary(signal);
+    fetchActions(signal);
   }, [fetchSession, fetchTranscript, fetchSummary, fetchActions]);
 
   useEffect(() => {
-    load();
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
   }, [load]);
 
   const stopPolling = useCallback(() => {
@@ -156,17 +163,19 @@ export function SessionPage({ id }: { id: string }) {
       return;
     }
     if (pollRef.current) return;
+    const controller = new AbortController();
+
     pollRef.current = setInterval(async () => {
       if (isPolling.current) return;
       isPolling.current = true;
       try {
-        const next = await fetchSession(false);
+        const next = await fetchSession(false, controller.signal);
         if (!next) return;
         if (next.status === "completed") {
           stopPolling();
-          fetchTranscript();
-          fetchSummary();
-          fetchActions();
+          fetchTranscript(controller.signal);
+          fetchSummary(controller.signal);
+          fetchActions(controller.signal);
         } else if (next.status === "failed") {
           stopPolling();
         }
@@ -174,7 +183,10 @@ export function SessionPage({ id }: { id: string }) {
         isPolling.current = false;
       }
     }, POLL_INTERVAL_MS);
-    return () => stopPolling();
+    return () => {
+      stopPolling();
+      controller.abort();
+    };
   }, [
     session.data?.status,
     fetchSession,
@@ -184,12 +196,6 @@ export function SessionPage({ id }: { id: string }) {
     stopPolling,
   ]);
 
-  useEffect(() => {
-    return () => {
-      stopPolling();
-      abortControllerRef.current.abort();
-    };
-  }, [stopPolling]);
 
   async function onProcess() {
     if (processing) return;
@@ -210,14 +216,14 @@ export function SessionPage({ id }: { id: string }) {
   function handleExport(format: string) {
     if (!session.data || !transcript.data?.segments) return;
     const data = {
-      session: session.data as Session,
+      session: session.data!,
       transcript: transcript.data.segments,
       summary: summary.data?.summary,
       mom: summary.data?.mom,
       actions: actions.data || [],
     };
-    if (format === "txt") exportAsTxt(data, `${session.data.id}.txt`);
-    if (format === "md") exportAsMarkdown(data, `${session.data.id}.md`);
+    if (format === "txt") exportAsTxt(data);
+    if (format === "md") exportAsMarkdown(data);
     if (format === "pdf") printAsPdf();
   }
 
@@ -255,10 +261,22 @@ export function SessionPage({ id }: { id: string }) {
                     if (e.key === "Escape") setIsEditingTitle(false);
                   }}
                 />
-                <Button size="sm" variant="ghost" onClick={handleSaveTitle} disabled={isSavingTitle} className="h-8 px-2 text-green-600 hover:text-green-700 hover:bg-green-50">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={handleSaveTitle}
+                  disabled={isSavingTitle}
+                  className="h-8 px-2 text-green-600 hover:text-green-700 hover:bg-green-50"
+                >
                   Save
                 </Button>
-                <Button size="sm" variant="ghost" onClick={() => setIsEditingTitle(false)} disabled={isSavingTitle} className="h-8 px-2 text-muted-foreground hover:bg-muted">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setIsEditingTitle(false)}
+                  disabled={isSavingTitle}
+                  className="h-8 px-2 text-muted-foreground hover:bg-muted"
+                >
                   Cancel
                 </Button>
               </div>
@@ -311,7 +329,7 @@ export function SessionPage({ id }: { id: string }) {
               </Button>
             </div>
           )}
-          <Button variant="outline" size="sm" onClick={load}>
+          <Button variant="outline" size="sm" onClick={() => load()}>
             <RefreshCw className="h-3.5 w-3.5" />
             Refresh
           </Button>
@@ -354,6 +372,7 @@ export function SessionPage({ id }: { id: string }) {
             segments={transcript.data?.segments}
             loading={transcript.loading}
             error={transcript.error}
+            session={session.data ?? undefined}
           />
         </div>
       </div>

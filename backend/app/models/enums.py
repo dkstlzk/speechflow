@@ -31,6 +31,6 @@ SESSION_STATUS_FLOW = [
 REALTIME_STATUS_FLOW = [
     SessionStatus.RECORDING,
     SessionStatus.FINALIZING,
-    SessionStatus.REVIEW,
-    SessionStatus.SAVED,
+    SessionStatus.PROCESSING,
+    SessionStatus.COMPLETED,
 ]

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Link } from "@tanstack/react-router";
 import { AppLayout } from "@/layouts/AppLayout";
+import { Button } from "@/components/ui/button";
 import { ConnectionStatusBadge } from "@/components/ConnectionStatusBadge";
 import { RecordingTimer } from "@/components/RecordingTimer";
 import { RealtimeControls } from "@/components/RealtimeControls";
@@ -13,7 +14,7 @@ import { MomPanel } from "@/components/MomPanel";
 import { ActionItemsPanel } from "@/components/ActionItemsPanel";
 import { AudioVisualizer } from "@/components/AudioVisualizer";
 import { AiGeneratingSkeleton } from "@/components/AiGeneratingSkeleton";
-import { ReviewScreen } from "@/components/ReviewScreen";
+
 import {
   socket,
   connect,
@@ -32,7 +33,7 @@ import {
   getActions,
   getSummary,
   processSession,
-  saveRealtimeSession,
+
   startRealtimeSession,
 } from "@/services/api";
 import { startAudioCapture, stopAudioCapture } from "@/services/audio";
@@ -44,12 +45,17 @@ import type {
   StreamingEvent,
   SummaryResponse,
   TranscriptSegment,
+  MicrophoneState,
 } from "@/types";
 
 export function RealtimePage() {
   const [conn, setConn] = useState<ConnectionStatus>("disconnected");
   const [rec, setRec] = useState<RecordingStatus>("idle");
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const sessionIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    sessionIdRef.current = sessionId;
+  }, [sessionId]);
 
   // Separated: captions are disposable, segments are committed
   const [caption, setCaption] = useState<string>("");
@@ -58,29 +64,37 @@ export function RealtimePage() {
   const [events, setEvents] = useState<StreamingEvent[]>([]);
   const [autoScroll, setAutoScroll] = useState(true);
   const [resetKey, setResetKey] = useState(0);
-  const [micGranted, setMicGranted] = useState<boolean | null>(null);
+  const [micState, setMicState] = useState<MicrophoneState>("initializing");
+
+  const startInProgressRef = useRef(false);
 
   const [summary, setSummary] = useState<SummaryResponse | null>(null);
   const [actions, setActions] = useState<ActionItem[] | null>(null);
   const [processing, setProcessing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [savedTitle, setSavedTitle] = useState<string | undefined>();
-  const [pingLogs, setPingLogs] = useState<string[]>([]);
-
+    const [savedTitle, setSavedTitle] = useState<string | undefined>();
   useEffect(() => {
+    // Connect to websocket immediately on page open
+    connect().catch((err) => {
+      console.error("[RealtimePage] Initial connect failed", err);
+    });
+
     // Subscribe to committed transcript chunks (persisted in DB)
     const off1 = subscribeToTranscript((seg) => {
+      if (seg.sessionId && seg.sessionId !== sessionIdRef.current) return;
       setSegments((s) => [...s, seg]);
     });
 
     // Subscribe to live captions (disposable, UI only)
     const off2 = subscribeToCaptions((cap: CaptionUpdate) => {
+      if (cap.sessionId && cap.sessionId !== sessionIdRef.current) return;
       setCaption(cap.text);
     });
 
     // Subscribe to status events for the event log
-    const off3 = subscribeToStatus((ev) => {
+    const off3 = subscribeToStatus((ev: StreamingEvent) => {
+      if (ev.sessionId && ev.sessionId !== sessionIdRef.current) return;
       setEvents((e) => [...e, ev]);
 
       if (ev.type === "connected") {
@@ -94,78 +108,149 @@ export function RealtimePage() {
       }
     });
 
-    type PongPayload = {
-      message: string;
-      sid: string;
-      echo_client_time?: number;
-    };
-
-    const onPong = (data: PongPayload) => {
-      const latency =
-        typeof data.echo_client_time === "number" ? Date.now() - data.echo_client_time : "N/A";
-
-      setPingLogs((prev) =>
-        [`PONG: ${data.message} | Latency: ${latency}ms | SID: ${data.sid}`, ...prev].slice(0, 3),
-      );
-    };
-
-    socket.on("pong_test", onPong);
 
     return () => {
       off1();
       off2();
       off3();
-      socket.off("pong_test", onPong);
       disconnect();
+    };
+  }, []);
+
+  useEffect(() => {
+    let permissionStatus: PermissionStatus | null = null;
+
+    const fallback = setTimeout(() => {
+      setMicState((prev) => (prev === "initializing" ? "not_requested" : prev));
+    }, 1000);
+
+    async function checkMicrophonePermission() {
+      try {
+        if (!navigator.permissions || !navigator.permissions.query) {
+          setMicState("not_requested");
+          return;
+        }
+        const status = await navigator.permissions.query({ name: "microphone" as PermissionName });
+        permissionStatus = status;
+
+        const updateState = () => {
+          if (status.state === "granted") {
+            setMicState((prev) =>
+              prev === "initializing" || prev === "not_requested" || prev === "denied"
+                ? "ready"
+                : prev,
+            );
+          } else if (status.state === "denied") {
+            setMicState("denied");
+          } else if (status.state === "prompt") {
+            // only set not_requested if we aren't already ready/recording
+            setMicState((prev) =>
+              prev === "ready" || prev === "recording" || prev === "paused"
+                ? prev
+                : "not_requested",
+            );
+          }
+        };
+
+        updateState();
+        status.onchange = updateState;
+      } catch (err) {
+        setMicState("not_requested");
+      }
+    }
+
+    checkMicrophonePermission();
+
+    return () => {
+      clearTimeout(fallback);
+      // Clean up the permission listener to prevent stale callbacks
+      if (permissionStatus) {
+        permissionStatus.onchange = null;
+      }
     };
   }, []);
 
   async function requestMic() {
     if (!navigator.mediaDevices?.getUserMedia) {
-      setMicGranted(false);
+      setMicState("denied");
       return false;
     }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       stream.getTracks().forEach((t) => t.stop());
-      setMicGranted(true);
+      setMicState("ready");
       return true;
     } catch {
-      setMicGranted(false);
+      setMicState("denied");
       return false;
     }
   }
 
   async function onStart() {
-    const granted = await requestMic();
-    if (!granted) {
-      toast.error("Microphone access denied. Please allow microphone access to start recording.");
+    if (rec !== "idle" && rec !== "completed") {
       return;
     }
-    setConn("connecting");
-    try {
-      await connect();
-      const res = await startRealtimeSession();
-      setSessionId(res.data.sessionId);
-      setRec("recording");
 
-      startRecording(res.data.sessionId);
+    if (startInProgressRef.current) return;
+    startInProgressRef.current = true;
+
+    try {
+      const granted = await requestMic();
+      if (!granted) {
+        toast.error("Microphone access denied. Please allow microphone access to start recording.");
+        return;
+      }
+
       await startAudioCapture();
+
+      const res = await startRealtimeSession();
+      const newSessionId = String(res.data.sessionId);
+      sessionIdRef.current = newSessionId;
+      setSessionId(newSessionId);
+      
+      // Clear transcript state exactly once when starting a fresh recording
+      // This prevents late-arriving chunks from the previous session from leaking into the new session.
+      setSegments([]);
+      setCaption("");
+      setEvents([]);
+      setSummary(null);
+      setActions(null);
+      
+      setRec("recording");
+      setMicState("recording");
+
+      try {
+        startRecording(newSessionId);
+      } catch (err: any) {
+        await deleteRealtimeSession(newSessionId);
+        stopAudioCapture();
+        throw err;
+      }
     } catch (err: any) {
       setConn("disconnected");
       setRec("idle");
       toast.error(err.message || "Failed to start session. Please try again.");
+    } finally {
+      startInProgressRef.current = false;
     }
   }
 
   function onPause() {
     pauseRecording();
+    stopAudioCapture();
     setRec("paused");
+    setMicState("paused");
   }
 
-  function onResume() {
-    resumeRecording();
-    setRec("recording");
+  async function onResume() {
+    try {
+      await startAudioCapture();
+      resumeRecording();
+      setRec("recording");
+      setMicState("recording");
+    } catch (err: any) {
+      toast.error("Failed to resume microphone access.");
+    }
   }
 
   async function onStop() {
@@ -173,6 +258,9 @@ export function RealtimePage() {
     stopAudioCapture();
 
     setRec("finalizing");
+    if (micState === "recording" || micState === "paused") {
+      setMicState("ready");
+    }
     setCaption(""); // Clear disposable caption
 
     try {
@@ -182,26 +270,11 @@ export function RealtimePage() {
     } catch (err: any) {
       toast.error(err.message || "Failed to finalize session. It may be partially saved.");
     } finally {
-      disconnect();
-      setConn("disconnected");
-      setRec("review");
+      setRec("completed");
     }
   }
 
-  async function onSave() {
-    if (!sessionId) return;
-    setSaving(true);
-    try {
-      const res = await saveRealtimeSession(sessionId);
-      setSavedTitle(res.data.title);
-      setRec("saved");
-      toast.success("Session saved successfully!");
-    } catch (err: any) {
-      toast.error(err.message || "Failed to save session. Please try again.");
-    } finally {
-      setSaving(false);
-    }
-  }
+
 
   async function onDelete() {
     if (!sessionId) return;
@@ -218,9 +291,11 @@ export function RealtimePage() {
   function onReset() {
     stopRecording();
     stopAudioCapture();
-    disconnect();
-    setConn("disconnected");
+
     setRec("idle");
+    if (micState === "recording" || micState === "paused" || micState === "ready") {
+      setMicState("ready");
+    }
     setSessionId(null);
     setSegments([]);
     setCaption("");
@@ -286,7 +361,7 @@ export function RealtimePage() {
         <div className="mt-5 border-t border-border pt-4">
           <RealtimeControls
             status={rec}
-            micGranted={micGranted}
+            micState={micState}
             onStart={onStart}
             onPause={onPause}
             onResume={onResume}
@@ -312,23 +387,24 @@ export function RealtimePage() {
         />
       </div>
 
-      {/* Review screen — shown after stop */}
-      {(rec === "review" || rec === "saved") && sessionId && (
-        <div className="mb-6">
-          <ReviewScreen
-            sessionId={sessionId}
-            segments={segments}
-            onSave={onSave}
-            onDelete={onDelete}
-            saving={saving}
-            deleting={deleting}
-            savedTitle={savedTitle}
-          />
+      {/* Post-recording actions */}
+      {rec === "completed" && sessionId && (
+        <div className="mb-6 flex gap-4">
+          <Link
+            to="/session/$id"
+            params={{ id: sessionId }}
+            className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+          >
+            View Full Session
+          </Link>
+          <Button variant="outline" onClick={onDelete} disabled={deleting}>
+            {deleting ? "Deleting…" : "Delete Recording"}
+          </Button>
         </div>
       )}
 
-      {/* Intelligence generation — only after SAVED */}
-      {rec === "saved" && sessionId && (
+      {/* Intelligence generation */}
+      {rec === "completed" && sessionId && (
         <section className="mb-6 rounded-lg border border-border bg-card p-5 shadow-sm">
           <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
             Intelligence
@@ -370,31 +446,7 @@ export function RealtimePage() {
 
       {import.meta.env.DEV && (
         <>
-          <section className="mb-6 rounded-lg border border-border bg-card p-5 shadow-sm flex items-center justify-between">
-            <div>
-              <h3 className="text-sm font-semibold uppercase text-muted-foreground mb-1">
-                Transport Test
-              </h3>
 
-              <div className="font-mono text-xs text-muted-foreground h-4">
-                {pingLogs[0] || "Click ping to test socket latency..."}
-              </div>
-            </div>
-
-            <button
-              onClick={() => {
-                if (!socket.connected) return;
-
-                socket.emit("ping_test", {
-                  client_time: Date.now(),
-                });
-              }}
-              disabled={conn !== "connected"}
-              className="rounded-md bg-secondary px-4 py-2 text-sm font-medium hover:bg-secondary/80 disabled:opacity-50"
-            >
-              Send Ping
-            </button>
-          </section>
 
           <StreamingEventLog events={events} />
         </>

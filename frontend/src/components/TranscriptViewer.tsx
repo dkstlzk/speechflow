@@ -1,10 +1,11 @@
 import { MessageSquareText, Download } from "lucide-react";
-import type { TranscriptSegment } from "@/types";
+import type { TranscriptSegment, Session } from "@/types";
 import { PanelShell } from "./PanelShell";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { downloadTranscriptAsTxt, getSpeakerColor } from "@/lib/utils";
 import { formatTranscriptTime } from "@/lib/transcript";
+import { generateExportFilename } from "@/lib/export";
 
 import { useMemo } from "react";
 
@@ -12,9 +13,10 @@ interface Props {
   segments?: TranscriptSegment[];
   loading?: boolean;
   error?: string | null;
+  session?: Session;
 }
 
-export function TranscriptViewer({ segments, loading, error }: Props) {
+export function TranscriptViewer({ segments, loading, error, session }: Props) {
   const hasSegments = !!segments && segments.length > 0;
 
   const speakerMapping = useMemo(() => {
@@ -47,7 +49,12 @@ export function TranscriptViewer({ segments, loading, error }: Props) {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => downloadTranscriptAsTxt(segments!, "transcript.txt")}
+            onClick={() => {
+              const filename = session
+                ? generateExportFilename(session, "txt", "transcript")
+                : "transcript.txt";
+              downloadTranscriptAsTxt(segments!, filename);
+            }}
           >
             <Download className="h-3.5 w-3.5" />
             Export
@@ -64,7 +71,8 @@ export function TranscriptViewer({ segments, loading, error }: Props) {
                   variant="secondary"
                   className={`${getSpeakerColor(seg.speaker)} border-0 font-medium`}
                 >
-                  {speakerMapping[seg.speaker] || (seg.speaker === "UNKNOWN" ? "Speaker" : seg.speaker)}
+                  {speakerMapping[seg.speaker] ||
+                    (seg.speaker === "UNKNOWN" ? "Speaker" : seg.speaker)}
                 </Badge>
                 <span className="text-[11px] font-mono text-muted-foreground/70">
                   #{i + 1} • {formatTranscriptTime(seg.startSec)} →{" "}

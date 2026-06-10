@@ -25,12 +25,13 @@ let transcriptListeners: TranscriptListener[] = [];
 let captionListeners: CaptionListener[] = [];
 let statusListeners: StatusListener[] = [];
 
-function emitStatus(type: string, message: string) {
+function emitStatus(type: string, message: string, sessionId?: string) {
   const ev: StreamingEvent = {
     id: Math.random().toString(36).slice(2),
     timestamp: new Date().toISOString(),
     type,
     message,
+    sessionId,
   };
   statusListeners.forEach((l) => l(ev));
 }
@@ -49,24 +50,24 @@ socket.on("connect_error", (err) => {
   emitStatus("error", `Connection error: ${err.message}`);
 });
 
-socket.on("stream_ack", () => {
-  emitStatus("stream_started", "Backend acknowledged stream start");
+socket.on("stream_ack", (data) => {
+  emitStatus("stream_started", "Backend acknowledged stream start", data?.session_id ? String(data.session_id) : undefined);
 });
 
-socket.on("stream_complete", () => {
-  emitStatus("stream_complete", "Backend finalized stream");
+socket.on("stream_complete", (data) => {
+  emitStatus("stream_complete", "Backend finalized stream", data?.session_id ? String(data.session_id) : undefined);
 });
 
-socket.on("stream_finalized", () => {
-  emitStatus("stream_finalized", "All segments persisted — session ready for review");
+socket.on("stream_finalized", (data) => {
+  emitStatus("stream_finalized", "All segments persisted — session ready", data?.session_id ? String(data.session_id) : undefined);
 });
 
-socket.on("stream_paused", () => {
-  emitStatus("stream_paused", "Recording paused");
+socket.on("stream_paused", (data) => {
+  emitStatus("stream_paused", "Recording paused", data?.session_id ? String(data.session_id) : undefined);
 });
 
-socket.on("stream_resumed", () => {
-  emitStatus("stream_resumed", "Recording resumed");
+socket.on("stream_resumed", (data) => {
+  emitStatus("stream_resumed", "Recording resumed", data?.session_id ? String(data.session_id) : undefined);
 });
 
 // ── Caption Channel (disposable, UI only) ──────────────────────────
@@ -75,6 +76,7 @@ socket.on("caption_update", (data) => {
   const caption: CaptionUpdate = {
     text: data.text || "",
     timestamp: data.timestamp || Date.now() / 1000,
+    sessionId: data.session_id ? String(data.session_id) : undefined,
   };
   captionListeners.forEach((l) => l(caption));
 });
@@ -89,6 +91,7 @@ socket.on("transcript_committed", (data) => {
     endSec: data.end_time,
     chunk_index: data.chunk_index,
     is_partial: false,
+    sessionId: data.session_id ? String(data.session_id) : undefined,
   };
   transcriptListeners.forEach((l) => l(segment));
 });
@@ -99,26 +102,33 @@ export async function connect(): Promise<void> {
   emitStatus("connecting", "Establishing connection...");
 
   if (socket.connected) {
+    emitStatus("connected", "Socket already connected");
     return;
   }
 
   await new Promise<void>((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      socket.off("connect");
-      socket.off("connect_error");
+    let timeout: ReturnType<typeof setTimeout>;
 
+    const onConnect = () => {
+      clearTimeout(timeout);
+      socket.off("connect_error", onConnectError);
+      resolve();
+    };
+
+    const onConnectError = (err: any) => {
+      clearTimeout(timeout);
+      socket.off("connect", onConnect);
+      reject(err);
+    };
+
+    timeout = setTimeout(() => {
+      socket.off("connect", onConnect);
+      socket.off("connect_error", onConnectError);
       reject(new Error("Socket connection timeout"));
     }, 5000);
 
-    socket.once("connect", () => {
-      clearTimeout(timeout);
-      resolve();
-    });
-
-    socket.once("connect_error", (err) => {
-      clearTimeout(timeout);
-      reject(err);
-    });
+    socket.once("connect", onConnect);
+    socket.once("connect_error", onConnectError);
 
     socket.connect();
   });

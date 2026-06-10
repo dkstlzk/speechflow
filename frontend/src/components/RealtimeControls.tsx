@@ -1,8 +1,8 @@
-import type { RecordingStatus } from "@/types";
+import type { RecordingStatus, MicrophoneState } from "@/types";
 
 interface Props {
   status: RecordingStatus;
-  micGranted: boolean | null;
+  micState: MicrophoneState;
   onStart: () => void;
   onPause: () => void;
   onResume: () => void;
@@ -15,7 +15,7 @@ const btn =
 
 export function RealtimeControls({
   status,
-  micGranted,
+  micState,
   onStart,
   onPause,
   onResume,
@@ -25,17 +25,28 @@ export function RealtimeControls({
   const recording = status === "recording";
   const paused = status === "paused";
   const idle = status === "idle";
-  const canStart = idle || status === "saved";
+  const canStart = idle || status === "completed";
+
+  const micTextMap: Record<MicrophoneState, string> = {
+    initializing: "Checking...",
+    not_requested: "Permission not requested",
+    ready: "Ready",
+    recording: "Recording",
+    paused: "Paused",
+    denied: "Permission denied",
+  };
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <button
-        onClick={onStart}
-        disabled={!canStart}
-        className={`${btn} bg-primary text-primary-foreground hover:bg-primary/90`}
-      >
-        Start Recording
-      </button>
+      {status !== "completed" && (
+        <button
+          onClick={onStart}
+          disabled={!idle}
+          className={`${btn} bg-primary text-primary-foreground hover:bg-primary/90`}
+        >
+          Start Recording
+        </button>
+      )}
       <button
         onClick={onPause}
         disabled={!recording}
@@ -60,13 +71,16 @@ export function RealtimeControls({
       <button
         onClick={onReset}
         disabled={idle}
-        className={`${btn} border border-input bg-background hover:bg-accent`}
+        className={`${btn} border border-input bg-background hover:bg-accent flex flex-col items-center`}
       >
-        Reset Session
+        <span className="leading-tight">New Recording</span>
+        <span className="text-[10px] font-normal leading-tight text-muted-foreground">
+          (Auto-saved)
+        </span>
       </button>
 
       <span className="ml-auto text-xs text-muted-foreground">
-        Microphone: {micGranted === null ? "not requested" : micGranted ? "granted" : "denied"}
+        Microphone: {micTextMap[micState]}
       </span>
     </div>
   );

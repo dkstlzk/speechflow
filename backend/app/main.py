@@ -70,6 +70,12 @@ def create_app() -> Flask:
         daemon=True,
     ).start()
 
+    from .workers.realtime.worker_state import transcriber
+    threading.Thread(
+        target=transcriber._get_model,
+        daemon=True,
+    ).start()
+
     @app.get("/health")
     def health():
         return jsonify({"status": "ok"})

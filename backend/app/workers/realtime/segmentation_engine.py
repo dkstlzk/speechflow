@@ -61,13 +61,14 @@ def check_segment_boundary(sid: str, session) -> Optional[SpeechSegment]:
 
     if is_speaking:
         session.last_speech_time = now
+        session.has_speech = True
 
     silence_duration = now - session.last_speech_time
 
     reason = None
     if session.is_ending:
         reason = "END"
-    elif silence_duration >= SILENCE_THRESHOLD_SECONDS:
+    elif silence_duration >= SILENCE_THRESHOLD_SECONDS and getattr(session, "has_speech", False):
         reason = "SILENCE"
     elif segment_duration >= MAX_SEGMENT_SECONDS:
         reason = "MAX_LENGTH"
