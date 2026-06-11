@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 interface SessionCardProps {
   session: Session;
   onDelete?: (id: string) => void | Promise<void>;
+  searchQuery?: string;
 }
 
 function formatDuration(sec?: number) {
@@ -41,7 +42,7 @@ function formatRelative(iso?: string) {
   return d.toLocaleDateString();
 }
 
-export function SessionCard({ session, onDelete }: SessionCardProps) {
+export function SessionCard({ session, onDelete, searchQuery }: SessionCardProps) {
   const [deleting, setDeleting] = useState(false);
   const [open, setOpen] = useState(false);
 
@@ -135,6 +136,7 @@ export function SessionCard({ session, onDelete }: SessionCardProps) {
         <Link
           to="/session/$id"
           params={{ id: session.id }}
+          search={{ q: searchQuery || undefined }}
           className="inline-flex items-center gap-1 rounded-md border border-border bg-surface px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-accent"
         >
           Open

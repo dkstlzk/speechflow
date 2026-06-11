@@ -9,7 +9,7 @@ from flask_socketio import SocketIO
 
 from .api import register_blueprints
 from .config.logging import configure_logging
-from .config.settings import Settings
+from .config.settings import settings
 from .websocket import register_socketio_events
 
 from .db.base import Base
@@ -18,11 +18,11 @@ from .db.migrations import run_migrations
 
 from .workers.realtime import realtime_worker_loop
 
-from .config.logging import configure_logging, get_logger
+from .config.logging import get_logger
 
 configure_logging()
 logger = get_logger(__name__)
-settings = Settings()
+
 cors_origins = [o.strip() for o in settings.CORS_ORIGINS.split(",")] if settings.CORS_ORIGINS and settings.CORS_ORIGINS != "*" else "*"
 
 socketio = SocketIO(
@@ -48,12 +48,26 @@ def create_app() -> Flask:
     register_socketio_events(socketio)
     socketio.init_app(app)
 
+
+
+    @app.get("/health")
+    def health():
+        return jsonify({"status": "ok"})
+
+    return app
+
+
+if __name__ == "__main__":
+    app = create_app()
+
     Base.metadata.create_all(bind=engine)
     run_migrations(engine)
 
     # Recover stale sessions
+    db = None
     try:
         from .services.persistence.session_repository import recover_stale_sessions
+        from .db.session import SessionLocal
         db = SessionLocal()
         recovered = recover_stale_sessions(db)
         logger.info(
@@ -62,7 +76,8 @@ def create_app() -> Flask:
     except Exception as e:
         logger.error(f"Failed to recover stale sessions: {e}")
     finally:
-        db.close()
+        if db is not None:
+            db.close()
 
     threading.Thread(
         target=realtime_worker_loop,
@@ -76,13 +91,6 @@ def create_app() -> Flask:
         daemon=True,
     ).start()
 
-    @app.get("/health")
-    def health():
-        return jsonify({"status": "ok"})
-
-    return app
-
-
-if __name__ == "__main__":
-    app = create_app()
-    socketio.run(app, host="0.0.0.0", port=5000, debug=True)
+    import os
+    is_debug = os.environ.get("FLASK_DEBUG", "0") == "1"
+    socketio.run(app, host="0.0.0.0", port=5000, debug=is_debug)

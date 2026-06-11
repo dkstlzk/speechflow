@@ -1,5 +1,6 @@
 import type { ActionItem, Session, TranscriptSegment } from "@/types";
 import { formatTranscriptTime } from "./transcript";
+import { Document, Packer, Paragraph, TextRun, HeadingLevel } from "docx";
 
 export function generateExportFilename(
   session: Session,
@@ -36,7 +37,9 @@ function buildSpeakerMap(segments: TranscriptSegment[]): Record<string, string> 
   let speakerIdx = 0;
   for (const seg of segments) {
     if (seg.speaker === "UNKNOWN" || !seg.speaker.startsWith("SPEAKER_")) continue;
-    if (!map[seg.speaker]) {
+    if (seg.displayName) {
+      map[seg.speaker] = seg.displayName;
+    } else if (!map[seg.speaker]) {
       map[seg.speaker] = `Speaker ${String.fromCharCode(65 + speakerIdx)}`;
       speakerIdx++;
     }
@@ -147,4 +150,83 @@ export function exportAsTxt(data: SessionData) {
 
 export function printAsPdf() {
   window.print();
+}
+
+export async function exportAsDocx(data: SessionData) {
+  const { session, transcript, summary, mom, actions } = data;
+  const title = session.title || session.fileName || "Session";
+  const date = session.createdAt ? new Date(session.createdAt).toLocaleString() : "Unknown Date";
+
+  const children: Paragraph[] = [
+    new Paragraph({
+      text: title,
+      heading: HeadingLevel.HEADING_1,
+    }),
+    new Paragraph({
+      children: [
+        new TextRun({ text: "Date: ", bold: true }),
+        new TextRun(date),
+      ],
+    }),
+    new Paragraph({
+      children: [
+        new TextRun({ text: "ID: ", bold: true }),
+        new TextRun(session.id),
+      ],
+      spacing: { after: 400 },
+    }),
+  ];
+
+  if (summary) {
+    children.push(
+      new Paragraph({ text: "Intelligence Summary", heading: HeadingLevel.HEADING_2 }),
+      new Paragraph({ text: summary, spacing: { after: 400 } })
+    );
+  }
+
+  if (mom) {
+    children.push(
+      new Paragraph({ text: "Meeting Minutes", heading: HeadingLevel.HEADING_2 }),
+      new Paragraph({ text: mom, spacing: { after: 400 } })
+    );
+  }
+
+  if (actions && actions.length > 0) {
+    children.push(new Paragraph({ text: "Action Items", heading: HeadingLevel.HEADING_2 }));
+    actions.forEach((a) => {
+      children.push(new Paragraph({ text: a.text, bullet: { level: 0 } }));
+    });
+    children.push(new Paragraph({ text: "", spacing: { after: 400 } }));
+  }
+
+  children.push(new Paragraph({ text: "Full Transcript", heading: HeadingLevel.HEADING_2 }));
+  const speakerMap = buildSpeakerMap(transcript);
+
+  transcript.forEach((t) => {
+    const time = `[${formatTranscriptTime(t.startSec)} -> ${formatTranscriptTime(t.endSec)}]`;
+    const speakerName = speakerMap[t.speaker] || (t.speaker === "UNKNOWN" ? "Speaker" : t.speaker);
+    children.push(
+      new Paragraph({
+        children: [
+          new TextRun({ text: `${speakerName} `, bold: true }),
+          new TextRun({ text: time, color: "666666" }),
+        ],
+      }),
+      new Paragraph({ text: t.text, spacing: { after: 200 } })
+    );
+  });
+
+  const doc = new Document({
+    sections: [{ children }],
+  });
+
+  const blob = await Packer.toBlob(doc);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = generateExportFilename(data.session, "docx");
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }

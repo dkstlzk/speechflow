@@ -1,7 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { SessionPage } from "@/pages/SessionPage";
 
+import { z } from "zod";
+
 export const Route = createFileRoute("/session/$id")({
+  validateSearch: z.object({
+    q: z.string().optional(),
+  }),
   head: () => ({
     meta: [
       { title: "SpeechFlow — Session" },
@@ -13,5 +18,6 @@ export const Route = createFileRoute("/session/$id")({
 
 function RouteComponent() {
   const { id } = Route.useParams();
-  return <SessionPage id={id} />;
+  const search = Route.useSearch();
+  return <SessionPage id={id} initialSearch={search.q} />;
 }

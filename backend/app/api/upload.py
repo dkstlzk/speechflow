@@ -1,7 +1,7 @@
 from flask import Blueprint, jsonify, request
 
 from ..config.logging import get_logger
-from ..config.settings import Settings
+from ..config.settings import settings
 from ..schemas.response import ApiResponse, UploadResponseSchema
 from ..services.session import create_upload_session
 from ..utils.file_manager import create_temp_path, is_allowed_extension, sanitize_filename
@@ -9,7 +9,7 @@ from ..workers.upload_pipeline import start_upload_pipeline
 
 upload_bp = Blueprint("upload", __name__)
 logger = get_logger("upload")
-settings = Settings()
+
 
 
 @upload_bp.post("/")

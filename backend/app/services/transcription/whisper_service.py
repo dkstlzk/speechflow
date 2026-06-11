@@ -10,7 +10,7 @@ import numpy as np
 from faster_whisper import WhisperModel
 
 from ...config.logging import get_logger
-from ...config.settings import Settings
+from ...config.settings import settings
 
 logger = get_logger("transcription")
 
@@ -31,7 +31,7 @@ class WhisperTranscriptionService:
         compute_type: Optional[str] = None,
         model: Optional[WhisperModel] = None,
     ) -> None:
-        settings = Settings()
+
         self.model_name = model_name or settings.WHISPER_MODEL
         self.device = device or settings.WHISPER_DEVICE
         self.compute_type = compute_type or settings.WHISPER_COMPUTE_TYPE
@@ -81,9 +81,3 @@ def transcribe_audio_file(audio_path: str) -> List[Dict]:
     """Return Whisper segments for a normalized audio file."""
     service = WhisperTranscriptionService()
     return service.transcribe(audio_path).segments
-
-
-def transcribe_stream_window(chunks: Iterable[bytes]) -> List[Dict]:
-    """Return partial segments from a rolling audio window."""
-    # TODO: support streaming chunk stabilization.
-    return []

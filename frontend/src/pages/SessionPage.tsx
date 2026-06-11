@@ -11,6 +11,12 @@ import { PanelShell } from "@/components/PanelShell";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   ApiError,
   getActions,
   getSession,
@@ -21,7 +27,7 @@ import {
   updateSpeaker,
 } from "@/services/api";
 import type { ActionItem, Session, SummaryResponse, TranscriptResponse } from "@/types";
-import { exportAsMarkdown, exportAsTxt, printAsPdf } from "@/lib/export";
+import { exportAsMarkdown, exportAsTxt, exportAsDocx, printAsPdf } from "@/lib/export";
 import { toast } from "sonner";
 
 interface State<T> {
@@ -41,7 +47,7 @@ function formatDuration(sec?: number) {
   return `${m}m ${s.toString().padStart(2, "0")}s`;
 }
 
-export function SessionPage({ id }: { id: string }) {
+export function SessionPage({ id, initialSearch }: { id: string; initialSearch?: string }) {
   const [session, setSession] = useState<State<Session>>(initial());
   const [transcript, setTranscript] = useState<State<TranscriptResponse>>(initial());
   const [summary, setSummary] = useState<State<SummaryResponse>>(initial());
@@ -237,7 +243,7 @@ export function SessionPage({ id }: { id: string }) {
     }
   }
 
-  function handleExport(format: string) {
+  async function handleExport(format: string) {
     if (!session.data || !transcript.data?.segments) return;
     const data = {
       session: session.data!,
@@ -246,9 +252,25 @@ export function SessionPage({ id }: { id: string }) {
       mom: summary.data?.mom,
       actions: actions.data || [],
     };
-    if (format === "txt") exportAsTxt(data);
-    if (format === "md") exportAsMarkdown(data);
-    if (format === "pdf") printAsPdf();
+    switch (format) {
+      case "txt":
+        exportAsTxt(data);
+        break;
+      case "md":
+        exportAsMarkdown(data);
+        break;
+      case "docx":
+        try {
+          await exportAsDocx(data);
+        } catch (err) {
+          toast.error("Failed to generate DOCX export");
+          console.error(err);
+        }
+        break;
+      case "pdf":
+        printAsPdf();
+        break;
+    }
   }
 
   const duration = formatDuration(session.data?.durationSec);
@@ -332,26 +354,28 @@ export function SessionPage({ id }: { id: string }) {
         </div>
         <div className="flex gap-2">
           {session.data && transcript.data?.segments && (
-            <div className="relative">
-              <select
-                className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                onChange={(e) => {
-                  if (e.target.value) {
-                    handleExport(e.target.value);
-                    e.target.value = "";
-                  }
-                }}
-              >
-                <option value="">Export...</option>
-                <option value="txt">Export as TXT</option>
-                <option value="md">Export as Markdown</option>
-                <option value="pdf">Export as PDF</option>
-              </select>
-              <Button variant="outline" size="sm" className="pointer-events-none">
-                <Download className="h-3.5 w-3.5" />
-                Export
-              </Button>
-            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Download className="h-3.5 w-3.5 mr-2" />
+                  Export
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => handleExport("txt")}>
+                  Export as TXT
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleExport("md")}>
+                  Export as Markdown
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleExport("docx")}>
+                  Export as DOCX (Meeting Report)
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleExport("pdf")}>
+                  Export as PDF
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
           <Button variant="outline" size="sm" onClick={() => load()}>
             <RefreshCw className="h-3.5 w-3.5" />
@@ -398,6 +422,7 @@ export function SessionPage({ id }: { id: string }) {
             error={transcript.error}
             session={session.data ?? undefined}
             onRenameSpeaker={handleRenameSpeaker}
+            searchQuery={initialSearch}
           />
         </div>
       </div>

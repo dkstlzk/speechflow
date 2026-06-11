@@ -64,8 +64,6 @@ def ensure_columns(engine: Engine) -> None:
                 conn.commit()
                 logger.info("Added 'audio_path' column to sessions table")
 
-                logger.info("Added 'audio_path' column to sessions table")
-
 
 def ensure_foreign_key_cascades(engine: Engine) -> None:
     """Ensure foreign keys on child tables have ON DELETE CASCADE/SET NULL."""

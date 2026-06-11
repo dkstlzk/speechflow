@@ -11,7 +11,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from ..config.logging import get_logger
-from ..config.settings import Settings
+from ..config.settings import settings
 from ..models.enums import SessionStatus
 from ..services.audio import AudioPreprocessorService
 from ..services.diarization import DiarizationService
@@ -38,7 +38,6 @@ def process_upload_session(
     engine.dispose()
     logger.info(f"[UploadWorker] Child process started session={session_id}")
 
-    settings = Settings()
     owns_session = db_session is None
     db = db_session or SessionLocal()
 

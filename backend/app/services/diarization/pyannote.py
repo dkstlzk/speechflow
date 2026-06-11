@@ -4,7 +4,7 @@ from typing import Dict, List, Optional
 from pyannote.audio import Pipeline
 
 from ...config.logging import get_logger
-from ...config.settings import Settings
+from ...config.settings import settings
 
 logger = get_logger("diarization")
 _PIPELINE: Optional[Pipeline] = None
@@ -14,7 +14,7 @@ _PIPELINE_MODEL: Optional[str] = None
 def _get_pipeline() -> Pipeline:
     global _PIPELINE, _PIPELINE_MODEL
     if _PIPELINE is None:
-        settings = Settings()
+
         if not settings.HF_TOKEN:
             raise RuntimeError("HF_TOKEN is required for pyannote diarization")
 
@@ -56,7 +56,7 @@ def diarize_audio(audio_path: str) -> List[Dict]:
     )
 
     duration_seconds = time.perf_counter() - start_time
-    model_name = _PIPELINE_MODEL or Settings().DIARIZATION_MODEL
+    model_name = _PIPELINE_MODEL or settings.DIARIZATION_MODEL
     logger.info(
         "Diarization completed",
         extra={

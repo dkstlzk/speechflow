@@ -89,10 +89,30 @@ interface Props {
   error?: string | null;
   session?: Session;
   onRenameSpeaker?: (speaker: string, newName: string) => void;
+  searchQuery?: string;
 }
 
-export function TranscriptViewer({ segments, loading, error, session, onRenameSpeaker }: Props) {
+export function TranscriptViewer({ segments, loading, error, session, onRenameSpeaker, searchQuery }: Props) {
   const hasSegments = !!segments && segments.length > 0;
+
+  const highlightText = (text: string, query?: string): React.ReactNode => {
+    if (!query || query.trim() === "") return text;
+    const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const parts = text.split(new RegExp(`(${escaped})`, "gi"));
+    return (
+      <>
+        {parts.map((part, i) =>
+          part.toLowerCase() === query.toLowerCase() ? (
+            <mark key={i} className="bg-yellow-200/80 text-foreground rounded-sm px-0.5 font-medium dark:bg-yellow-500/40">
+              {part}
+            </mark>
+          ) : (
+            part
+          )
+        )}
+      </>
+    );
+  };
 
   const speakerMapping = useMemo(() => {
     const map: Record<string, string> = {};
@@ -157,7 +177,7 @@ export function TranscriptViewer({ segments, loading, error, session, onRenameSp
                   seg.is_partial ? "italic text-muted-foreground" : "text-foreground/90"
                 }`}
               >
-                {seg.text}
+                {highlightText(seg.text, searchQuery)}
               </p>
             </li>
           ))}

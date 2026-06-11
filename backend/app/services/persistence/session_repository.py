@@ -142,8 +142,11 @@ def update_transcript_type(
 def recover_stale_sessions(db: Session, max_hours: int = 2) -> int:
     """
     Find processing sessions that are stuck and mark them as failed.
+    Cleans up orphaned audio files for RECORDING sessions.
     Returns the number of recovered sessions.
     """
+    import os
+    from ...config.settings import settings
     cutoff_time = datetime.now() - timedelta(hours=max_hours)
 
     stale_states = [
@@ -152,6 +155,7 @@ def recover_stale_sessions(db: Session, max_hours: int = 2) -> int:
         SessionStatus.DIARIZING,
         SessionStatus.PROCESSING,
         SessionStatus.FINALIZING,
+        SessionStatus.RECORDING,
     ]
 
     stuck_sessions = db.query(SessionModel).filter(
@@ -161,10 +165,42 @@ def recover_stale_sessions(db: Session, max_hours: int = 2) -> int:
 
     for session in stuck_sessions:
         logger.warning(f"[Recovery] Session {session.id} stuck in {session.status.value}. Marking as FAILED.")
+
+        # Cleanup orphaned files for realtime sessions that crashed
+        if session.status == SessionStatus.RECORDING:
+            audio_dir = os.path.abspath(os.path.join(settings.EXPORT_DIR, "audio"))
+            raw_path = os.path.join(audio_dir, f"session_{session.id}.raw")
+            wav_path = os.path.join(audio_dir, f"session_{session.id}.wav")
+            import time
+            for path in [raw_path, wav_path]:
+                if os.path.exists(path):
+                    try:
+                        orphan_path = path + f".orphan.{int(time.time())}"
+                        os.rename(path, orphan_path)
+                        logger.info(f"[Recovery] Archived stranded file to: {orphan_path}")
+                    except Exception as e:
+                        logger.error(f"[Recovery] Failed to archive stranded file: {e}")
+
         session.status = SessionStatus.FAILED
         session.processing_error = "Session failed due to unexpected worker interruption (stale state recovery)."
 
     if stuck_sessions:
         db.commit()
+
+    # Clean up old orphan files (older than 7 days)
+    audio_dir = os.path.abspath(os.path.join(settings.EXPORT_DIR, "audio"))
+    if os.path.exists(audio_dir):
+        import time
+        now = time.time()
+        seven_days = 7 * 24 * 3600
+        for fname in os.listdir(audio_dir):
+            if ".orphan." in fname:
+                fpath = os.path.join(audio_dir, fname)
+                try:
+                    if os.path.isfile(fpath) and now - os.path.getmtime(fpath) > seven_days:
+                        os.remove(fpath)
+                        logger.info(f"[Recovery] Deleted old orphan file: {fname}")
+                except Exception as e:
+                    logger.error(f"[Recovery] Failed to delete old orphan file {fname}: {e}")
 
     return len(stuck_sessions)

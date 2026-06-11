@@ -138,7 +138,7 @@ export async function getSession(id: string, signal?: AbortSignal): Promise<ApiR
     audio_url?: string;
     title?: string | null;
   };
-  const raw = await apiFetch<BS>(`${API_BASE}/api/sessions/${id}`, { signal });
+  const raw = await apiFetch<BS>(`${API_BASE}/api/sessions/${id}`, { signal, cache: "no-store" });
   return {
     data: {
       id: String(raw.data.id),

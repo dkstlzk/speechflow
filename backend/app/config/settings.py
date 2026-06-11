@@ -44,3 +44,5 @@ class Settings:
     )
     HF_TOKEN: str = os.getenv("HF_TOKEN", "")
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
+
+settings = Settings()

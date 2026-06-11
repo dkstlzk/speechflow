@@ -163,7 +163,7 @@ export function HistoryPage() {
       ) : (
         <div className="space-y-3">
           {filtered.map((s) => (
-            <SessionCard key={s.id} session={s} onDelete={handleDelete} />
+            <SessionCard key={s.id} session={s} onDelete={handleDelete} searchQuery={query} />
           ))}
         </div>
       )}

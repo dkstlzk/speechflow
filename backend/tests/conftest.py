@@ -7,6 +7,7 @@ temp_dir = tempfile.mkdtemp(prefix="speechflow_test_")
 os.environ.setdefault("TEMP_DIR", temp_dir)
 os.environ.setdefault("UPLOAD_DIR", temp_dir)
 os.environ.setdefault("DATABASE_URL", f"sqlite:///{temp_dir}/test.db")
+os.environ.setdefault("SECRET_KEY", "test-only-key")
 
 from backend.app import create_app
 from backend.app.db import Base, engine, SessionLocal

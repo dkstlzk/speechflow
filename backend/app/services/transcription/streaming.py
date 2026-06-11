@@ -83,17 +83,16 @@ class StreamingSessionManager:
             sid=sid, session_id=session_id, sample_rate=sample_rate
         )
         self.active_sessions[sid] = session
-        
+
         # Open raw file for canonical audio saving
-        from ...config.settings import Settings
+        from ...config.settings import settings
         import os
-        settings = Settings()
         realtime_dir = os.path.abspath(os.path.join(settings.EXPORT_DIR, "audio"))
         os.makedirs(realtime_dir, exist_ok=True)
         session.raw_audio_path = os.path.join(realtime_dir, f"session_{session_id}.raw")
         session.raw_file_handle = open(session.raw_audio_path, "wb")
         logger.info(f"[Playback] Raw file created: {session.raw_audio_path}")
-        
+
         logger.info(
             f"[SessionManager] Created Session | SID: {sid} "
             f"| DB Session ID: {session_id} | Rate: {sample_rate}Hz"
@@ -103,10 +102,10 @@ class StreamingSessionManager:
     def destroy_session(self, sid: str) -> None:
         if sid in self.active_sessions:
             session = self.active_sessions[sid]
-            
+
             if session.raw_file_handle:
                 session.raw_file_handle.close()
-            
+
             # Convert raw to wav and update DB
             if session.raw_audio_path:
                 try:
@@ -114,25 +113,27 @@ class StreamingSessionManager:
                     import os
                     logger.info("[Playback] Converting raw to wav")
                     wav_path = session.raw_audio_path.replace(".raw", ".wav")
-                    with open(session.raw_audio_path, "rb") as f_raw:
-                        raw_data = f_raw.read()
-                    
+
                     with wave.open(wav_path, "wb") as f_wav:
                         f_wav.setnchannels(1)
                         f_wav.setsampwidth(2)
                         f_wav.setframerate(session.sample_rate)
-                        f_wav.writeframes(raw_data)
-                    
+
+                        with open(session.raw_audio_path, "rb") as f_raw:
+                            while True:
+                                chunk = f_raw.read(1024 * 1024) # 1MB chunks
+                                if not chunk:
+                                    break
+                                f_wav.writeframes(chunk)
+
                     logger.info(f"[Playback] WAV created: {wav_path}")
-                    
+
                     # Calculate duration
                     wav_size = os.path.getsize(wav_path)
                     # 44 bytes header, 2 bytes per sample, sample_rate samples per second
                     duration = (wav_size - 44) / (2 * session.sample_rate)
                     logger.info(f"WAV duration: {duration:.2f} seconds")
-                    
-                    os.remove(session.raw_audio_path)
-                    
+
                     # Safe Persistence
                     if os.path.exists(wav_path) and wav_size > 0:
                         from ...db.session import SessionLocal
@@ -146,18 +147,32 @@ class StreamingSessionManager:
                                 db_session.duration_seconds = duration
                                 db.commit()
                                 logger.info(f"[Playback] audio_path, status, and duration updated for session {session.session_id}")
+
+                                # SAFELY remove raw file only after successful DB commit
+                                if os.path.exists(session.raw_audio_path):
+                                    os.remove(session.raw_audio_path)
                         finally:
                             db.close()
                     else:
-                        logger.error("[Playback] WAV creation failed or size is 0 bytes")
+                        raise RuntimeError("WAV creation failed or size is 0 bytes")
+
                 except Exception as e:
                     logger.error(f"[Playback] Error saving realtime audio: {e}")
+                    import os
+                    import time
+                    if session.raw_audio_path and os.path.exists(session.raw_audio_path):
+                        try:
+                            orphan_path = session.raw_audio_path + f".orphan.{int(time.time())}"
+                            os.rename(session.raw_audio_path, orphan_path)
+                            logger.info(f"[Playback] Archived corrupted raw stream to {orphan_path}")
+                        except Exception as rename_err:
+                            logger.error(f"[Playback] Failed to archive raw stream: {rename_err}")
 
             logger.info(
                 f"[Playback] Session finalized | SID: {sid} "
                 f"| Final Buffer Size: {len(session.audio_buffer)} bytes"
             )
-            
+
             # Remove from active sessions only after everything is fully persisted
             self.active_sessions.pop(sid, None)
 
@@ -238,15 +253,7 @@ class StreamingSessionManager:
 
         return bytes(audio_slice)
 
-    def get_current_segment_duration(self, sid: str) -> float:
-        """How many seconds of audio are in the current open segment."""
-        session = self.active_sessions.get(sid)
-        if not session:
-            return 0.0
 
-        segment_bytes = len(session.audio_buffer) - session.segment_start_offset
-        bytes_per_sec = session.sample_rate * 2
-        return segment_bytes / bytes_per_sec
 
     # ── Buffer Trimming ────────────────────────────────────────────────
 

@@ -283,6 +283,8 @@ export function RealtimePage() {
       await deleteRealtimeSession(sessionId);
       // Reset to idle after delete
       onReset();
+    } catch (err) {
+      toast.error("Failed to delete session");
     } finally {
       setDeleting(false);
     }
