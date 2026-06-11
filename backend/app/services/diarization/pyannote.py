@@ -1,4 +1,5 @@
 import time
+import threading
 from typing import Dict, List, Optional
 
 from pyannote.audio import Pipeline
@@ -9,24 +10,25 @@ from ...config.settings import settings
 logger = get_logger("diarization")
 _PIPELINE: Optional[Pipeline] = None
 _PIPELINE_MODEL: Optional[str] = None
-
+_PIPELINE_LOCK = threading.Lock()
 
 def _get_pipeline() -> Pipeline:
     global _PIPELINE, _PIPELINE_MODEL
     if _PIPELINE is None:
+        with _PIPELINE_LOCK:
+            if _PIPELINE is None:
+                if not settings.HF_TOKEN:
+                    raise RuntimeError("HF_TOKEN is required for pyannote diarization")
 
-        if not settings.HF_TOKEN:
-            raise RuntimeError("HF_TOKEN is required for pyannote diarization")
-
-        _PIPELINE_MODEL = settings.DIARIZATION_MODEL
-        _PIPELINE = Pipeline.from_pretrained(
-            settings.DIARIZATION_MODEL,
-            token=settings.HF_TOKEN,
-        )
-        try:
-            _PIPELINE.to("cpu")
-        except Exception:
-            logger.info("pyannote pipeline device defaulted")
+                _PIPELINE_MODEL = settings.DIARIZATION_MODEL
+                _PIPELINE = Pipeline.from_pretrained(
+                    settings.DIARIZATION_MODEL,
+                    token=settings.HF_TOKEN,
+                )
+                try:
+                    _PIPELINE.to("cpu")
+                except Exception:
+                    logger.info("pyannote pipeline device defaulted")
     return _PIPELINE
 
 

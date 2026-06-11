@@ -132,22 +132,33 @@ def ensure_fts_indexes(engine: Engine) -> None:
     if engine.dialect.name != "postgresql":
         return
 
+    inspector = inspect(engine)
     with engine.connect() as conn:
         # Transcript chunks FTS
-        conn.execute(
-            text("ALTER TABLE transcript_chunks ADD COLUMN IF NOT EXISTS search_vector tsvector GENERATED ALWAYS AS (to_tsvector('english', text)) STORED")
-        )
-        conn.execute(
-            text("CREATE INDEX IF NOT EXISTS transcript_chunks_search_idx ON transcript_chunks USING GIN(search_vector)")
-        )
+        if inspector.has_table("transcript_chunks"):
+            chunk_cols = {c["name"] for c in inspector.get_columns("transcript_chunks")}
+            if "search_vector" not in chunk_cols:
+                conn.execute(
+                    text("ALTER TABLE transcript_chunks ADD COLUMN search_vector tsvector GENERATED ALWAYS AS (to_tsvector('english', text)) STORED")
+                )
+                logger.info("Added FTS column to transcript_chunks")
+            
+            conn.execute(
+                text("CREATE INDEX IF NOT EXISTS transcript_chunks_search_idx ON transcript_chunks USING GIN(search_vector)")
+            )
 
         # Sessions FTS
-        conn.execute(
-            text("ALTER TABLE sessions ADD COLUMN IF NOT EXISTS search_vector tsvector GENERATED ALWAYS AS (to_tsvector('english', coalesce(title, '') || ' ' || coalesce(original_filename, ''))) STORED")
-        )
-        conn.execute(
-            text("CREATE INDEX IF NOT EXISTS sessions_search_idx ON sessions USING GIN(search_vector)")
-        )
+        if inspector.has_table("sessions"):
+            session_cols = {c["name"] for c in inspector.get_columns("sessions")}
+            if "search_vector" not in session_cols:
+                conn.execute(
+                    text("ALTER TABLE sessions ADD COLUMN search_vector tsvector GENERATED ALWAYS AS (to_tsvector('english', coalesce(title, '') || ' ' || coalesce(original_filename, ''))) STORED")
+                )
+                logger.info("Added FTS column to sessions")
+            
+            conn.execute(
+                text("CREATE INDEX IF NOT EXISTS sessions_search_idx ON sessions USING GIN(search_vector)")
+            )
         
         conn.commit()
 

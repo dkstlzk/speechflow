@@ -163,8 +163,6 @@ class TranscriptProcessor:
         mom = None
         action_items = None
 
-        # SpeechFlow currently treats MoM and Action Items
-        # as meeting-specific intelligence artifacts.
         if transcript_type == "meeting":
             try:
                 mom = self.generate_mom(session_id)
@@ -175,14 +173,14 @@ class TranscriptProcessor:
                 logger.error(f"MoM generation failed: {e}", extra={"session_id": session_id})
                 mom = None
 
-            try:
-                action_items = self.generate_action_items(session_id)
-                if not action_items or not action_items.strip():
-                    logger.error("Empty Action Items generated", extra={"session_id": session_id})
-                    action_items = None
-            except Exception as e:
-                logger.error(f"Action Items generation failed: {e}", extra={"session_id": session_id})
+        try:
+            action_items = self.generate_action_items(session_id)
+            if not action_items or not action_items.strip():
+                logger.error("Empty Action Items generated", extra={"session_id": session_id})
                 action_items = None
+        except Exception as e:
+            logger.error(f"Action Items generation failed: {e}", extra={"session_id": session_id})
+            action_items = None
 
         return {
             "session_id": session_id,

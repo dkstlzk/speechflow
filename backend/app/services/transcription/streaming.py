@@ -56,6 +56,7 @@ class StreamingSession:
     raw_file_handle: Optional[BinaryIO] = None
 
     lock: threading.Lock = field(default_factory=threading.Lock)
+    finalized_event: threading.Event = field(default_factory=threading.Event)
 
 
 @dataclass
@@ -100,9 +101,11 @@ class StreamingSessionManager:
         return session
 
     def destroy_session(self, sid: str) -> None:
-        if sid in self.active_sessions:
-            session = self.active_sessions[sid]
+        session = self.active_sessions.get(sid)
+        if not session:
+            return
 
+        try:
             if session.raw_file_handle:
                 session.raw_file_handle.close()
 
@@ -173,8 +176,10 @@ class StreamingSessionManager:
                 f"| Final Buffer Size: {len(session.audio_buffer)} bytes"
             )
 
-            # Remove from active sessions only after everything is fully persisted
-            self.active_sessions.pop(sid, None)
+        finally:
+            popped_session = self.active_sessions.pop(sid, None)
+            if popped_session:
+                popped_session.finalized_event.set()
 
     # ── Audio Ingestion ────────────────────────────────────────────────
 

@@ -91,6 +91,19 @@ if __name__ == "__main__":
         daemon=True,
     ).start()
 
+    from .services.diarization.pyannote import _get_pipeline
+    def _warm_pyannote():
+        try:
+            _get_pipeline()
+            logger.info("Pyannote warmup completed successfully")
+        except Exception as e:
+            logger.error(f"Pyannote warmup failed: {e}")
+
+    threading.Thread(
+        target=_warm_pyannote,
+        daemon=True,
+    ).start()
+
     import os
     is_debug = os.environ.get("FLASK_DEBUG", "0") == "1"
     socketio.run(app, host="0.0.0.0", port=5000, debug=is_debug)
