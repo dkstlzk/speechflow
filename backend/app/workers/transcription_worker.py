@@ -97,7 +97,7 @@ def process_upload_session(
                 from ..models.session import Session as SessionModel
                 session_model = db.query(SessionModel).filter(SessionModel.id == session_id).first()
                 if session_model:
-                    session_model.audio_path = str(final_wav_path)
+                    session_model.audio_path = final_wav_path.name
                     db.commit()
                     logger.info(f"[Playback] Upload audio_path updated: {final_wav_path}")
             else:

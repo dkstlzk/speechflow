@@ -20,6 +20,9 @@ from ..services.persistence.session_repository import (
 )
 from ..services.persistence.speaker_repository import update_speaker_display_name
 from flask import request as flask_request
+from ..config.logging import get_logger
+
+logger = get_logger("sessions_api")
 
 sessions_bp = Blueprint("sessions", __name__)
 
@@ -69,8 +72,9 @@ def list_sessions():
     try:
         rows = list_recent_sessions(db, limit=50, query=query)
         data = [_serialize_session(r) for r in rows]
-    except Exception as e:
-        return jsonify(ApiResponse.fail(f"failed to list sessions: {e}").to_dict()), 500
+    except Exception:
+        logger.exception("Failed to list sessions")
+        return jsonify(ApiResponse.fail("Failed to list sessions").to_dict()), 500
     finally:
         db.close()
     return jsonify(ApiResponse.ok(data).to_dict()), 200
@@ -89,8 +93,9 @@ def get_session(session_id: str):
         if row is None:
             return jsonify(ApiResponse.fail("session not found").to_dict()), 404
         data = _serialize_session(row)
-    except Exception as e:
-        return jsonify(ApiResponse.fail(f"failed to load session: {e}").to_dict()), 500
+    except Exception:
+        logger.exception("Failed to load session")
+        return jsonify(ApiResponse.fail("Failed to load session").to_dict()), 500
     finally:
         db.close()
     return jsonify(ApiResponse.ok(data).to_dict()), 200
@@ -106,12 +111,20 @@ def get_session_audio(session_id: str):
     db = SessionLocal()
     try:
         session = get_session_by_id(db, session_id_int)
-        if not session or not getattr(session, "audio_path", None) or not os.path.exists(session.audio_path):
+        if not session or not getattr(session, "audio_path", None):
+            return jsonify(ApiResponse.fail("audio not found").to_dict()), 404
+
+        from ..config.settings import settings
+        filename = os.path.basename(session.audio_path)
+        safe_path = os.path.join(settings.EXPORT_DIR, "audio", filename)
+
+        if not os.path.exists(safe_path):
             return jsonify(ApiResponse.fail("audio not found").to_dict()), 404
         
-        return send_file(session.audio_path, mimetype="audio/wav")
-    except Exception as e:
-        return jsonify(ApiResponse.fail(f"failed to load audio: {e}").to_dict()), 500
+        return send_file(safe_path, mimetype="audio/wav")
+    except Exception:
+        logger.exception("Failed to load audio")
+        return jsonify(ApiResponse.fail("Failed to load audio").to_dict()), 500
     finally:
         db.close()
 
@@ -135,10 +148,11 @@ def delete_session_endpoint(session_id: str):
                 ApiResponse.fail("session not found").to_dict()
             ), 404
 
-    except Exception as e:
+    except Exception:
+        logger.exception("Failed to delete session")
         return jsonify(
             ApiResponse.fail(
-                f"failed to delete session: {e}"
+                "Failed to delete session"
             ).to_dict()
         ), 500
 
@@ -179,8 +193,9 @@ def update_session_title_endpoint(session_id: str):
         return jsonify(
             ApiResponse.ok({"session_id": session_id_int, "title": session.title}).to_dict()
         ), 200
-    except Exception as e:
-        return jsonify(ApiResponse.fail(f"failed to update session title: {e}").to_dict()), 500
+    except Exception:
+        logger.exception("Failed to update session title")
+        return jsonify(ApiResponse.fail("Failed to update session title").to_dict()), 500
     finally:
         db.close()
 
@@ -213,8 +228,9 @@ def update_speaker_endpoint(session_id: str, speaker_label: str):
                 }
             ).to_dict()
         ), 200
-    except Exception as e:
-        return jsonify(ApiResponse.fail(f"failed to update speaker: {e}").to_dict()), 500
+    except Exception:
+        logger.exception("Failed to update speaker")
+        return jsonify(ApiResponse.fail("Failed to update speaker").to_dict()), 500
     finally:
         db.close()
 
@@ -256,12 +272,15 @@ def process_session(session_id: str):
         finally:
             db.close()
         
-    except TranscriptNotFoundError as e:
-        return jsonify(ApiResponse.fail(str(e)).to_dict()), 404
-    except EmptyTranscriptError as e:
-        return jsonify(ApiResponse.fail(str(e)).to_dict()), 400
-    except TranscriptProcessorError as e:
-        return jsonify(ApiResponse.fail(str(e)).to_dict()), 500
+    except TranscriptNotFoundError:
+        logger.warning("Transcript not found")
+        return jsonify(ApiResponse.fail("Transcript not found").to_dict()), 404
+    except EmptyTranscriptError:
+        logger.warning("Empty transcript error")
+        return jsonify(ApiResponse.fail("Transcript is empty").to_dict()), 400
+    except TranscriptProcessorError:
+        logger.exception("Transcript processing failed")
+        return jsonify(ApiResponse.fail("Transcript processing failed").to_dict()), 500
 
     # Persist outputs
     try:
@@ -269,10 +288,11 @@ def process_session(session_id: str):
         raw_actions = result.get("action_items") or ""
         parsed_items = _parse_action_items_text(raw_actions)
         save_action_items(session_id_int, parsed_items)
-    except Exception as e:
+    except Exception:
+        logger.exception("Failed to persist generated outputs")
         return jsonify(
             ApiResponse.fail(
-                f"failed to persist generated outputs: {e}"
+                "Failed to persist generated outputs"
             ).to_dict()
         ), 500
     return jsonify(ApiResponse.ok(result).to_dict()), 200

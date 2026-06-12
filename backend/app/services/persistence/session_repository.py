@@ -110,10 +110,13 @@ def delete_session(db: Session, session_id: int) -> bool:
 
     if audio_path:
         import os
-        if os.path.exists(audio_path):
+        from ...config.settings import settings
+        filename = os.path.basename(audio_path)
+        safe_path = os.path.join(settings.EXPORT_DIR, "audio", filename)
+        if os.path.exists(safe_path):
             try:
-                os.remove(audio_path)
-                logger.info(f"[Playback] Playback file deleted: {audio_path}")
+                os.remove(safe_path)
+                logger.info(f"[Playback] Playback file deleted: {safe_path}")
             except Exception as e:
                 logger.error(f"[Playback] Failed to delete playback file: {e}")
 

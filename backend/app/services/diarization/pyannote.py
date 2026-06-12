@@ -11,24 +11,36 @@ logger = get_logger("diarization")
 _PIPELINE: Optional[Pipeline] = None
 _PIPELINE_MODEL: Optional[str] = None
 _PIPELINE_LOCK = threading.Lock()
+_PIPELINE_FAILED = False
 
 def _get_pipeline() -> Pipeline:
-    global _PIPELINE, _PIPELINE_MODEL
+    global _PIPELINE, _PIPELINE_MODEL, _PIPELINE_FAILED
+    if _PIPELINE_FAILED:
+        raise RuntimeError("Diarization unavailable due to previous initialization failure")
+        
     if _PIPELINE is None:
         with _PIPELINE_LOCK:
+            if _PIPELINE_FAILED:
+                raise RuntimeError("Diarization unavailable due to previous initialization failure")
             if _PIPELINE is None:
-                if not settings.HF_TOKEN:
-                    raise RuntimeError("HF_TOKEN is required for pyannote diarization")
-
-                _PIPELINE_MODEL = settings.DIARIZATION_MODEL
-                _PIPELINE = Pipeline.from_pretrained(
-                    settings.DIARIZATION_MODEL,
-                    token=settings.HF_TOKEN,
-                )
                 try:
-                    _PIPELINE.to("cpu")
-                except Exception:
-                    logger.info("pyannote pipeline device defaulted")
+                    if not settings.HF_TOKEN:
+                        raise RuntimeError("HF_TOKEN is required for pyannote diarization")
+
+                    _PIPELINE_MODEL = settings.DIARIZATION_MODEL
+                    _PIPELINE = Pipeline.from_pretrained(
+                        settings.DIARIZATION_MODEL,
+                        token=settings.HF_TOKEN,
+                    )
+                    try:
+                        _PIPELINE.to("cpu")
+                    except Exception:
+                        logger.info("pyannote pipeline device defaulted")
+                except Exception as e:
+                    error_str = str(e)
+                    if "HF_TOKEN" in error_str or "401" in error_str or "403" in error_str or "404" in error_str:
+                        _PIPELINE_FAILED = True
+                    raise RuntimeError("Diarization initialization failed") from e
     return _PIPELINE
 
 

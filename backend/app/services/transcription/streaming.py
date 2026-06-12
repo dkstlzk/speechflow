@@ -145,7 +145,7 @@ class StreamingSessionManager:
                         try:
                             db_session = db.query(SessionModel).filter(SessionModel.id == int(session.session_id)).first()
                             if db_session:
-                                db_session.audio_path = wav_path
+                                db_session.audio_path = os.path.basename(wav_path)
                                 db_session.status = SessionStatus.COMPLETED
                                 db_session.duration_seconds = duration
                                 db.commit()

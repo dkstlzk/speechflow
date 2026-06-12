@@ -71,7 +71,11 @@ def finalize_realtime_session(session_id: str):
             
     # Wait up to 5 seconds for background audio processing to finish destroying
     if target_session:
-        target_session.finalized_event.wait(timeout=5.0)
+        finalized = target_session.finalized_event.wait(timeout=5.0)
+        if not finalized:
+            from ..config.logging import get_logger
+            logger = get_logger("realtime_api")
+            logger.warning(f"Session {session_id_int} finalization timed out after 5.0s")
 
     db = SessionLocal()
 
