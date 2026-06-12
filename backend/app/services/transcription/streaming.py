@@ -4,6 +4,8 @@ from typing import Dict, Optional, BinaryIO
 import threading
 from ...config.logging import get_logger
 from ...models.enums import SessionStatus
+from ...models.session import Session as SessionModel
+from ...db.session import SessionLocal
 
 logger = get_logger(__name__)
 
@@ -111,6 +113,9 @@ class StreamingSessionManager:
 
             # Convert raw to wav and update DB
             if session.raw_audio_path:
+                db = None
+                recovery_db = None
+                persisted_successfully = False
                 try:
                     import wave
                     import os
@@ -139,8 +144,6 @@ class StreamingSessionManager:
 
                     # Safe Persistence
                     if os.path.exists(wav_path) and wav_size > 0:
-                        from ...db.session import SessionLocal
-                        from ...models.session import Session as SessionModel
                         db = SessionLocal()
                         try:
                             db_session = db.query(SessionModel).filter(SessionModel.id == int(session.session_id)).first()
@@ -149,6 +152,7 @@ class StreamingSessionManager:
                                 db_session.status = SessionStatus.COMPLETED
                                 db_session.duration_seconds = duration
                                 db.commit()
+                                persisted_successfully = True
                                 logger.info(f"[Playback] audio_path, status, and duration updated for session {session.session_id}")
 
                                 # SAFELY remove raw file only after successful DB commit
@@ -170,6 +174,36 @@ class StreamingSessionManager:
                             logger.info(f"[Playback] Archived corrupted raw stream to {orphan_path}")
                         except Exception as rename_err:
                             logger.error(f"[Playback] Failed to archive raw stream: {rename_err}")
+                    # Isolated recovery transaction
+                    try:
+                        if db is not None:
+                            try:
+                                db.rollback()
+                            except Exception:
+                                pass
+                                
+                        recovery_db = SessionLocal()
+                        
+                        db_session = (
+                            recovery_db.query(SessionModel)
+                            .filter(SessionModel.id == int(session.session_id))
+                            .first()
+                        )
+                        
+                        if db_session and not persisted_successfully:
+                            db_session.status = SessionStatus.FAILED
+                            recovery_db.commit()
+                            logger.info(f"[Playback] Marked session {session.session_id} as FAILED after error")
+                    except Exception as recovery_err:
+                        if recovery_db is not None:
+                            try:
+                                recovery_db.rollback()
+                            except Exception:
+                                pass
+                        logger.error(f"[Playback] Failed to mark session as FAILED: {recovery_err}")
+                    finally:
+                        if recovery_db is not None:
+                            recovery_db.close()
 
             logger.info(
                 f"[Playback] Session finalized | SID: {sid} "

@@ -1,74 +1,84 @@
 # SpeechFlow Architecture
 
-Date: 28/05/2026
+Date: 09/06/2026
 
 ## Objective
 
-Document the finalized Phase 1 backend architecture for the upload transcription
-pipeline in Flask.
+Document the finalized backend architecture for SpeechFlow, encompassing the upload transcription pipeline, real-time streaming pipeline, and intelligence layer.
 
-## Phase 1 Status
+## Project Status
 
-PHASE 1 — Upload Transcription Pipeline is complete.
+**Phase 1 — Upload Transcription Pipeline:** Complete
+**Phase 2 — Intelligence Layer:** Complete
+**Phase 3 — Real-Time Streaming Infrastructure:** Complete
+**Phase 4 — Session Management & Retrieval:** Complete
+**Phase 5 — Frontend Integration:** Complete
 
 Implemented scope:
-
 - Upload API (multipart audio)
+- Realtime WebSocket API (Socket.IO with AudioWorkletNode)
 - FFmpeg preprocessing (16kHz mono WAV)
-- faster-whisper CPU transcription
-- pyannote diarization
+- VAD (Voice Activity Detection) segmentation via Silero
+- faster-whisper CPU transcription (live & batch)
+- pyannote diarization (batch upload only)
 - Whisper to diarization alignment
 - Speaker-labeled transcript persistence
-- Ordered transcript retrieval API
-- Threaded worker orchestration with lifecycle tracking
-
-Out of scope for Phase 1:
-
-- Realtime websocket streaming
-- VAD-gated live transcription
-- Summarization and action-item extraction
+- Intelligence Generation (Classification, Summaries, MoM, Action Items) via Ollama
+- Deterministic transcript chunk and intelligence retrieval APIs
+- Full fault-tolerance with isolated database recovery transactions
 
 ## Core Components
 
 | Component | Responsibility |
 | --- | --- |
-| Flask | HTTP API for upload and transcript retrieval |
+| Flask | HTTP API for upload, sessions, and retrieval |
+| Socket.IO | Bidirectional WebSocket transport for real-time PCM audio streaming |
 | SQLAlchemy | ORM and repository-backed persistence |
-| PostgreSQL | Session, speaker, and transcript chunk storage |
+| PostgreSQL | Session, speaker, chunk, summary, and action item storage with FTS indexing |
 | FFmpeg | Audio normalization pipeline |
+| Silero VAD | Realtime audio chunk segmentation |
 | faster-whisper | CPU transcription engine |
 | pyannote.audio | Speaker diarization |
-| Background worker threads | Non-blocking upload pipeline execution |
+| Ollama | Local LLM inference engine for intelligent extraction |
+| Background worker threads | Non-blocking execution for realtime streaming, upload processing, and intelligence generation |
 
 ## Modular Boundaries
 
-- `api/`: upload and sessions endpoints
-- `workers/`: threaded orchestration and stage transitions
+- `api/`: Upload, sessions, realtime endpoints
+- `workers/`: Threaded orchestration for `upload_pipeline.py` and `realtime/worker.py`
+- `websocket.py`: Socket.IO event registrations and lifecycle mapping
 - `services/audio/`: FFmpeg preprocessing wrappers
-- `services/transcription/`: Whisper service and alignment logic
+- `services/transcription/`: Whisper service, alignment logic, VAD, and `streaming.py` session management
 - `services/diarization/`: pyannote integration layer
-- `services/persistence/`: session/speaker/chunk repositories
-- `services/session/`: transcript retrieval assembly
-- `models/`: SQLAlchemy entities (`Session`, `Speaker`, `TranscriptChunk`)
-- `db/`: engine/session bootstrap
-- `config/`: runtime settings and logging
+- `services/summarization/`: Ollama client, prompt templates, and `TranscriptProcessor`
+- `services/persistence/`: Dedicated repositories for sessions, speakers, transcripts, summaries, and action items
+- `services/session/`: Aggregated retrieval assembly
+- `models/`: SQLAlchemy entities (`Session`, `Speaker`, `TranscriptChunk`, `Summary`, `ActionItem`)
+- `db/`: Engine, session bootstrap, and Alembic migrations
+- `config/`: Runtime settings and logging
 
-## Finalized Upload Pipeline
+## Finalized Execution Flows
 
-`Upload -> FFmpeg -> Whisper -> Diarization -> Alignment -> Persistence -> Retrieval`
+### 1. Upload Pipeline
+`Upload -> FFmpeg -> Whisper -> Diarization -> Alignment -> Persistence -> Intelligence Generation -> Completed`
 
-Stage lifecycle:
+### 2. Real-Time Pipeline
+`Socket.IO -> Streaming Buffer -> VAD Chunking -> Whisper -> Transcript Persistence -> Finalization -> Intelligence Generation -> Completed`
 
+## Session Lifecycle
+
+Upload status flow:
 `pending -> preprocessing -> transcribing -> diarizing -> processing -> completed`
 
-Failure lifecycle:
+Real-time status flow:
+`recording -> finalizing -> processing -> completed`
 
+Failure lifecycle:
 `<current_stage> -> failed`
 
 ## Transcript Contract
 
-Final transcript chunks are persisted and reconstructed in chronological order
-with this shape:
+Final transcript chunks are persisted in chronological order with this shape:
 
 ```json
 {
@@ -80,12 +90,11 @@ with this shape:
 }
 ```
 
-## Stability Notes
+## Stability & Fault-Tolerance Notes
 
-- Alignment uses conservative overlap thresholds and speaker-switch hysteresis to
-  reduce unstable speaker flips on tiny overlaps.
-- Transcript chunks are replaced per session on worker reruns to avoid
-  persistence duplication.
+- Real-time pipeline features isolated database recovery transactions. If background WAV conversion fails, the session safely updates to `failed` to prevent frontend polling hangs.
+- Stale, orphaned `recording` sessions are automatically reset to `failed` upon backend startup.
+- Whisper and Pyannote models run warmup tasks via daemon threads on boot.
+- Intelligence requests failing via Ollama explicitly trigger `503 Service Unavailable` with `OllamaClientError`.
 - Retrieval enforces deterministic ordering by chunk index and timestamps.
-- Worker cleanup removes temporary input and intermediate WAV files in both
-  success and failure paths.
+- Worker cleanup reliably removes temporary input and intermediate WAV files in both success and failure paths.

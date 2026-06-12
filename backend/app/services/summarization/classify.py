@@ -78,7 +78,7 @@ def classify_transcript(
     try:
         raw = client.generate(prompt, model=model)
     except OllamaClientError:
-        logger.warning("Transcript classification failed, defaulting to unknown")
+        logger.warning("Transcript classification failed due to Ollama error, defaulting to unknown")
         return "unknown"
 
     parsed = raw.strip().lower().split("\n")[0].strip().rstrip(".")

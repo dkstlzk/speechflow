@@ -58,6 +58,14 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
   const [isSavingTitle, setIsSavingTitle] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isPolling = useRef(false);
+  const audioRef = useRef<HTMLAudioElement>(null);
+
+  const onSeek = (time: number) => {
+    if (audioRef.current) {
+      audioRef.current.currentTime = time;
+      audioRef.current.play();
+    }
+  };
 
   const handleSaveTitle = async () => {
     if (!editTitleValue.trim() || editTitleValue === session.data?.title) {
@@ -403,7 +411,7 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
         <aside className="space-y-6 lg:sticky lg:top-20 lg:self-start lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto lg:pr-1">
           {session.data?.has_audio && session.data?.audio_url && (
             <PanelShell title="Recording" icon={<Music className="h-4 w-4" />} bare>
-              <audio controls src={session.data.audio_url} className="w-full" />
+              <audio ref={audioRef} controls src={session.data.audio_url} className="w-full" />
             </PanelShell>
           )}
           <SummaryPanel
@@ -423,6 +431,7 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
             session={session.data ?? undefined}
             onRenameSpeaker={handleRenameSpeaker}
             searchQuery={initialSearch}
+            onSeek={onSeek}
           />
         </div>
       </div>

@@ -90,9 +90,10 @@ interface Props {
   session?: Session;
   onRenameSpeaker?: (speaker: string, newName: string) => void;
   searchQuery?: string;
+  onSeek?: (time: number) => void;
 }
 
-export function TranscriptViewer({ segments, loading, error, session, onRenameSpeaker, searchQuery }: Props) {
+export function TranscriptViewer({ segments, loading, error, session, onRenameSpeaker, searchQuery, onSeek }: Props) {
   const hasSegments = !!segments && segments.length > 0;
 
   const highlightText = (text: string, query?: string): React.ReactNode => {
@@ -167,10 +168,15 @@ export function TranscriptViewer({ segments, loading, error, session, onRenameSp
                   speakerMapping={speakerMapping}
                   onRenameSpeaker={onRenameSpeaker}
                 />
-                <span className="text-[11px] font-mono text-muted-foreground/70">
+                <button
+                  onClick={() => onSeek && onSeek(seg.startSec)}
+                  disabled={!onSeek}
+                  aria-label={`Jump to ${formatTranscriptTime(seg.startSec)}`}
+                  className={`text-[11px] font-mono text-muted-foreground/70 transition-colors ${onSeek ? "cursor-pointer hover:text-primary" : ""}`}
+                >
                   #{i + 1} • {formatTranscriptTime(seg.startSec)} →{" "}
                   {formatTranscriptTime(seg.endSec)}
-                </span>
+                </button>
               </div>
               <p
                 className={`text-[14.5px] leading-7 ${

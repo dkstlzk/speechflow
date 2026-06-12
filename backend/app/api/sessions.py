@@ -10,6 +10,7 @@ from ..services.summarization.transcript_processor import (
     EmptyTranscriptError,
     TranscriptProcessorError,
 )
+from ..services.summarization.ollama import OllamaClientError
 from ..services.persistence.summaries import save_summary, get_summary
 from ..services.persistence.actions import save_action_items
 from ..services.persistence.session_repository import (
@@ -278,6 +279,9 @@ def process_session(session_id: str):
     except EmptyTranscriptError:
         logger.warning("Empty transcript error")
         return jsonify(ApiResponse.fail("Transcript is empty").to_dict()), 400
+    except OllamaClientError:
+        logger.warning("Ollama unavailable")
+        return jsonify(ApiResponse.fail("Ollama is unavailable or timed out. Ensure Ollama is running and try again.").to_dict()), 503
     except TranscriptProcessorError:
         logger.exception("Transcript processing failed")
         return jsonify(ApiResponse.fail("Transcript processing failed").to_dict()), 500

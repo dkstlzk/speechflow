@@ -156,6 +156,8 @@ class TranscriptProcessor:
                     .replace("SPEAKER_", "Participant ")
                     .replace("Speaker ", "Participant ")
                 )
+        except OllamaClientError:
+            raise
         except Exception as e:
             logger.error(f"Summary generation failed: {e}", extra={"session_id": session_id})
             summary = None
@@ -169,6 +171,8 @@ class TranscriptProcessor:
                 if not mom or not mom.strip():
                     logger.error("Empty MoM generated", extra={"session_id": session_id})
                     mom = None
+            except OllamaClientError:
+                raise
             except Exception as e:
                 logger.error(f"MoM generation failed: {e}", extra={"session_id": session_id})
                 mom = None
@@ -178,6 +182,8 @@ class TranscriptProcessor:
             if not action_items or not action_items.strip():
                 logger.error("Empty Action Items generated", extra={"session_id": session_id})
                 action_items = None
+        except OllamaClientError:
+            raise
         except Exception as e:
             logger.error(f"Action Items generation failed: {e}", extra={"session_id": session_id})
             action_items = None
@@ -211,9 +217,7 @@ class TranscriptProcessor:
                         "chunk_index": i,
                     },
                 )
-                raise TranscriptGenerationError(
-                    f"Ollama generation failed for {output_type} (chunk {i})"
-                ) from exc
+                raise
 
         if len(partial_outputs) == 1:
             return partial_outputs[0]
@@ -232,4 +236,4 @@ class TranscriptProcessor:
                     "output_type": output_type,
                 },
             )
-            raise TranscriptGenerationError(f"Ollama merge generation failed for {output_type}") from exc
+            raise
