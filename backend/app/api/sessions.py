@@ -44,6 +44,8 @@ def _serialize_session(row) -> dict:
             else None,
         "has_audio": bool(getattr(row, "audio_path", None)),
         "audio_url": f"/api/sessions/{row.id}/audio" if getattr(row, "audio_path", None) else None,
+        "diarization_mode": getattr(row, "diarization_mode", None),
+        "diarized_at": row.diarized_at.isoformat() if getattr(row, "diarized_at", None) else None,
     }
 
 
@@ -320,8 +322,8 @@ def trigger_quick_diarization(session_id: str):
         session = db.query(Session).with_for_update().filter(Session.id == session_id_int).first()
         if not session:
             return jsonify(ApiResponse.fail("Session not found").to_dict()), 404
-        if session.status in [SessionStatus.DIARIZING, SessionStatus.PROCESSING]:
-            return jsonify(ApiResponse.fail("Session is currently processing").to_dict()), 400
+        if session.status in [SessionStatus.RECORDING, SessionStatus.DIARIZING, SessionStatus.PROCESSING]:
+            return jsonify(ApiResponse.fail("Session is currently recording or processing").to_dict()), 400
         
         session.status = SessionStatus.DIARIZING
         db.commit()
@@ -353,8 +355,8 @@ def trigger_accurate_diarization(session_id: str):
         session = db.query(Session).with_for_update().filter(Session.id == session_id_int).first()
         if not session:
             return jsonify(ApiResponse.fail("Session not found").to_dict()), 404
-        if session.status in [SessionStatus.DIARIZING, SessionStatus.PROCESSING]:
-            return jsonify(ApiResponse.fail("Session is currently processing").to_dict()), 400
+        if session.status in [SessionStatus.RECORDING, SessionStatus.DIARIZING, SessionStatus.PROCESSING]:
+            return jsonify(ApiResponse.fail("Session is currently recording or processing").to_dict()), 400
         
         session.status = SessionStatus.DIARIZING
         db.commit()

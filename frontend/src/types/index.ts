@@ -67,7 +67,7 @@ export interface ApiResponse<T> {
   message?: string;
 }
 
-export type ConnectionStatus = "connected" | "connecting" | "disconnected";
+export type ConnectionStatus = "connected" | "connecting" | "disconnected" | "error";
 export type RecordingStatus = "idle" | "recording" | "paused" | "finalizing" | "completed";
 export type MicrophoneState =
   | "initializing"

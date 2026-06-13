@@ -85,7 +85,12 @@ def finalize_realtime_session(session_id: str):
             if not session.title:
                 session.title = f"Recording_{session_id_int:03d}"
             
-            session.status = SessionStatus.COMPLETED
+            if target_session is None and session.status == SessionStatus.RECORDING:
+                session.status = SessionStatus.FAILED
+                logger.warning(f"Session {session_id_int} finalized but no active session found. Marking FAILED.")
+            elif session.status != SessionStatus.FAILED:
+                session.status = SessionStatus.COMPLETED
+                
             db.add(session)
             db.commit()
             db.refresh(session)

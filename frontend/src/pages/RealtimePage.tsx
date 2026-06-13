@@ -107,21 +107,10 @@ export function RealtimePage() {
       if (ev.type === "connecting") {
         setConn("connecting");
       }
-      if (ev.type === "disconnected") {
-        setConn("disconnected");
-        // R-1: If recording was active, stop immediately and warn user
-        if (recRef.current === "recording" || recRef.current === "paused") {
-          stopAudioCapture();
-          setRec("completed");
-          setMicState("ready");
-          toast.error(
-            "Connection lost. Recording was interrupted. Please start a new recording session.",
-            { duration: 10000 }
-          );
-        }
+      if (ev.type === "disconnected" || ev.type === "error") {
+        setConn(ev.type === "disconnected" ? "disconnected" : "error");
       }
     });
-
 
     return () => {
       off1();
@@ -130,6 +119,22 @@ export function RealtimePage() {
       disconnect();
     };
   }, []);
+
+  // Safe declarative teardown: runs after state is fully committed
+  useEffect(() => {
+    if (
+      (conn === "disconnected" || conn === "error") &&
+      (rec === "recording" || rec === "paused")
+    ) {
+      stopAudioCapture();
+      setRec("completed");
+      setMicState("ready");
+      toast.error(
+        "Connection lost or error occurred. Recording was interrupted.",
+        { duration: 10000 }
+      );
+    }
+  }, [conn, rec]);
 
   useEffect(() => {
     let permissionStatus: PermissionStatus | null = null;
@@ -228,6 +233,7 @@ export function RealtimePage() {
       setSummary(null);
       setActions(null);
       
+      setConn("connecting");
       setRec("recording");
       setMicState("recording");
 
