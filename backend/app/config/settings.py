@@ -21,11 +21,12 @@ class Settings:
             raise RuntimeError("DATABASE_URL environment variable is required")
     SOCKETIO_ASYNC_MODE: str = os.getenv("SOCKETIO_ASYNC_MODE", "threading")
     CORS_ORIGINS: str = os.getenv("CORS_ORIGINS", "*")
-    UPLOAD_DIR: str = os.getenv("UPLOAD_DIR", "temp")
-    EXPORT_DIR: str = os.getenv("EXPORT_DIR", "exports")
-    TRANSCRIPTS_DIR: str = os.getenv("TRANSCRIPTS_DIR", "transcripts")
-    MODEL_DIR: str = os.getenv("MODEL_DIR", "ml_models")
-    TEMP_DIR: str = os.getenv("TEMP_DIR", "temp")
+    PROJECT_ROOT: str = str(Path(__file__).resolve().parents[3])
+    UPLOAD_DIR: str = os.getenv("UPLOAD_DIR", str(Path(PROJECT_ROOT) / "temp"))
+    EXPORT_DIR: str = os.getenv("EXPORT_DIR", str(Path(PROJECT_ROOT) / "exports"))
+    TRANSCRIPTS_DIR: str = os.getenv("TRANSCRIPTS_DIR", str(Path(PROJECT_ROOT) / "transcripts"))
+    MODEL_DIR: str = os.getenv("MODEL_DIR", str(Path(PROJECT_ROOT) / "ml_models"))
+    TEMP_DIR: str = os.getenv("TEMP_DIR", str(Path(PROJECT_ROOT) / "temp"))
     MAX_UPLOAD_MB: int = int(os.getenv("MAX_UPLOAD_MB", DEFAULT_MAX_UPLOAD_MB))
     MAX_CONTENT_LENGTH: int = MAX_UPLOAD_MB * 1024 * 1024
     ALLOWED_EXTENSIONS: tuple = tuple(

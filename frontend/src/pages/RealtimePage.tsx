@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { AppLayout } from "@/layouts/AppLayout";
 import { Button } from "@/components/ui/button";
 import { ConnectionStatusBadge } from "@/components/ConnectionStatusBadge";
@@ -33,7 +33,6 @@ import {
   getActions,
   getSummary,
   processSession,
-
   startRealtimeSession,
 } from "@/services/api";
 import { startAudioCapture, stopAudioCapture } from "@/services/audio";
@@ -49,13 +48,18 @@ import type {
 } from "@/types";
 
 export function RealtimePage() {
+  const navigate = useNavigate();
   const [conn, setConn] = useState<ConnectionStatus>("disconnected");
   const [rec, setRec] = useState<RecordingStatus>("idle");
+  const recRef = useRef<RecordingStatus>("idle");
   const [sessionId, setSessionId] = useState<string | null>(null);
   const sessionIdRef = useRef<string | null>(null);
   useEffect(() => {
     sessionIdRef.current = sessionId;
   }, [sessionId]);
+  useEffect(() => {
+    recRef.current = rec;
+  }, [rec]);
 
   // Separated: captions are disposable, segments are committed
   const [caption, setCaption] = useState<string>("");
@@ -105,6 +109,16 @@ export function RealtimePage() {
       }
       if (ev.type === "disconnected") {
         setConn("disconnected");
+        // R-1: If recording was active, stop immediately and warn user
+        if (recRef.current === "recording" || recRef.current === "paused") {
+          stopAudioCapture();
+          setRec("completed");
+          setMicState("ready");
+          toast.error(
+            "Connection lost. Recording was interrupted. Please start a new recording session.",
+            { duration: 10000 }
+          );
+        }
       }
     });
 
@@ -201,8 +215,6 @@ export function RealtimePage() {
         return;
       }
 
-      await startAudioCapture();
-
       const res = await startRealtimeSession();
       const newSessionId = String(res.data.sessionId);
       sessionIdRef.current = newSessionId;
@@ -221,6 +233,7 @@ export function RealtimePage() {
 
       try {
         startRecording(newSessionId);
+        await startAudioCapture();
       } catch (err: any) {
         await deleteRealtimeSession(newSessionId);
         stopAudioCapture();
@@ -266,6 +279,10 @@ export function RealtimePage() {
     try {
       if (sessionId) {
         await finalizeRealtimeSession(sessionId);
+        navigate({
+          to: "/session/$id",
+          params: { id: sessionId },
+        });
       }
     } catch (err: any) {
       toast.error(err.message || "Failed to finalize session. It may be partially saved.");

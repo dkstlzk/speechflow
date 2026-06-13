@@ -302,6 +302,72 @@ def process_session(session_id: str):
     return jsonify(ApiResponse.ok(result).to_dict()), 200
 
 
+@sessions_bp.post("/<session_id>/quick-diarization")
+def trigger_quick_diarization(session_id: str):
+    from ..workers.diarization_worker import process_quick_diarization
+    try:
+        session_id_int = int(session_id)
+    except ValueError:
+        return jsonify(ApiResponse.fail("invalid session id").to_dict()), 400
+
+    from ..models.enums import SessionStatus
+    from ..models.session import Session
+    from ..db.session import SessionLocal
+
+    db = SessionLocal()
+    try:
+        # D-2: Row-level lock prevents TOCTOU race on concurrent requests
+        session = db.query(Session).with_for_update().filter(Session.id == session_id_int).first()
+        if not session:
+            return jsonify(ApiResponse.fail("Session not found").to_dict()), 404
+        if session.status in [SessionStatus.DIARIZING, SessionStatus.PROCESSING]:
+            return jsonify(ApiResponse.fail("Session is currently processing").to_dict()), 400
+        
+        session.status = SessionStatus.DIARIZING
+        db.commit()
+    finally:
+        db.close()
+
+    # TODO(TechDebt): Fire-and-forget threads risk job loss if the process restarts.
+    # Acceptable for MVP, but should be migrated to Celery/Redis in production.
+    import multiprocessing
+    multiprocessing.get_context("spawn").Process(target=process_quick_diarization, args=(session_id_int,), daemon=True).start()
+    return jsonify(ApiResponse.ok({"message": "Quick diarization started"}).to_dict()), 202
+
+
+@sessions_bp.post("/<session_id>/accurate-diarization")
+def trigger_accurate_diarization(session_id: str):
+    from ..workers.diarization_worker import process_accurate_diarization
+    try:
+        session_id_int = int(session_id)
+    except ValueError:
+        return jsonify(ApiResponse.fail("invalid session id").to_dict()), 400
+
+    from ..models.enums import SessionStatus
+    from ..models.session import Session
+    from ..db.session import SessionLocal
+
+    db = SessionLocal()
+    try:
+        # D-2: Row-level lock prevents TOCTOU race on concurrent requests
+        session = db.query(Session).with_for_update().filter(Session.id == session_id_int).first()
+        if not session:
+            return jsonify(ApiResponse.fail("Session not found").to_dict()), 404
+        if session.status in [SessionStatus.DIARIZING, SessionStatus.PROCESSING]:
+            return jsonify(ApiResponse.fail("Session is currently processing").to_dict()), 400
+        
+        session.status = SessionStatus.DIARIZING
+        db.commit()
+    finally:
+        db.close()
+
+    # TODO(TechDebt): Fire-and-forget threads risk job loss if the process restarts.
+    # Acceptable for MVP, but should be migrated to Celery/Redis in production.
+    import multiprocessing
+    multiprocessing.get_context("spawn").Process(target=process_accurate_diarization, args=(session_id_int,), daemon=True).start()
+    return jsonify(ApiResponse.ok({"message": "Accurate diarization started"}).to_dict()), 202
+
+
 @sessions_bp.get("/<session_id>/summary")
 def get_session_summary(session_id: str):
     try:

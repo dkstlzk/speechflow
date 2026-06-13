@@ -64,6 +64,32 @@ def ensure_columns(engine: Engine) -> None:
                 conn.commit()
                 logger.info("Added 'audio_path' column to sessions table")
 
+        if "diarization_mode" not in columns:
+            with engine.connect() as conn:
+                conn.execute(
+                    text("ALTER TABLE sessions ADD COLUMN diarization_mode VARCHAR(32)")
+                )
+                conn.commit()
+                logger.info("Added 'diarization_mode' column to sessions table")
+
+        if "diarized_at" not in columns:
+            with engine.connect() as conn:
+                conn.execute(
+                    text("ALTER TABLE sessions ADD COLUMN diarized_at TIMESTAMP")
+                )
+                conn.commit()
+                logger.info("Added 'diarized_at' column to sessions table")
+
+    if inspector.has_table("transcript_chunks"):
+        chunk_cols = {col["name"] for col in inspector.get_columns("transcript_chunks")}
+        if "speaker_source" not in chunk_cols:
+            with engine.connect() as conn:
+                conn.execute(
+                    text("ALTER TABLE transcript_chunks ADD COLUMN speaker_source VARCHAR(20)")
+                )
+                conn.commit()
+                logger.info("Added 'speaker_source' column to transcript_chunks table")
+
 
 def ensure_foreign_key_cascades(engine: Engine) -> None:
     """Ensure foreign keys on child tables have ON DELETE CASCADE/SET NULL."""

@@ -23,6 +23,8 @@ import {
   getSummary,
   getTranscript,
   processSession,
+  processQuickDiarization,
+  processAccurateDiarization,
   updateSessionTitle,
   updateSpeaker,
 } from "@/services/api";
@@ -53,6 +55,7 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
   const [summary, setSummary] = useState<State<SummaryResponse>>(initial());
   const [actions, setActions] = useState<State<ActionItem[]>>(initial());
   const [processing, setProcessing] = useState(false);
+  const [diarizing, setDiarizing] = useState(false);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editTitleValue, setEditTitleValue] = useState("");
   const [isSavingTitle, setIsSavingTitle] = useState(false);
@@ -129,7 +132,7 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
   );
 
   const fetchTranscript = useCallback((signal?: AbortSignal) => {
-    setTranscript(initial());
+    setTranscript(prev => ({ ...prev, loading: true, error: null }));
     return getTranscript(id, signal)
       .then((r) => setTranscript({ data: r.data, loading: false, error: null }))
       .catch((e: unknown) => {
@@ -144,7 +147,7 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
   }, [id]);
 
   const fetchSummary = useCallback((signal?: AbortSignal) => {
-    setSummary(initial());
+    setSummary(prev => ({ ...prev, loading: true, error: null }));
     return getSummary(id, signal)
       .then((r) => setSummary({ data: r.data, loading: false, error: null }))
       .catch((e: unknown) => {
@@ -159,7 +162,7 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
   }, [id]);
 
   const fetchActions = useCallback((signal?: AbortSignal) => {
-    setActions(initial());
+    setActions(prev => ({ ...prev, loading: true, error: null }));
     return getActions(id, signal)
       .then((r) => setActions({ data: r.data, loading: false, error: null }))
       .catch((e: unknown) => {
@@ -196,7 +199,7 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
 
   useEffect(() => {
     const status = session.data?.status;
-    if (status !== "processing") {
+    if (status !== "processing" && status !== "diarizing") {
       stopPolling();
       return;
     }
@@ -251,6 +254,32 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
     }
   }
 
+  async function onQuickDiarization() {
+    setDiarizing(true);
+    try {
+      await processQuickDiarization(id);
+      toast.success("Quick diarization started. Refresh the session after processing completes.");
+      fetchSession(false); // F-1: Immediately reflect DIARIZING status
+    } catch (err: any) {
+      toast.error(err.message || "Failed to apply quick labels");
+    } finally {
+      setDiarizing(false);
+    }
+  }
+
+  async function onAccurateDiarization() {
+    setDiarizing(true);
+    try {
+      await processAccurateDiarization(id);
+      toast.success("Accurate diarization started. Processing may take several minutes.");
+      fetchSession(false); // F-1: Immediately reflect DIARIZING status
+    } catch (err: any) {
+      toast.error(err.message || "Failed to start accurate diarization");
+    } finally {
+      setDiarizing(false);
+    }
+  }
+
   async function handleExport(format: string) {
     if (!session.data || !transcript.data?.segments) return;
     const data = {
@@ -284,7 +313,9 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
   const duration = formatDuration(session.data?.durationSec);
   const title = session.data?.title || session.data?.fileName || "Session";
   const showSkeleton =
-    processing || (session.data?.status === "processing" && !summary.data && !actions.data?.length);
+    processing || diarizing || 
+    session.data?.status === "diarizing" || 
+    (session.data?.status === "processing" && !summary.data && !actions.data?.length);
   const progressMode = !transcript.data?.segments?.length ? "transcript" : "intelligence";
 
   return (
@@ -360,7 +391,7 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
             {duration && <span>· {duration}</span>}
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap justify-end gap-2">
           {session.data && transcript.data?.segments && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -385,6 +416,12 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
               </DropdownMenuContent>
             </DropdownMenu>
           )}
+          <Button variant="outline" size="sm" onClick={onQuickDiarization} disabled={diarizing || session.data?.status === "diarizing" || session.data?.status === "processing"}>
+            ⚡ Quick Labels
+          </Button>
+          <Button variant="outline" size="sm" onClick={onAccurateDiarization} disabled={diarizing || session.data?.status === "diarizing" || session.data?.status === "processing"}>
+            🎯 Accurate Diarization
+          </Button>
           <Button variant="outline" size="sm" onClick={() => load()}>
             <RefreshCw className="h-3.5 w-3.5" />
             Refresh
@@ -411,7 +448,7 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
         <aside className="space-y-6 lg:sticky lg:top-20 lg:self-start lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto lg:pr-1">
           {session.data?.has_audio && session.data?.audio_url && (
             <PanelShell title="Recording" icon={<Music className="h-4 w-4" />} bare>
-              <audio ref={audioRef} controls src={session.data.audio_url} className="w-full" />
+              <audio ref={audioRef} controls src={`${session.data.audio_url}?t=${session.data.createdAt || Date.now()}`} className="w-full" />
             </PanelShell>
           )}
           <SummaryPanel

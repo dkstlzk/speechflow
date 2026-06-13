@@ -64,6 +64,7 @@ def register_events(socketio: SocketIO) -> None:
 
     @socketio.on("audio_chunk")
     def handle_audio_chunk(payload):
+        logger.debug(f"[Socket.IO] audio_chunk received for {request.sid} at {time.time():.3f}")
         # Append incoming raw bytes directly to this user's stateful audio buffer
         session_manager.append_audio(request.sid, payload)
 

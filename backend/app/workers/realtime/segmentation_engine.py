@@ -9,8 +9,8 @@ from .worker_state import vad_model
 logger = get_logger(__name__)
 
 SILENCE_THRESHOLD_SECONDS = 1.5
-MAX_SEGMENT_SECONDS = 25.0
-VAD_SPEECH_THRESHOLD = 0.5
+MAX_SEGMENT_SECONDS = 10.0
+VAD_SPEECH_THRESHOLD = 0.35
 
 def _check_vad_speaking(audio_np: np.ndarray, sample_rate: int) -> bool:
     if vad_model is None:

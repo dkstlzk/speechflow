@@ -20,6 +20,7 @@ coverage==7.14.1
 ctranslate2==4.7.2
 cycler==0.12.1
 einops==0.8.2
+eventlet==0.41.0
 faster-whisper==1.2.1
 ffmpeg-python==0.2.0
 filelock==3.29.0

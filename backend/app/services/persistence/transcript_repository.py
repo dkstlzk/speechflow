@@ -48,3 +48,10 @@ def list_transcript_chunks(db: Session, session_id: int) -> List[TranscriptChunk
         )
         .all()
     )
+
+def update_chunk_speakers(db: Session, session_id: int, updates: List[Dict]) -> None:
+    """Update speaker_id and speaker_source for existing chunks."""
+    # We use bulk_update_mappings if we have the primary key (id) in the updates dict.
+    # The updates dict should have: 'id', 'speaker_id', 'speaker_source'
+    db.bulk_update_mappings(TranscriptChunk, updates)
+    db.commit()

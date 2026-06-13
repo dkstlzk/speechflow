@@ -262,6 +262,32 @@ export async function processSession(
   };
 }
 
+// POST /api/sessions/{id}/quick-diarization
+export async function processQuickDiarization(
+  id: string,
+): Promise<ApiResponse<{ message: string }>> {
+  const raw = await apiFetch<{ message: string }>(`${API_BASE}/api/sessions/${id}/quick-diarization`, {
+    method: "POST",
+  });
+  return {
+    data: raw.data,
+    ok: true,
+  };
+}
+
+// POST /api/sessions/{id}/accurate-diarization
+export async function processAccurateDiarization(
+  id: string,
+): Promise<ApiResponse<{ message: string }>> {
+  const raw = await apiFetch<{ message: string }>(`${API_BASE}/api/sessions/${id}/accurate-diarization`, {
+    method: "POST",
+  });
+  return {
+    data: raw.data,
+    ok: true,
+  };
+}
+
 export async function startRealtimeSession(): Promise<ApiResponse<{ sessionId: string }>> {
   const raw = await apiFetch<{
     session_id: number;

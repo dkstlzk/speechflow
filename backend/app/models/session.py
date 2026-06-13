@@ -35,3 +35,5 @@ class Session(Base):
     )
     title = Column(String(255), nullable=True)
     audio_path = Column(String(512), nullable=True)
+    diarization_mode = Column(String(32), nullable=True)
+    diarized_at = Column(DateTime, nullable=True)

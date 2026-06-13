@@ -13,3 +13,4 @@ onnxruntime
 pydub
 ollama
 simple-websocket
+eventlet

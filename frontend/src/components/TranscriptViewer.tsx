@@ -169,19 +169,22 @@ export function TranscriptViewer({ segments, loading, error, session, onRenameSp
                   onRenameSpeaker={onRenameSpeaker}
                 />
                 <button
-                  onClick={() => onSeek && onSeek(seg.startSec)}
-                  disabled={!onSeek}
+                  onClick={() => {
+                    if (onSeek && seg.startSec !== undefined) {
+                      onSeek(seg.startSec);
+                    }
+                  }}
+                  disabled={!onSeek || seg.startSec === undefined}
                   aria-label={`Jump to ${formatTranscriptTime(seg.startSec)}`}
-                  className={`text-[11px] font-mono text-muted-foreground/70 transition-colors ${onSeek ? "cursor-pointer hover:text-primary" : ""}`}
+                  className={`text-[11px] font-mono text-muted-foreground/70 transition-colors ${onSeek && seg.startSec !== undefined ? "cursor-pointer hover:text-primary" : ""}`}
                 >
                   #{i + 1} • {formatTranscriptTime(seg.startSec)} →{" "}
                   {formatTranscriptTime(seg.endSec)}
                 </button>
               </div>
               <p
-                className={`text-[14.5px] leading-7 ${
-                  seg.is_partial ? "italic text-muted-foreground" : "text-foreground/90"
-                }`}
+                className={`text-[14.5px] leading-7 ${seg.is_partial ? "italic text-muted-foreground" : "text-foreground/90"
+                  }`}
               >
                 {highlightText(seg.text, searchQuery)}
               </p>

@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, Text
+from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, Text, String
 from sqlalchemy.orm import relationship, backref
 from sqlalchemy.sql import func
 
@@ -16,6 +16,7 @@ class TranscriptChunk(Base):
     text = Column(Text, nullable=False)
     chunk_index = Column(Integer, nullable=False)
     is_partial = Column(Boolean, default=False)
+    speaker_source = Column(String(20), default=None, server_default=None)
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
 
     session = relationship("Session", backref=backref("transcript_chunks", cascade="all, delete-orphan", passive_deletes=True))

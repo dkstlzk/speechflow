@@ -105,6 +105,7 @@ class StreamingSessionManager:
     def destroy_session(self, sid: str) -> None:
         session = self.active_sessions.get(sid)
         if not session:
+            logger.warning(f"[SessionManager] destroy_session called but sid={sid} not found")
             return
 
         try:
@@ -214,6 +215,8 @@ class StreamingSessionManager:
             popped_session = self.active_sessions.pop(sid, None)
             if popped_session:
                 popped_session.finalized_event.set()
+            else:
+                logger.warning(f"[SessionManager] Could not set finalized_event, sid={sid} not found in active_sessions during pop")
 
     # ── Audio Ingestion ────────────────────────────────────────────────
 
