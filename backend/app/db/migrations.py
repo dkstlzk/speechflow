@@ -153,6 +153,23 @@ def ensure_foreign_key_cascades(engine: Engine) -> None:
             logger.info("Ensured ON DELETE CASCADE for all session child tables")
 
 
+def ensure_unique_constraints(engine: Engine) -> None:
+    """Ensure unique constraints exist."""
+    if engine.dialect.name != "postgresql":
+        return
+
+    with engine.connect() as conn:
+        result = conn.execute(
+            text("SELECT conname FROM pg_constraint WHERE conname = 'uix_session_chunk'")
+        )
+        if result.fetchone() is None:
+            conn.execute(
+                text("ALTER TABLE transcript_chunks ADD CONSTRAINT uix_session_chunk UNIQUE (session_id, chunk_index)")
+            )
+            conn.commit()
+            logger.info("Added unique constraint uix_session_chunk to transcript_chunks")
+
+
 def ensure_fts_indexes(engine: Engine) -> None:
     """Add Full Text Search generated columns and GIN indexes for PostgreSQL."""
     if engine.dialect.name != "postgresql":
@@ -205,6 +222,11 @@ def run_migrations(engine: Engine) -> None:
         ensure_foreign_key_cascades(engine)
     except Exception as e:
         logger.warning(f"ensure_foreign_key_cascades failed (non-fatal): {e}")
+
+    try:
+        ensure_unique_constraints(engine)
+    except Exception as e:
+        logger.warning(f"ensure_unique_constraints failed (non-fatal): {e}")
 
     try:
         ensure_fts_indexes(engine)

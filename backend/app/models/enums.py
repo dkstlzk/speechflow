@@ -17,7 +17,6 @@ class SessionStatus(str, Enum):
     REVIEW = "review"
     SAVED = "saved"
 
-
 SESSION_STATUS_FLOW = [
     SessionStatus.PENDING,
     SessionStatus.UPLOADED,

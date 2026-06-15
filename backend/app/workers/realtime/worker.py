@@ -95,7 +95,7 @@ def realtime_worker_loop(socketio: SocketIO):
 
             bytes_per_second = session.sample_rate * 2
             has_audio = session_manager.has_new_audio(
-                sid, min_bytes=bytes_per_second
+                sid, min_bytes=int(bytes_per_second * 0.3)
             )
 
             if not has_audio and not session.is_ending:

@@ -11,6 +11,9 @@ from ..services.persistence.session_repository import (
 )
 
 
+from ..config.logging import get_logger
+logger = get_logger("realtime_api")
+
 realtime_bp = Blueprint("realtime", __name__)
 
 
@@ -70,12 +73,11 @@ def finalize_realtime_session(session_id: str):
     )
             
     # Wait up to 5 seconds for background audio processing to finish destroying
+    finalized = True
     if target_session:
         finalized = target_session.finalized_event.wait(timeout=5.0)
         if not finalized:
-            from ..config.logging import get_logger
-            logger = get_logger("realtime_api")
-            logger.warning(f"Session {session_id_int} finalization timed out after 5.0s")
+            logger.warning(f"Session {session_id_int} finalization timed out after 5.0s. Marking FINALIZING.")
 
     db = SessionLocal()
 
@@ -89,7 +91,10 @@ def finalize_realtime_session(session_id: str):
                 session.status = SessionStatus.FAILED
                 logger.warning(f"Session {session_id_int} finalized but no active session found. Marking FAILED.")
             elif session.status != SessionStatus.FAILED:
-                session.status = SessionStatus.COMPLETED
+                if not finalized:
+                    session.status = SessionStatus.FINALIZING
+                else:
+                    session.status = SessionStatus.COMPLETED
                 
             db.add(session)
             db.commit()
@@ -99,7 +104,7 @@ def finalize_realtime_session(session_id: str):
             ApiResponse.ok(
                 {
                     "session_id": session_id_int,
-                    "status": "completed",
+                    "status": session.status.value,
                 }
             ).to_dict()
         ), 200

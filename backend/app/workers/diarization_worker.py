@@ -90,7 +90,6 @@ def process_quick_diarization(session_id: int) -> None:
         
         embeddings = []
         valid_chunks = []
-        short_chunks = []
         MIN_EMBEDDING_DURATION = 1.0
 
         for chunk in existing_chunks:
@@ -101,7 +100,6 @@ def process_quick_diarization(session_id: int) -> None:
                 
             duration = chunk.end_time - chunk.start_time
             if duration < MIN_EMBEDDING_DURATION:
-                short_chunks.append(chunk)
                 continue
 
             chunk_waveform = waveform[:, start_frame:end_frame]
@@ -209,7 +207,7 @@ def process_accurate_diarization(session_id: int) -> None:
         # 2. Run Pyannote on full WAV
         speaker_segments = diarizer.diarize(str(wav_path))
 
-        # 3. Align (this handles splitting/merging as well)
+        # 3. Align (assigns one speaker per Whisper segment with hysteresis)
         aligned_segments = align_transcript_with_speakers(
             result.segments, speaker_segments
         )

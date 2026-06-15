@@ -147,13 +147,14 @@ export function isConnected(): boolean {
 
 // ── Recording Control ──────────────────────────────────────────────
 
-export function startRecording(sessionId: string): void {
+export function startRecording(sessionId: string, sampleRate?: number): void {
   if (!socket.connected) return;
 
   emitStatus("session_started", `Session ${sessionId} started`);
 
   socket.emit("stream_start", {
     session_id: sessionId,
+    sample_rate: sampleRate,
   });
 }
 

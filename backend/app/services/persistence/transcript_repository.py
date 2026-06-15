@@ -31,6 +31,20 @@ def replace_session_chunks(db: Session, session_id: int, chunks: List[Dict]) -> 
     )
     if chunks:
         db.bulk_insert_mappings(TranscriptChunk, chunks)
+        
+    # Cleanup any orphaned speakers for this session that no longer have chunks
+    # (e.g., if a speaker was renamed during a previous diarization run)
+    from ...models.speaker import Speaker
+    db.query(Speaker).filter(
+        Speaker.session_id == session_id,
+        ~Speaker.id.in_(
+            db.query(TranscriptChunk.speaker_id).filter(
+                TranscriptChunk.session_id == session_id,
+                TranscriptChunk.speaker_id.isnot(None)
+            )
+        )
+    ).delete(synchronize_session=False)
+    
     db.commit()
 
 

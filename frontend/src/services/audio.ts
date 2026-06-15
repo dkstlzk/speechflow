@@ -5,8 +5,17 @@ let mediaStream: MediaStream | null = null;
 let sourceNode: MediaStreamAudioSourceNode | null = null;
 let workletNode: AudioWorkletNode | null = null;
 
-export async function startAudioCapture() {
-  if (audioContext) return;
+export function initAudioContext(): number {
+  if (!audioContext) {
+    audioContext = new AudioContext({ sampleRate: 16000 });
+  }
+  return audioContext.sampleRate;
+}
+
+export async function startAudioCapture(): Promise<void> {
+  if (!audioContext) {
+    initAudioContext();
+  }
 
   try {
     mediaStream = await navigator.mediaDevices.getUserMedia({
@@ -37,6 +46,10 @@ export async function startAudioCapture() {
     };
 
     sourceNode.connect(workletNode);
+
+    if (audioContext.state === "suspended") {
+      await audioContext.resume();
+    }
 
     // Bind global lifecycle hook for developer environment sanity
     window.addEventListener("beforeunload", stopAudioCapture);

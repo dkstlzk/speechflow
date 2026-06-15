@@ -5,7 +5,8 @@ export type ProcessingStatus =
   | "completed"
   | "failed"
   | "recording"
-  | "finalizing";
+  | "finalizing"
+  | "diarizing";
 
 export type TranscriptType =
   | "meeting"

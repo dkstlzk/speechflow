@@ -199,7 +199,7 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
 
   useEffect(() => {
     const status = session.data?.status;
-    if (status !== "processing" && status !== "diarizing") {
+    if (status !== "processing" && status !== "diarizing" && status !== "finalizing") {
       stopPolling();
       return;
     }
@@ -214,9 +214,9 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
         if (!next) return;
         if (next.status === "completed") {
           stopPolling();
-          fetchTranscript(controller.signal);
-          fetchSummary(controller.signal);
-          fetchActions(controller.signal);
+          fetchTranscript();
+          fetchSummary();
+          fetchActions();
         } else if (next.status === "failed") {
           stopPolling();
         }
@@ -315,6 +315,7 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
   const showSkeleton =
     processing || diarizing || 
     session.data?.status === "diarizing" || 
+    session.data?.status === "finalizing" ||
     (session.data?.status === "processing" && !summary.data && !actions.data?.length);
   const progressMode = !transcript.data?.segments?.length ? "transcript" : "intelligence";
 

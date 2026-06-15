@@ -28,7 +28,9 @@ export function HistoryPage() {
   }, [query]);
 
   useEffect(() => {
-    // mounted
+    const handleFocus = () => setRetryTrigger((rt) => rt + 1);
+    window.addEventListener("focus", handleFocus);
+    return () => window.removeEventListener("focus", handleFocus);
   }, []);
 
   useEffect(() => {

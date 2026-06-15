@@ -35,7 +35,7 @@ import {
   processSession,
   startRealtimeSession,
 } from "@/services/api";
-import { startAudioCapture, stopAudioCapture } from "@/services/audio";
+import { initAudioContext, startAudioCapture, stopAudioCapture } from "@/services/audio";
 import type {
   ActionItem,
   CaptionUpdate,
@@ -213,6 +213,12 @@ export function RealtimePage() {
     if (startInProgressRef.current) return;
     startInProgressRef.current = true;
 
+    if (!socket.connected) {
+      toast.error("Cannot start recording: Server disconnected.");
+      startInProgressRef.current = false;
+      return;
+    }
+
     try {
       const granted = await requestMic();
       if (!granted) {
@@ -233,12 +239,12 @@ export function RealtimePage() {
       setSummary(null);
       setActions(null);
       
-      setConn("connecting");
       setRec("recording");
       setMicState("recording");
 
       try {
-        startRecording(newSessionId);
+        const rate = initAudioContext();
+        startRecording(newSessionId, rate);
         await startAudioCapture();
       } catch (err: any) {
         await deleteRealtimeSession(newSessionId);

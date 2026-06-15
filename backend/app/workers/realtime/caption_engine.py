@@ -8,7 +8,7 @@ from .worker_state import transcriber
 logger = get_logger(__name__)
 
 CAPTION_WINDOW_SECONDS = 5.0
-CAPTION_INTERVAL_SECONDS = 1.0
+CAPTION_INTERVAL_SECONDS = 0.3
 
 def emit_caption_update(socketio: SocketIO, sid: str, session) -> None:
     now = time.time()
@@ -31,7 +31,8 @@ def emit_caption_update(socketio: SocketIO, sid: str, session) -> None:
         )
         t0 = time.time()
         logger.debug(f"[CaptionEngine] Whisper inference starting for {sid} at {t0:.3f}")
-        result = transcriber.transcribe(audio_np)
+        import eventlet
+        result = eventlet.tpool.execute(transcriber.transcribe, audio_np)
         t1 = time.time()
         logger.debug(f"[CaptionEngine] Whisper inference finished for {sid} at {t1:.3f} (Duration: {t1-t0:.3f}s)")
         text = result.text.strip() if result.text else ""

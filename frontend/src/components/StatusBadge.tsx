@@ -20,6 +20,10 @@ const STYLES: Record<ProcessingStatus, { wrap: string; dot: string }> = {
     wrap: "bg-amber-500/10 text-amber-700 dark:text-amber-300",
     dot: "bg-amber-500 animate-pulse",
   },
+  diarizing: {
+    wrap: "bg-purple-500/10 text-purple-700 dark:text-purple-300",
+    dot: "bg-purple-500 animate-pulse",
+  },
 };
 
 export function StatusBadge({ status }: { status: ProcessingStatus }) {

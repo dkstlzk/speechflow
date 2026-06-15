@@ -38,7 +38,9 @@ def transcribe_and_persist_segment(
 
         t0 = time.time()
         logger.debug(f"[TranscriptEngine] Whisper inference starting for {sid} chunk #{current_chunk_index} at {t0:.3f}")
-        result = transcriber.transcribe(audio_np)
+        # pyrefly: ignore [missing-import]
+        import eventlet
+        result = eventlet.tpool.execute(transcriber.transcribe, audio_np)
         t1 = time.time()
         logger.debug(f"[TranscriptEngine] Whisper inference finished for {sid} chunk #{current_chunk_index} at {t1:.3f} (Duration: {t1-t0:.3f}s)")
         
@@ -54,9 +56,6 @@ def transcribe_and_persist_segment(
             return
 
         from sqlalchemy.exc import IntegrityError
-        from ...db.session import SessionLocal
-        
-        db = SessionLocal()
         try:
             save_transcript_chunks(
                 int(session.session_id),
@@ -78,8 +77,6 @@ def transcribe_and_persist_segment(
                 f"for session {session.session_id}. Session was likely deleted mid-transaction. Error: {e}"
             )
             return
-        finally:
-            db.close()
 
         with session.lock:
             session.persisted_chunk_indices.add(current_chunk_index)

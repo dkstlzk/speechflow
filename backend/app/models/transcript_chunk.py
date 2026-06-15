@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, Text, String
+from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, Text, String, UniqueConstraint
 from sqlalchemy.orm import relationship, backref
 from sqlalchemy.sql import func
 
@@ -21,3 +21,7 @@ class TranscriptChunk(Base):
 
     session = relationship("Session", backref=backref("transcript_chunks", cascade="all, delete-orphan", passive_deletes=True))
     speaker = relationship("Speaker", backref="transcript_chunks")
+
+    __table_args__ = (
+        UniqueConstraint("session_id", "chunk_index", name="uix_session_chunk"),
+    )
