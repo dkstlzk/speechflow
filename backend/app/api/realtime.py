@@ -9,6 +9,7 @@ from ..services.persistence.session_repository import (
     get_session_by_id,
     update_session_status,
 )
+from ..models.session import Session as SessionModel
 
 
 from ..config.logging import get_logger
@@ -82,19 +83,25 @@ def finalize_realtime_session(session_id: str):
     db = SessionLocal()
 
     try:
-        session = get_session_by_id(db, session_id_int)
+        # Use row-level locking to prevent race with destroy_session
+        session = db.query(SessionModel).with_for_update().filter(SessionModel.id == session_id_int).first()
         if session:
             if not session.title:
                 session.title = f"Recording_{session_id_int:03d}"
             
-            if target_session is None and session.status == SessionStatus.RECORDING:
-                session.status = SessionStatus.FAILED
-                logger.warning(f"Session {session_id_int} finalized but no active session found. Marking FAILED.")
-            elif session.status != SessionStatus.FAILED:
-                if not finalized:
+            # If target_session is None, destroy_session already popped it and is likely committing COMPLETED.
+            # Only update status if it's still RECORDING.
+            if session.status == SessionStatus.RECORDING:
+                if target_session is None:
+                    # destroy_session is in flight but hasn't committed yet, mark FINALIZING
                     session.status = SessionStatus.FINALIZING
+                elif not finalized:
+                    session.status = SessionStatus.FINALIZING
+                # If finalized is True, destroy_session is literally committing COMPLETED right now,
+                # but since we hold the lock, it might be waiting for us. So we just let it be,
+                # or set it to FINALIZING and let destroy_session overwrite it.
                 else:
-                    session.status = SessionStatus.COMPLETED
+                    session.status = SessionStatus.FINALIZING
                 
             db.add(session)
             db.commit()

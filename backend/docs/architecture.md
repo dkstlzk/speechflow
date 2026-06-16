@@ -6,26 +6,29 @@ Date: 09/06/2026
 
 Document the finalized backend architecture for SpeechFlow, encompassing the upload transcription pipeline, real-time streaming pipeline, and intelligence layer.
 
+> [!WARNING]
+> This document reflects the Phase 3 Architecture. For the final, fully verified Phase 4 MVP architecture (which includes isolated Pyannote offline diarization for Realtime sessions, FTS, and hard stabilization fixes), please see **[SPEECHFLOW_ARCHITECTURE_CURRENT.md](./SPEECHFLOW_ARCHITECTURE_CURRENT.md)**.
+
 ## Project Status
 
 **Phase 1 — Upload Transcription Pipeline:** Complete
 **Phase 2 — Intelligence Layer:** Complete
 **Phase 3 — Real-Time Streaming Infrastructure:** Complete
-**Phase 4 — Session Management & Retrieval:** Complete
+**Phase 4 — Diarization, Session Management & Retrieval:** Complete
 **Phase 5 — Frontend Integration:** Complete
 
 Implemented scope:
 - Upload API (multipart audio)
-- Realtime WebSocket API (Socket.IO with AudioWorkletNode)
+- Realtime WebSocket API (Socket.IO with AudioContext)
 - FFmpeg preprocessing (16kHz mono WAV)
 - VAD (Voice Activity Detection) segmentation via Silero
 - faster-whisper CPU transcription (live & batch)
-- pyannote diarization (batch upload only)
-- Whisper to diarization alignment
-- Speaker-labeled transcript persistence
+- pyannote diarization (available for both Upload and Realtime offline processing via Quick/Accurate modes)
+- Whisper to diarization alignment with hysteresis
+- Speaker-labeled transcript persistence with unique constraints
 - Intelligence Generation (Classification, Summaries, MoM, Action Items) via Ollama
 - Deterministic transcript chunk and intelligence retrieval APIs
-- Full fault-tolerance with isolated database recovery transactions
+- Full fault-tolerance with isolated database recovery transactions and spawned multiprocessing
 
 ## Core Components
 
@@ -38,14 +41,14 @@ Implemented scope:
 | FFmpeg | Audio normalization pipeline |
 | Silero VAD | Realtime audio chunk segmentation |
 | faster-whisper | CPU transcription engine |
-| pyannote.audio | Speaker diarization |
+| pyannote.audio | Speaker diarization (isolated in multiprocessing.spawn) |
 | Ollama | Local LLM inference engine for intelligent extraction |
-| Background worker threads | Non-blocking execution for realtime streaming, upload processing, and intelligence generation |
+| Background worker threads | Non-blocking execution for realtime streaming and intelligence |
 
 ## Modular Boundaries
 
 - `api/`: Upload, sessions, realtime endpoints
-- `workers/`: Threaded orchestration for `upload_pipeline.py` and `realtime/worker.py`
+- `workers/`: Threaded orchestration for `upload_pipeline.py`, `realtime/worker.py`, and `diarization_worker.py`
 - `websocket.py`: Socket.IO event registrations and lifecycle mapping
 - `services/audio/`: FFmpeg preprocessing wrappers
 - `services/transcription/`: Whisper service, alignment logic, VAD, and `streaming.py` session management
@@ -64,6 +67,7 @@ Implemented scope:
 
 ### 2. Real-Time Pipeline
 `Socket.IO -> Streaming Buffer -> VAD Chunking -> Whisper -> Transcript Persistence -> Finalization -> Intelligence Generation -> Completed`
+*(Optional Offline Diarization can be triggered post-completion)*
 
 ## Session Lifecycle
 
@@ -71,7 +75,7 @@ Upload status flow:
 `pending -> preprocessing -> transcribing -> diarizing -> processing -> completed`
 
 Real-time status flow:
-`recording -> finalizing -> processing -> completed`
+`recording -> finalizing -> processing -> completed` *(can transition to `diarizing` on demand)*
 
 Failure lifecycle:
 `<current_stage> -> failed`
@@ -94,7 +98,7 @@ Final transcript chunks are persisted in chronological order with this shape:
 
 - Real-time pipeline features isolated database recovery transactions. If background WAV conversion fails, the session safely updates to `failed` to prevent frontend polling hangs.
 - Stale, orphaned `recording` sessions are automatically reset to `failed` upon backend startup.
-- Whisper and Pyannote models run warmup tasks via daemon threads on boot.
+- Diarization is heavily sandboxed inside `multiprocessing.spawn` to prevent memory leaks and thread starvation from crashing the main Eventlet loop.
 - Intelligence requests failing via Ollama explicitly trigger `503 Service Unavailable` with `OllamaClientError`.
 - Retrieval enforces deterministic ordering by chunk index and timestamps.
 - Worker cleanup reliably removes temporary input and intermediate WAV files in both success and failure paths.

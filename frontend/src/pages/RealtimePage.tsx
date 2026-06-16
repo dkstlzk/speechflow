@@ -79,11 +79,6 @@ export function RealtimePage() {
   const [deleting, setDeleting] = useState(false);
     const [savedTitle, setSavedTitle] = useState<string | undefined>();
   useEffect(() => {
-    // Connect to websocket immediately on page open
-    connect().catch((err) => {
-      console.error("[RealtimePage] Initial connect failed", err);
-    });
-
     // Subscribe to committed transcript chunks (persisted in DB)
     const off1 = subscribeToTranscript((seg) => {
       if (seg.sessionId && seg.sessionId !== sessionIdRef.current) return;
@@ -110,6 +105,11 @@ export function RealtimePage() {
       if (ev.type === "disconnected" || ev.type === "error") {
         setConn(ev.type === "disconnected" ? "disconnected" : "error");
       }
+    });
+
+    // Connect to websocket after subscriptions are set up
+    connect().catch((err) => {
+      console.error("[RealtimePage] Initial connect failed", err);
     });
 
     return () => {

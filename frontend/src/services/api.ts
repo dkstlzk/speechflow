@@ -108,6 +108,7 @@ export async function getSessions(
     title?: string | null;
     has_audio?: boolean;
     audio_url?: string;
+    duration_seconds?: number;
   };
   const url = query
     ? `${API_BASE}/api/sessions/?q=${encodeURIComponent(query)}`
@@ -122,6 +123,7 @@ export async function getSessions(
     title: s.title ?? undefined,
     has_audio: s.has_audio,
     audio_url: s.audio_url ? `${API_BASE}${s.audio_url}` : undefined,
+    durationSec: s.duration_seconds ?? undefined,
   }));
   return { data: sessions, ok: true };
 }
@@ -137,6 +139,7 @@ export async function getSession(id: string, signal?: AbortSignal): Promise<ApiR
     has_audio?: boolean;
     audio_url?: string;
     title?: string | null;
+    duration_seconds?: number;
   };
   const raw = await apiFetch<BS>(`${API_BASE}/api/sessions/${id}`, { signal, cache: "no-store" });
   return {
@@ -149,6 +152,7 @@ export async function getSession(id: string, signal?: AbortSignal): Promise<ApiR
       title: raw.data.title ?? undefined,
       has_audio: raw.data.has_audio,
       audio_url: raw.data.audio_url ? `${API_BASE}${raw.data.audio_url}` : undefined,
+      durationSec: raw.data.duration_seconds ?? undefined,
     },
     ok: true,
   };

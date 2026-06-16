@@ -42,7 +42,7 @@ def create_app() -> Flask:
     app.config["MAX_CONTENT_LENGTH"] = settings.MAX_CONTENT_LENGTH
     app.config["ALLOWED_EXTENSIONS"] = settings.ALLOWED_EXTENSIONS
 
-    CORS(app, resources={r"/api/*": {"origins": cors_origins}})
+    CORS(app, resources={r"/api/*": {"origins": cors_origins, "expose_headers": ["Content-Range", "Accept-Ranges", "Content-Length"]}})
 
     register_blueprints(app)
     register_socketio_events(socketio)

@@ -4,7 +4,7 @@ SpeechFlow is a Flask-first speech-to-text and intelligent transcript processing
 
 It converts both uploaded audio/video files and real-time streaming audio into structured outputs including:
 
-- Speaker-labeled transcripts
+- Speaker-labeled transcripts (Diarization)
 - Live transcript streaming
 - Summaries
 - Meeting Minutes (MoM)
@@ -28,35 +28,42 @@ The project is designed around fully local, CPU-only inference using open-source
 - Browser disconnect recovery
 - Stale session cleanup
 - Transcript ownership isolation
-- Delta stabilization
-- Microphone privacy lifecycle
+- Fast "live disposable captions" (0.3s) and persistent committed chunks
+- Atomic row-level database locking (`SELECT FOR UPDATE`)
 
 #### Realtime Streaming Infrastructure
-- Bidirectional Socket.IO transport
-- In-browser microphone capture via `AudioWorkletNode`
+- Bidirectional Socket.IO transport (Eventlet)
+- In-browser microphone capture via WebRTC / `AudioContext`
 - Chunk-based VAD (Voice Activity Detection) segmentation
 - Live Faster-Whisper transcription with rolling acoustic context
 - Delta-based transcript stabilization (Tentative vs Committed text)
 - Resilient watchdog architecture for dropped connections
 - Strict hardware privacy lifecycle (microphone teardown on pause)
 
+#### Speaker Diarization (Offline)
+- Two-Tier processing: "Quick" (clustering embeddings) and "Accurate" (full re-transcription + Pyannote)
+- Isolated process execution (`multiprocessing.spawn`) to prevent memory leaks and segfaults
+- Hysteresis-based alignment of Whisper transcript chunks to Pyannote speaker segments
+- Orphan speaker cleanup and mapping
+
 #### Intelligent Transcript Processing
 - Transcript classification (e.g., Meeting, Lecture, Brainstorm)
 - Summary and Meeting Minutes (MoM) generation
-- Action item extraction
+- Action item extraction (with parsed deliverables)
 - Local LLM inference via Ollama (phi3:mini)
 
 #### Persistence & Management
-- Unified session and transcript chunk storage
+- Unified session and transcript chunk storage with strict Unique Constraints
 - Support for streaming real-time persistence
 - History tracking, session deletion, and cascading cleanup
-- Indexed session discovery using PostgreSQL FTS
+- Indexed session discovery using PostgreSQL FTS (Full-Text Search)
 
 #### Frontend UI
-- Modern React + TypeScript interface
+- Modern React + TypeScript interface ("Lovable" UI)
 - Real-time live transcript timeline rendering
-- Intelligent loading skeletons and state management
-- Session editing and dashboarding
+- Intelligent loading skeletons and declarative state management
+- Realtime Audio Visualizer and connection status badge
+- Transcript seek navigation and `.txt` export
 
 ---
 
@@ -66,18 +73,24 @@ The project is designed around fully local, CPU-only inference using open-source
 flowchart TD
 
     subgraph Client
-        A[Browser Mic] --> B[AudioWorklet]
+        A[Browser Mic] --> B[AudioContext]
         B --> C[Socket.IO Client]
     end
 
     subgraph Backend Transport
         C -->|Raw PCM| D[Session Manager]
-        D --> E[Realtime Worker]
+        D --> E[Realtime Worker (Eventlet Synchronous)]
     end
 
     subgraph Speech Pipeline
         E --> F[Silero VAD]
         F -->|Segments| G[Faster-Whisper]
+    end
+    
+    subgraph Diarization Pipeline
+        G -->|Offline Post-Processing| M[Pyannote.audio]
+        M --> N[Speaker Alignment]
+        N --> H
     end
 
     subgraph Database
@@ -99,11 +112,12 @@ flowchart TD
 
 | Layer | Technology |
 | :--- | :--- |
-| **Realtime Transport** | Socket.IO (Flask-SocketIO) |
+| **Realtime Transport** | Socket.IO (Flask-SocketIO + Eventlet) |
 | **Backend Framework** | Flask, SQLAlchemy |
-| **Frontend Framework** | React, TypeScript, Vite |
+| **Frontend Framework** | React, TypeScript, Vite, Tailwind CSS |
 | **Speech Recognition** | Faster-Whisper |
 | **Voice Activity Detection** | Silero VAD |
+| **Speaker Diarization** | Pyannote.audio (wespeaker-voxceleb) |
 | **Database** | PostgreSQL |
 | **Intelligence Generation** | Ollama (phi3:mini) |
 | **Audio Processing** | FFmpeg, pydub, AudioWorkletNode |
@@ -126,6 +140,7 @@ DATABASE_URL=postgresql://user:pass@localhost/speechflow
 OLLAMA_ENDPOINT=http://localhost:11434
 OLLAMA_TIMEOUT_SECONDS=120
 HF_TOKEN=your_huggingface_token
+SECRET_KEY=generate_a_secure_random_key_here
 ```
 
 ### Backend & Frontend
@@ -154,24 +169,23 @@ npm run dev
 ### Phase 3 — Streaming Infrastructure
 ✅ Complete
 
-### Phase 4 — Session Management & Retrieval
+### Phase 4 — Diarization, Hardening & Retrieval
 ✅ Complete
 
 ### Phase 5 — Frontend Integration
 ✅ Complete
 
-### Phase 6 — Testing, Optimization & Deployment
-🚧 In Progress (Demo Ready / Controlled User Testing)
+### Phase 6 — Deployment & Multi-Tenant Support
+🚧 Pending
 
 ---
 
 ## Current Limitations
 
-- **Infrastructure**: Single backend instance; no horizontal scaling or Redis adapter.
-- **State Management**: Realtime session manager operates entirely in-memory.
-- **Performance**: CPU-only transcription introduces latency on older hardware.
-- **Features**: Advanced semantic retrieval is not yet implemented. Speaker diarization is currently optimized for the batch upload pipeline only.
-- **Intent**: Realtime transcription is currently optimized for MVP demonstrations and controlled user testing rather than massive concurrency.
+- **Authentication/Authorization**: There is currently no authentication layer. Any client with network access can read or delete any session. The backend should not be exposed to the public internet.
+- **Diarization Quality vs Realtime Compression**: Realtime WebRTC audio capture applies aggressive Auto Gain Control (AGC) and Noise Suppression. This destroys acoustic embeddings, forcing Pyannote to artificially merge speakers (e.g. 5 real speakers may be clustered as 3). This is an expected hardware/browser limitation, not a pipeline bug.
+- **Eventlet Deprecation**: The backend uses `eventlet` for WebSocket concurrency. Due to `greenlet` thread-clash crashes, heavy ML tasks currently block the Eventlet hub synchronously. A future migration to `asyncio` is recommended to natively handle asynchronous background processing.
+- **Storage Quotas**: There are no application-level storage quotas.
 
 ---
 

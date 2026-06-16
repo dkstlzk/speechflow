@@ -38,9 +38,7 @@ def transcribe_and_persist_segment(
 
         t0 = time.time()
         logger.debug(f"[TranscriptEngine] Whisper inference starting for {sid} chunk #{current_chunk_index} at {t0:.3f}")
-        # pyrefly: ignore [missing-import]
-        import eventlet
-        result = eventlet.tpool.execute(transcriber.transcribe, audio_np)
+        result = transcriber.transcribe(audio_np)
         t1 = time.time()
         logger.debug(f"[TranscriptEngine] Whisper inference finished for {sid} chunk #{current_chunk_index} at {t1:.3f} (Duration: {t1-t0:.3f}s)")
         
