@@ -1,6 +1,6 @@
 import time
-from flask import request
-from flask_socketio import SocketIO, emit
+from flask import request, session
+from flask_socketio import SocketIO, emit, disconnect
 
 from ..config.logging import get_logger
 from ..services.transcription.streaming import session_manager
@@ -12,6 +12,10 @@ logger = get_logger(__name__)
 def register_events(socketio: SocketIO) -> None:
     @socketio.on("connect")
     def handle_connect():
+        if not session.get("authenticated"):
+            logger.warning(f"[Socket.IO] Unauthorized connection attempt: {request.sid}")
+            return False # Reject connection
+            
         logger.info(f"[Socket.IO] Connected: {request.sid}")
         emit("server_status", {"status": "connected"})
 

@@ -16,6 +16,7 @@ export const socket: Socket = io(API_URL, {
   autoConnect: false,
   reconnection: false,
   transports: ["websocket"],
+  withCredentials: true,
 });
 
 type TranscriptListener = (chunk: TranscriptSegment) => void;

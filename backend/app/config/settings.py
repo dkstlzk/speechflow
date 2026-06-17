@@ -19,6 +19,8 @@ class Settings:
             raise RuntimeError("SECRET_KEY environment variable must be set")
         if not self.DATABASE_URL:
             raise RuntimeError("DATABASE_URL environment variable is required")
+        if not self.ADMIN_PASSWORD:
+            raise RuntimeError("ADMIN_PASSWORD environment variable is required (set it in .env to enable the auth wall)")
     SOCKETIO_ASYNC_MODE: str = os.getenv("SOCKETIO_ASYNC_MODE", "threading")
     CORS_ORIGINS: str = os.getenv("CORS_ORIGINS", "*")
     PROJECT_ROOT: str = str(Path(__file__).resolve().parents[3])
@@ -45,5 +47,6 @@ class Settings:
     )
     HF_TOKEN: str = os.getenv("HF_TOKEN", "")
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
+    ADMIN_PASSWORD: str = os.getenv("ADMIN_PASSWORD")
 
 settings = Settings()

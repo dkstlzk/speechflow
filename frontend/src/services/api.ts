@@ -24,10 +24,12 @@ export class ApiError extends Error {
 
 interface FetchOptions extends RequestInit {
   timeoutMs?: number;
+  credentials?: RequestCredentials;
 }
 
 async function apiFetch<T>(input: string, init: FetchOptions = {}): Promise<ApiResponse<T>> {
   const { timeoutMs, ...rest } = init;
+  rest.credentials = rest.credentials || "include";
   const controller = new AbortController();
   const timer = timeoutMs ? setTimeout(() => controller.abort(), timeoutMs) : null;
 

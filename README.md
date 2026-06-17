@@ -50,7 +50,7 @@ The project is designed around fully local, CPU-only inference using open-source
 - Transcript classification (e.g., Meeting, Lecture, Brainstorm)
 - Summary and Meeting Minutes (MoM) generation
 - Action item extraction (with parsed deliverables)
-- Local LLM inference via Ollama (phi3:mini)
+- Local LLM inference via Ollama (qwen2.5:3b)
 
 #### Persistence & Management
 - Unified session and transcript chunk storage with strict Unique Constraints
@@ -70,6 +70,14 @@ The project is designed around fully local, CPU-only inference using open-source
 - Realtime Audio Visualizer and connection status badge
 - Transcript seek navigation
 - Transcript export (.txt and .docx)
+
+#### Authentication & Access Control
+- Session-based authentication using Flask secure cookies
+- Login / Logout workflow
+- Protected API routes
+- Protected Socket.IO realtime connections
+- Session persistence across browser refreshes
+- Single-admin deployment model for MVP usage
 
 ---
 
@@ -125,7 +133,7 @@ flowchart TD
 | **Voice Activity Detection** | Silero VAD |
 | **Speaker Diarization** | Pyannote.audio (wespeaker-voxceleb) |
 | **Database** | PostgreSQL |
-| **Intelligence Generation** | Ollama (phi3:mini) |
+| **Intelligence Generation** | Ollama (qwen2.5:3b) |
 | **Audio Processing** | FFmpeg, pydub, AudioWorkletNode |
 
 ---
@@ -139,32 +147,31 @@ flowchart TD
 - FFmpeg
 - Ollama
 
-### Environment Variables
+### Required Environment Variables
+
+Required:
 
 ```bash
-DATABASE_URL=postgresql://user:pass@localhost/speechflow
-OLLAMA_ENDPOINT=http://localhost:11434
-OLLAMA_TIMEOUT_SECONDS=120
-HF_TOKEN=your_huggingface_token
 SECRET_KEY=generate_a_secure_random_key_here
+DATABASE_URL=postgresql://user:pass@localhost/speechflow
+ADMIN_PASSWORD=your_admin_password
 ```
 
-### Backend & Frontend
+Required for diarization:
 
 ```bash
-# Backend
-pip install -r backend/requirements/base.txt
-python -m backend.app.main
+HF_TOKEN=your_huggingface_token
+```
 
-# Frontend
-cd frontend
-npm install
-npm run dev
+Optional:
+
+```bash
+OLLAMA_ENDPOINT=http://localhost:11434
+OLLAMA_TIMEOUT_SECONDS=120
+LOG_LEVEL=INFO
 ```
 
 ---
-
-## Roadmap
 
 ### Phase 1 — Upload Pipeline
 ✅ Complete
@@ -172,27 +179,53 @@ npm run dev
 ### Phase 2 — Intelligent Processing Layer
 ✅ Complete
 
-### Phase 3 — Streaming Infrastructure
+### Phase 3 — Realtime Streaming Infrastructure
 ✅ Complete
 
-### Phase 4 — Diarization, Hardening & Retrieval
+### Phase 4 — Diarization, Reliability & Production Hardening
 ✅ Complete
 
-### Phase 5 — Frontend Integration & User Experience
+### Phase 5 — Authentication & MVP Stabilization
 ✅ Complete
 
-### Phase 6 — Deployment, Authentication & Multi-Tenant Support
-🚧 Pending
+### Future Work
+🚧 Multi-user support
+🚧 User ownership and permissions
+🚧 Deployment hardening
+🚧 Eventlet migration
+🚧 Storage quotas
 
 ---
 
 ## Current Limitations
 
-- Authentication and Authorization are not implemented.
-- The backend should not be exposed directly to the public internet.
-- Eventlet is used for realtime transport and remains a future migration candidate.
+- Authentication currently supports a single administrative user.
+- Multi-user ownership and permissions are not implemented.
+- Eventlet remains the realtime transport layer and is a future migration candidate.
 - No application-level storage quotas are enforced.
-- Realtime audio preprocessing performed by browsers can reduce diarization accuracy.
+- Delete requests during active diarization may still waste processing resources.
+- Browser audio preprocessing (AGC, noise suppression, echo cancellation, microphone quality, room acoustics) can reduce speaker separability and lower realtime diarization accuracy compared to uploaded audio.
+
+---
+
+## Realtime Diarization Note
+
+Realtime recordings and uploaded files do not necessarily produce identical diarization results.
+
+Browser audio capture pipelines commonly apply:
+
+- Automatic Gain Control (AGC)
+- Noise Suppression
+- Echo Cancellation
+
+These transformations alter speaker characteristics before the audio reaches the diarization models.
+
+As a result:
+
+- Uploaded source audio may produce more accurate speaker separation.
+- Realtime microphone recordings of the same content may produce fewer detected speakers.
+
+This is an expected limitation of browser-based audio capture and not necessarily a defect in the diarization pipeline.
 
 ---
 
