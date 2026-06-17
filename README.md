@@ -58,12 +58,18 @@ The project is designed around fully local, CPU-only inference using open-source
 - History tracking, session deletion, and cascading cleanup
 - Indexed session discovery using PostgreSQL FTS (Full-Text Search)
 
+#### Search & Retrieval
+- PostgreSQL Full-Text Search (FTS)
+- Transcript search highlighting
+- Session discovery and filtering
+
 #### Frontend UI
 - Modern React + TypeScript interface ("Lovable" UI)
 - Real-time live transcript timeline rendering
 - Intelligent loading skeletons and declarative state management
 - Realtime Audio Visualizer and connection status badge
-- Transcript seek navigation and `.txt` export
+- Transcript seek navigation
+- Transcript export (.txt and .docx)
 
 ---
 
@@ -73,37 +79,37 @@ The project is designed around fully local, CPU-only inference using open-source
 flowchart TD
 
     subgraph Client
-        A[Browser Mic] --> B[AudioContext]
+        A[Browser Microphone] --> B[Audio Context]
         B --> C[Socket.IO Client]
     end
 
-    subgraph Backend Transport
-        C -->|Raw PCM| D[Session Manager]
-        D --> E[Realtime Worker (Eventlet Synchronous)]
+    subgraph Backend
+        C -->|Raw PCM Audio| D[Session Manager]
+        D --> E[Realtime Worker]
     end
 
     subgraph Speech Pipeline
         E --> F[Silero VAD]
-        F -->|Segments| G[Faster-Whisper]
-    end
-    
-    subgraph Diarization Pipeline
-        G -->|Offline Post-Processing| M[Pyannote.audio]
-        M --> N[Speaker Alignment]
-        N --> H
+        F -->|Speech Segments| G[Faster Whisper]
     end
 
-    subgraph Database
-        G -->|Transcript Chunks| H[(PostgreSQL)]
+    subgraph Diarization Pipeline
+        G -->|Offline Processing| M[Pyannote Audio]
+        M --> N[Speaker Alignment]
+        N --> H[(PostgreSQL)]
+    end
+
+    subgraph Persistence
+        G -->|Transcript Chunks| H
     end
 
     subgraph Intelligence Layer
         H --> I[Ollama Classifier]
-        I --> J[Summary & Action Items]
+        I --> J[Summary and Action Items]
         J --> H
     end
 
-    H --> K[Frontend UI]
+    H --> K[React Frontend]
 ```
 
 ---
@@ -172,20 +178,21 @@ npm run dev
 ### Phase 4 — Diarization, Hardening & Retrieval
 ✅ Complete
 
-### Phase 5 — Frontend Integration
+### Phase 5 — Frontend Integration & User Experience
 ✅ Complete
 
-### Phase 6 — Deployment & Multi-Tenant Support
+### Phase 6 — Deployment, Authentication & Multi-Tenant Support
 🚧 Pending
 
 ---
 
 ## Current Limitations
 
-- **Authentication/Authorization**: There is currently no authentication layer. Any client with network access can read or delete any session. The backend should not be exposed to the public internet.
-- **Diarization Quality vs Realtime Compression**: Realtime WebRTC audio capture applies aggressive Auto Gain Control (AGC) and Noise Suppression. This destroys acoustic embeddings, forcing Pyannote to artificially merge speakers (e.g. 5 real speakers may be clustered as 3). This is an expected hardware/browser limitation, not a pipeline bug.
-- **Eventlet Deprecation**: The backend uses `eventlet` for WebSocket concurrency. Due to `greenlet` thread-clash crashes, heavy ML tasks currently block the Eventlet hub synchronously. A future migration to `asyncio` is recommended to natively handle asynchronous background processing.
-- **Storage Quotas**: There are no application-level storage quotas.
+- Authentication and Authorization are not implemented.
+- The backend should not be exposed directly to the public internet.
+- Eventlet is used for realtime transport and remains a future migration candidate.
+- No application-level storage quotas are enforced.
+- Realtime audio preprocessing performed by browsers can reduce diarization accuracy.
 
 ---
 
