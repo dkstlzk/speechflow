@@ -72,6 +72,11 @@ socket.on("stream_resumed", (data) => {
   emitStatus("stream_resumed", "Recording resumed", data?.session_id ? String(data.session_id) : undefined);
 });
 
+socket.on("force_disconnect", () => {
+  emitStatus("disconnected", "Forced disconnect from server");
+  socket.disconnect();
+});
+
 // ── Caption Channel (disposable, UI only) ──────────────────────────
 
 socket.on("caption_update", (data) => {

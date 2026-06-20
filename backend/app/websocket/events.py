@@ -1,6 +1,6 @@
 import time
 from flask import request, session
-from flask_socketio import SocketIO, emit, disconnect
+from flask_socketio import SocketIO, emit, disconnect, join_room
 
 from ..config.logging import get_logger
 from ..services.transcription.streaming import session_manager
@@ -16,7 +16,8 @@ def register_events(socketio: SocketIO) -> None:
             logger.warning(f"[Socket.IO] Unauthorized connection attempt: {request.sid}")
             return False # Reject connection
             
-        logger.info(f"[Socket.IO] Connected: {request.sid}")
+        join_room("admin")
+        logger.info(f"[Socket.IO] Connected: {request.sid} (joined admin room)")
         emit("server_status", {"status": "connected"})
 
     @socketio.on("disconnect")

@@ -58,6 +58,9 @@ async function apiFetch<T>(input: string, init: FetchOptions = {}): Promise<ApiR
   }
 
   if (!res.ok || json.success === false) {
+    if (res.status === 401) {
+      window.dispatchEvent(new Event("auth:unauthorized"));
+    }
     const msg = (json && json.error) || `Request failed with status ${res.status}`;
     throw new ApiError(msg, res.status);
   }

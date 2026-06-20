@@ -3,6 +3,9 @@ import eventlet
 eventlet.monkey_patch()
 
 import threading
+import signal
+import sys
+import time
 from flask import Flask, jsonify
 from flask_cors import CORS
 from flask_socketio import SocketIO
@@ -105,6 +108,51 @@ if __name__ == "__main__":
         target=_warm_pyannote,
         daemon=True,
     ).start()
+
+    def periodic_recovery_loop():
+        while True:
+            time.sleep(600)  # 10 minutes
+            logger.info("Running periodic stale session recovery...")
+            db = None
+            try:
+                from .services.persistence.session_repository import recover_stale_sessions
+                from .db.session import SessionLocal
+                db = SessionLocal()
+                recovered = recover_stale_sessions(db)
+                if recovered > 0:
+                    logger.info(f"Periodic recovery completed. Recovered={recovered}")
+            except Exception as e:
+                logger.error(f"Periodic recovery failed: {e}")
+            finally:
+                if db is not None:
+                    db.close()
+
+    threading.Thread(
+        target=periodic_recovery_loop,
+        daemon=True,
+    ).start()
+
+    def handle_shutdown(signum, frame):
+        logger.info(f"Received signal {signum}. Initiating graceful shutdown...")
+        from .services.transcription.streaming import session_manager
+        for sid, session in list(session_manager.active_sessions.items()):
+            session.is_ending = True
+        
+        # Wait up to 10 seconds for worker loop to drain active sessions
+        wait_seconds = 0
+        while session_manager.active_sessions and wait_seconds < 10:
+            time.sleep(1.0)
+            wait_seconds += 1
+            
+        logger.info("Active sessions drained. Shutting down thread pool...")
+        from .workers.realtime.worker_state import inference_executor
+        inference_executor.shutdown(wait=True)
+        
+        logger.info("Shutdown complete.")
+        sys.exit(0)
+
+    signal.signal(signal.SIGTERM, handle_shutdown)
+    signal.signal(signal.SIGINT, handle_shutdown)
 
     import os
     is_debug = os.environ.get("FLASK_DEBUG", "0") == "1"

@@ -60,6 +60,11 @@ class StreamingSession:
     lock: threading.Lock = field(default_factory=threading.Lock)
     finalized_event: threading.Event = field(default_factory=threading.Event)
 
+    # Concurrency flags
+    is_transcribing: bool = False
+    is_captioning: bool = False
+    final_chunk_submitted: bool = False
+
 
 @dataclass
 class SpeechSegment:

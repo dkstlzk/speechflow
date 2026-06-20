@@ -23,6 +23,22 @@ def login():
 def logout():
     session.clear()
     logger.info("Admin user logged out.")
+    try:
+        from ..main import socketio
+        try:
+            manager = socketio.server.manager
+            if hasattr(manager, 'get_participants'):
+                room_sids = list(manager.get_participants('/', 'admin'))
+            else:
+                room_sids = list(manager.rooms.get('/', {}).get('admin', {}).keys())
+                
+            for sid in room_sids:
+                socketio.server.disconnect(sid)
+                logger.info(f"Force disconnected admin socket sid: {sid}")
+        except Exception as inner_e:
+            logger.warning(f"Failed to gracefully retrieve admin room participants: {inner_e}")
+    except Exception as e:
+        logger.error(f"Failed to disconnect sockets: {e}")
     return jsonify({"success": True, "message": "Logged out successfully"})
 
 @auth_bp.get("/status")

@@ -36,20 +36,25 @@ class WhisperTranscriptionService:
         self.device = device or settings.WHISPER_DEVICE
         self.compute_type = compute_type or settings.WHISPER_COMPUTE_TYPE
         self._model = model
+        
+        import threading
+        self._lock = threading.Lock()
 
     def _get_model(self) -> WhisperModel:
         if self._model is None:
-            logger.info(
-                "Loading Whisper model",
-                extra={
-                    "model": self.model_name,
-                    "device": self.device,
-                    "compute_type": self.compute_type,
-                },
-            )
-            self._model = WhisperModel(
-                self.model_name, device=self.device, compute_type=self.compute_type
-            )
+            with self._lock:
+                if self._model is None:
+                    logger.info(
+                        "Loading Whisper model",
+                        extra={
+                            "model": self.model_name,
+                            "device": self.device,
+                            "compute_type": self.compute_type,
+                        },
+                    )
+                    self._model = WhisperModel(
+                        self.model_name, device=self.device, compute_type=self.compute_type, cpu_threads=2
+                    )
         return self._model
 
     def transcribe(self, audio: Union[str, np.ndarray]) -> TranscriptionResult:
