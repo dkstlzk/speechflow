@@ -116,6 +116,7 @@ export function RealtimePage() {
       off1();
       off2();
       off3();
+      stopAudioCapture();
       disconnect();
     };
   }, []);
@@ -383,10 +384,10 @@ export function RealtimePage() {
           </div>
           <div>
             <p className="text-xs uppercase tracking-wide text-muted-foreground">Duration</p>
-            <p className="mt-1.5 flex items-center gap-3">
+            <div className="mt-1.5 flex items-center gap-3">
               <RecordingTimer running={rec === "recording"} resetKey={resetKey} />
               <AudioVisualizer isRecording={rec === "recording"} />
-            </p>
+            </div>
           </div>
         </div>
         <div className="mt-5 border-t border-border pt-4">
