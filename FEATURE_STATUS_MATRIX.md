@@ -14,7 +14,7 @@ This matrix serves as the definitive source of truth for the implementation stat
 | **Delta Stabilization** | Algorithm to diff "tentative" vs "committed" transcript chunks. | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | Prevents UI flickering and duplicate overlapping sentences. |
 | **Transcript Persistence** | Writing committed chunks to the database with timestamps. | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | Fully automated; legacy "review before save" logic deprecated. |
 | **Timeline Rendering** | Frontend rendering of transcript segments synced to audio. | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | Provides chronological context. |
-| **Session Classification** | GPT prompt to classify session type (e.g., Meeting). | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | Requires local Ollama (phi3:mini) instance running. |
+| **Session Classification** | GPT prompt to classify session type (e.g., Meeting). | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | Requires local Ollama (qwen2.5:3b) instance running. |
 | **Summary Generation** | GPT generation of meeting summaries. | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | Synchronous execution; may cause timeouts on massive transcripts. |
 | **Action Item Extraction** | GPT extraction of structured to-do lists. | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | Currently highly dependent on prompt adherence. |
 | **Audio Playback** | Standard HTML5 playback of stitched `.wav` streams. | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | Integrated into the Lovable UI redesign. |

@@ -322,8 +322,8 @@ def trigger_quick_diarization(session_id: str):
         session = db.query(Session).with_for_update().filter(Session.id == session_id_int).first()
         if not session:
             return jsonify(ApiResponse.fail("Session not found").to_dict()), 404
-        if session.status in [SessionStatus.RECORDING, SessionStatus.DIARIZING, SessionStatus.PROCESSING]:
-            return jsonify(ApiResponse.fail("Session is currently recording or processing").to_dict()), 400
+        if session.status != SessionStatus.COMPLETED:
+            return jsonify(ApiResponse.fail("Session must be COMPLETED to run diarization").to_dict()), 400
         
         session.status = SessionStatus.DIARIZING
         db.commit()
@@ -355,8 +355,8 @@ def trigger_accurate_diarization(session_id: str):
         session = db.query(Session).with_for_update().filter(Session.id == session_id_int).first()
         if not session:
             return jsonify(ApiResponse.fail("Session not found").to_dict()), 404
-        if session.status in [SessionStatus.RECORDING, SessionStatus.DIARIZING, SessionStatus.PROCESSING]:
-            return jsonify(ApiResponse.fail("Session is currently recording or processing").to_dict()), 400
+        if session.status != SessionStatus.COMPLETED:
+            return jsonify(ApiResponse.fail("Session must be COMPLETED to run diarization").to_dict()), 400
         
         session.status = SessionStatus.DIARIZING
         db.commit()

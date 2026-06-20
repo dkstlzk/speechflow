@@ -27,6 +27,8 @@ export interface Session {
   title?: string;
   has_audio?: boolean;
   audio_url?: string;
+  diarization_mode?: string;
+  diarized_at?: string;
 }
 
 export interface TranscriptSegment {

@@ -17,6 +17,17 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
   ApiError,
   getActions,
   getSession,
@@ -391,6 +402,19 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
             )}
             {duration && <span>· {duration}</span>}
           </div>
+          {session.data?.diarization_mode && session.data?.diarized_at && (
+            <div className="mt-3 flex items-center gap-2 text-xs">
+              <span className="font-medium text-muted-foreground">Diarization:</span>
+              <span className="rounded-md bg-secondary px-2 py-1 font-medium capitalize text-secondary-foreground">
+                {session.data.diarization_mode.replace("_", " ")}
+              </span>
+              <span className="text-muted-foreground">
+                Completed: {new Date(session.data.diarized_at).toLocaleString(undefined, {
+                  day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit"
+                })}
+              </span>
+            </div>
+          )}
         </div>
         <div className="flex flex-wrap justify-end gap-2">
           {session.data && transcript.data?.segments && (
@@ -420,9 +444,25 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
           <Button variant="outline" size="sm" onClick={onQuickDiarization} disabled={diarizing || session.data?.status === "diarizing" || session.data?.status === "processing"}>
             ⚡ Quick Labels
           </Button>
-          <Button variant="outline" size="sm" onClick={onAccurateDiarization} disabled={diarizing || session.data?.status === "diarizing" || session.data?.status === "processing"}>
-            🎯 Accurate Diarization
-          </Button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="outline" size="sm" disabled={diarizing || session.data?.status === "diarizing" || session.data?.status === "processing"}>
+                🎯 Accurate Diarization
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Run Accurate Diarization?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will run a full Whisper + Pyannote rebuild. Your existing transcript will be permanently overwritten. Proceed?
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={onAccurateDiarization}>Proceed</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
           <Button variant="outline" size="sm" onClick={() => load()}>
             <RefreshCw className="h-3.5 w-3.5" />
             Refresh

@@ -26,7 +26,7 @@ A functional, albeit slow, batch processing pipeline that successfully transcrib
 Raw transcripts are difficult to read. We needed a way to derive value from the text, such as summarizing long meetings and extracting action items, while maintaining the "local-only" privacy requirement.
 
 **Solution**
-We integrated the Ollama framework running the `phi3:mini` model. We built an intelligence pipeline that hooked into the finalization of the upload process. The pipeline chunked long transcripts, executed map-reduce style summarization, and ran targeted prompts to extract Action Items and Meeting Minutes (MoM).
+We integrated the Ollama framework running the `qwen2.5:3b` model. We built an intelligence pipeline that hooked into the finalization of the upload process. The pipeline chunked long transcripts, executed map-reduce style summarization, and ran targeted prompts to extract Action Items and Meeting Minutes (MoM).
 
 **Key Commits**
 * `5f5900a` - Phase 2 integration complete and working

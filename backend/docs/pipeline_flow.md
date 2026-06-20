@@ -43,7 +43,7 @@ Define the finalized execution flow and transcript reconstruction behavior for b
 ## Intelligence Flow (Local LLM via Ollama)
 
 - Requires completed transcript.
-- Uses `phi3:mini` via Ollama backend.
+- Uses `qwen2.5:3b` via Ollama backend.
 - `Classifier` assigns a type (e.g. `meeting`, `lecture`, `casual_conversation`).
 - `SummaryGenerator` creates a paragraph summary.
 - If type is `meeting` or similar, `MoMGenerator` creates detailed Meeting Minutes.

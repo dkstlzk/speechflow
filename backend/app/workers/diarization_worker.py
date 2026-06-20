@@ -126,7 +126,7 @@ def process_quick_diarization(session_id: int) -> None:
                     n_clusters=None,
                     metric="cosine",
                     linkage="average",
-                    distance_threshold=0.3
+                    distance_threshold=settings.QUICK_DIARIZATION_THRESHOLD
                 )
                 labels = clustering.fit_predict(embeddings_np)
             

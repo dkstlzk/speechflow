@@ -57,7 +57,7 @@ Implemented scope:
 - `services/persistence/`: Dedicated repositories for sessions, speakers, transcripts, summaries, and action items
 - `services/session/`: Aggregated retrieval assembly
 - `models/`: SQLAlchemy entities (`Session`, `Speaker`, `TranscriptChunk`, `Summary`, `ActionItem`)
-- `db/`: Engine, session bootstrap, and Alembic migrations
+- `db/`: Engine, session bootstrap, and lightweight migrations
 - `config/`: Runtime settings and logging
 
 ## Finalized Execution Flows

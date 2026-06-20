@@ -83,21 +83,6 @@ def classify_transcript(
 
     parsed = raw.strip().lower().split("\n")[0].strip().rstrip(".")
 
-    if parsed == "conversation":
-        lower = transcript.lower()
-
-        meeting_signals = [
-            "attendance",
-            "student success",
-            "action item",
-            "next steps",
-            "meeting",
-            "committee",
-        ]
-
-        if sum(term in lower for term in meeting_signals) >= 2:
-            return "meeting"
-
     if parsed in VALID_TYPES:
         return parsed
 

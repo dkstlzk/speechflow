@@ -201,6 +201,7 @@ LOG_LEVEL=INFO
 
 - Authentication currently supports a single administrative user.
 - Multi-user ownership and permissions are not implemented.
+- **Deployment Architecture Constraint**: SpeechFlow currently assumes a single-process deployment (`gunicorn -w 1`) using Eventlet, without a Redis message queue backplane. Horizontal scaling requires migrating to a Redis-backed Socket.IO configuration.
 - Eventlet remains the realtime transport layer and is a future migration candidate.
 - No application-level storage quotas are enforced.
 - Delete requests during active diarization may still waste processing resources.
