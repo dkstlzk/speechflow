@@ -8,6 +8,7 @@ os.environ["TEMP_DIR"] = temp_dir
 os.environ["UPLOAD_DIR"] = temp_dir
 os.environ["DATABASE_URL"] = f"sqlite:///{temp_dir}/test.db"
 os.environ["SECRET_KEY"] = "test-only-key"
+os.environ["ADMIN_PASSWORD"] = "test-password"
 
 from backend.app import create_app
 from backend.app.db import Base, engine, SessionLocal
@@ -19,6 +20,11 @@ def app():
     app = create_app()
     app.config["TESTING"] = True
     return app
+
+@pytest.fixture(autouse=True)
+def mock_auth(client):
+    with client.session_transaction() as sess:
+        sess["authenticated"] = True
 
 
 @pytest.fixture

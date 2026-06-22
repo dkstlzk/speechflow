@@ -38,6 +38,9 @@ _PROCESS_INITIALIZED = False
 def create_app() -> Flask:
     app = Flask(__name__)
     app.config["SECRET_KEY"] = settings.SECRET_KEY
+    # Only use secure cookies in production/non-testing environments
+    app.config["SESSION_COOKIE_SECURE"] = False if app.config.get("TESTING") or settings.DATABASE_URL.startswith("sqlite") else True
+    app.config["SESSION_COOKIE_HTTPONLY"] = True
     app.config["SQLALCHEMY_DATABASE_URI"] = settings.DATABASE_URL
     app.config["UPLOAD_DIR"] = settings.UPLOAD_DIR
     app.config["EXPORT_DIR"] = settings.EXPORT_DIR

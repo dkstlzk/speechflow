@@ -259,49 +259,28 @@ def process_session(session_id: str):
     except ValueError:
         return jsonify(ApiResponse.fail("invalid session id").to_dict()), 400
 
-    processor = TranscriptProcessor()
+    from ..models.enums import SessionStatus
+    from ..models.session import Session
+    from ..db.session import SessionLocal
 
+    db = SessionLocal()
     try:
-        result = processor.process_session(session_id_int)
+        session = db.query(Session).with_for_update().filter(Session.id == session_id_int).first()
+        if not session:
+            return jsonify(ApiResponse.fail("Session not found").to_dict()), 404
+        if session.status != SessionStatus.COMPLETED:
+            return jsonify(ApiResponse.fail("Session must be COMPLETED to process").to_dict()), 400
         
-        db = SessionLocal()
+        session.status = SessionStatus.PROCESSING
+        db.commit()
+    finally:
+        db.close()
 
-        try:
-            update_transcript_type(
-                db,
-                session_id_int,
-                result["transcript_type"],
-            )
-        finally:
-            db.close()
-        
-    except TranscriptNotFoundError:
-        logger.warning("Transcript not found")
-        return jsonify(ApiResponse.fail("Transcript not found").to_dict()), 404
-    except EmptyTranscriptError:
-        logger.warning("Empty transcript error")
-        return jsonify(ApiResponse.fail("Transcript is empty").to_dict()), 400
-    except OllamaClientError:
-        logger.warning("Ollama unavailable")
-        return jsonify(ApiResponse.fail("Ollama is unavailable or timed out. Ensure Ollama is running and try again.").to_dict()), 503
-    except TranscriptProcessorError:
-        logger.exception("Transcript processing failed")
-        return jsonify(ApiResponse.fail("Transcript processing failed").to_dict()), 500
+    import multiprocessing
+    from ..workers.intelligence_worker import run_intelligence_pipeline
+    multiprocessing.get_context("spawn").Process(target=run_intelligence_pipeline, args=(session_id_int,), daemon=True).start()
+    return jsonify(ApiResponse.ok({"message": "Processing started"}).to_dict()), 202
 
-    # Persist outputs
-    try:
-        save_summary(session_id_int, result["summary"], result.get("mom"))
-        raw_actions = result.get("action_items") or ""
-        parsed_items = _parse_action_items_text(raw_actions)
-        save_action_items(session_id_int, parsed_items)
-    except Exception:
-        logger.exception("Failed to persist generated outputs")
-        return jsonify(
-            ApiResponse.fail(
-                "Failed to persist generated outputs"
-            ).to_dict()
-        ), 500
-    return jsonify(ApiResponse.ok(result).to_dict()), 200
 
 
 @sessions_bp.post("/<session_id>/quick-diarization")

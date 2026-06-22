@@ -224,8 +224,23 @@ The structural implementation securely commands `is_ending = True` across active
 
 ---
 
-## Section 17 – Known Non-Blocking Limitations
+## Section 17 – Known Non-Blocking Limitations & Feature Gaps
 
+While the architecture is stable, the final engineering audit identified the following gaps that must be addressed for full production readiness:
+
+**P0 / P1 (Must Fix)**
+* **Broken Test Suite:** `ADMIN_PASSWORD` is missing in `conftest.py`, which causes the test suite to fail on `Settings()` instantiation.
+* **Insecure Session Cookie:** `SESSION_COOKIE_SECURE` and `SESSION_COOKIE_HTTPONLY` are missing from `create_app()`, exposing the cookie on HTTPS.
+* **Diarization Timeout:** The 10s `audio_path` wait loop in `diarization_worker.py` causes silent failures on longer recordings if diarization is triggered too early.
+* **Auth Socket Logic:** Circular import in `api/auth.py` and incorrect `to='admin'` room targeting in the `force_disconnect` socket emission.
+* **Frontend Auth Verification:** `login()` in `AuthContext` does not await `checkStatus()`, allowing a desynced frontend state if the backend fails to set the cookie.
+
+**P2 (Cleanup)**
+* **Redundant VAD Filter:** `vad_filter=True` is still present in `whisper_service.py:65`.
+* **Missing Database Index:** `transcript_chunks` lacks an explicit `Index` on `(session_id, chunk_index)`.
+* **Dead Code:** `lovable-error-reporting.ts`, `server.ts`, and `start.ts` remain in the frontend repository.
+
+**System Limitations**
 * Single-process Eventlet deployment requirement (`gunicorn -w 1`).
 * No Redis Socket.IO backplane (No horizontal scaling).
 * CPU-only throughput (No GPU acceleration natively provided in deployment constraints).
@@ -236,16 +251,18 @@ The structural implementation securely commands `is_ending = True` across active
 
 ## Section 18 – Final Acceptance Verdict
 
-### PASS
+### PASS WITH CAVEATS
 
 **Justification:** 
 The SpeechFlow application has achieved complete functional stability across its realtime and asynchronous pipelines. The architectural concurrency logic safely protects inference limits, the single-admin authentication wall explicitly governs WebSocket ingestion, and the recovery/shutdown safeguards ensure the database remains structurally pure across worker cycles.
 
+However, the final engineering audit identified broken test environments (`conftest.py`) and missing secure cookie flags. These are minor code changes but critically block "Production Readiness" until patched.
+
 * **Runtime Verified:** Authentication, Upload Pipeline, Realtime Core, Document Export, and Database Integrity.
 * **Code Verified:** Fault Isolation, Graceful Shutdown, and Background State Recovery.
-* **Future Enhancements:** Hardware acceleration (GPU), quantitative LLM benchmarking, and horizontally scaled pub/sub configurations.
+* **Not Fully Verified / Caveats:** HTTPS cookie security, automated test suite execution, and long-session diarization polling.
 
 Based solely on collected and consolidated evidence, SpeechFlow is demonstrably robust, stable, and functionally complete. 
 
-It is officially ready for:
-**`git tag v1.0.0-mvp`**
+It is officially recommended for:
+**`git tag v1.0.0-mvp`** (once P0/P1 gaps are patched)

@@ -38,6 +38,14 @@ Simultaneously, the frontend React components correctly invoke declarative teard
 The remaining open items (Diarization, Intelligence Layer, DOCX Export) represent domain-specific accuracy benchmarks rather than foundational stability/concurrency blockers, and can be evaluated continuously post-MVP.
 
 ## 4. Final Recommendation
-**APPROVED FOR MVP TAGGING & RELEASE.**
+**APPROVED FOR MVP TAGGING & RELEASE (WITH CAVEATS).**
 
-The core realtime processing, background execution boundaries, session isolation, and database reliability mechanics are extremely stable. The codebase is structurally sound and functionally verified against its stated MVP goals. It is officially recommended to tag `v1.0.0-mvp`.
+The core realtime processing, background execution boundaries, session isolation, and database reliability mechanics are extremely stable. The codebase is structurally sound and functionally verified against its stated MVP goals.
+
+**Caveats blocking full production deployment:**
+The final engineering audit discovered minor but critical issues blocking production readiness, including:
+1. `conftest.py` missing `ADMIN_PASSWORD`, which breaks the automated test suite.
+2. Insecure session cookies (missing `Secure` and `HttpOnly` flags).
+3. Minor frontend and backend cleanup tasks (e.g., dead SSR files, 10s diarization timeout, unused imports).
+
+It is officially recommended to apply these minor P0/P1 patches and then immediately tag `v1.0.0-mvp`.

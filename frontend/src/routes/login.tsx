@@ -28,7 +28,7 @@ function LoginPage() {
       });
 
       if (res.ok) {
-        login();
+        await login();
         navigate({ to: "/" });
       } else {
         const data = await res.json();

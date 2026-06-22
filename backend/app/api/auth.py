@@ -24,8 +24,9 @@ def logout():
     session.clear()
     logger.info("Admin user logged out.")
     try:
-        from ..main import socketio
-        socketio.emit("force_disconnect", to="admin")
+        from flask import current_app
+        if "socketio" in current_app.extensions:
+            current_app.extensions["socketio"].emit("force_disconnect")
         logger.info("Sent force_disconnect broadcast to admin room.")
     except Exception as e:
         logger.error(f"Failed to broadcast disconnect: {e}")

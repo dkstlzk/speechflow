@@ -50,7 +50,7 @@ def process_quick_diarization(session_id: int) -> None:
     db = SessionLocal()
     try:
         import time
-        for _ in range(10):
+        for _ in range(600):
             session = get_session_by_id(db, session_id)
             if not session:
                 logger.error(f"[DiarizationWorker] Session {session_id} not found")
@@ -58,7 +58,7 @@ def process_quick_diarization(session_id: int) -> None:
             if session.audio_path:
                 break
             logger.info(f"[DiarizationWorker] Waiting for audio_path for session={session_id}...")
-            time.sleep(1)
+            time.sleep(5)
             db.expire_all() # Clear SQLAlchemy identity map cache
             
         if not session.audio_path:
@@ -173,7 +173,7 @@ def process_accurate_diarization(session_id: int) -> None:
     db = SessionLocal()
     try:
         import time
-        for _ in range(10):
+        for _ in range(600):
             session = get_session_by_id(db, session_id)
             if not session:
                 logger.error(f"[DiarizationWorker] Session {session_id} not found")
@@ -181,7 +181,7 @@ def process_accurate_diarization(session_id: int) -> None:
             if session.audio_path:
                 break
             logger.info(f"[DiarizationWorker] Waiting for audio_path for session={session_id}...")
-            time.sleep(1)
+            time.sleep(5)
             db.expire_all() # Clear SQLAlchemy identity map cache
             
         if not session.audio_path:

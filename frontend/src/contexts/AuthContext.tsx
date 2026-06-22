@@ -35,7 +35,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const login = () => setIsAuthenticated(true);
+  const login = async () => {
+    await checkStatus();
+  };
   
   const logout = async () => {
     try {

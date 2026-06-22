@@ -254,8 +254,10 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
     setProcessing(true);
     try {
       await processSession(id);
-      load();
-    } catch (e) {
+      toast.success("Intelligence generation started. Refresh the session after processing completes.");
+      fetchSession(false); // F-1: Immediately reflect PROCESSING status
+    } catch (e: any) {
+      toast.error(e.message || "Failed to process transcript.");
       setSummary({
         loading: false,
         error: e instanceof Error ? e.message : "Failed to process transcript.",
