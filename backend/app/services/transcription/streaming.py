@@ -139,6 +139,11 @@ class StreamingSessionManager:
                                 if not chunk:
                                     break
                                 f_wav.writeframes(chunk)
+                                
+                    # Force OS buffer flush to disk to prevent data loss on crash
+                    with open(wav_path, "ab") as f:
+                        f.flush()
+                        os.fsync(f.fileno())
 
                     logger.info(f"[Playback] WAV created: {wav_path}")
 
@@ -149,7 +154,7 @@ class StreamingSessionManager:
                     logger.info(f"WAV duration: {duration:.2f} seconds")
 
                     # Safe Persistence
-                    if os.path.exists(wav_path) and wav_size > 0:
+                    if os.path.exists(wav_path) and wav_size > 44:
                         db = SessionLocal()
                         try:
                             db_session = db.query(SessionModel).filter(SessionModel.id == int(session.session_id)).first()
@@ -161,7 +166,7 @@ class StreamingSessionManager:
                                 persisted_successfully = True
                                 logger.info(f"[Playback] audio_path, status, and duration updated for session {session.session_id}")
 
-                                # SAFELY remove raw file only after successful DB commit
+                                # SAFELY remove raw file only after successful DB commit and sync
                                 if os.path.exists(session.raw_audio_path):
                                     os.remove(session.raw_audio_path)
                         finally:

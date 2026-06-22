@@ -170,22 +170,48 @@ def recover_stale_sessions(db: Session, max_hours: int = 2) -> int:
         logger.warning(f"[Recovery] Session {session.id} stuck in {session.status.value}. Marking as FAILED.")
 
         # Cleanup orphaned files for realtime sessions that crashed
-        if session.status == SessionStatus.RECORDING:
+        if session.status == SessionStatus.RECORDING or session.status == SessionStatus.FINALIZING:
             audio_dir = os.path.abspath(os.path.join(settings.EXPORT_DIR, "audio"))
             raw_path = os.path.join(audio_dir, f"session_{session.id}.raw")
             wav_path = os.path.join(audio_dir, f"session_{session.id}.wav")
             import time
-            for path in [raw_path, wav_path]:
-                if os.path.exists(path):
+            import wave
+            
+            # Try to recover if the WAV file exists and is valid
+            recovered = False
+            if os.path.exists(wav_path) and os.path.getsize(wav_path) > 44:
+                session.audio_path = os.path.basename(wav_path)
+                session.status = SessionStatus.COMPLETED
+                try:
+                    # Calculate duration
+                    wav_size = os.path.getsize(wav_path)
+                    with wave.open(wav_path, "rb") as f_wav:
+                        duration = f_wav.getnframes() / float(f_wav.getframerate())
+                        session.duration_seconds = duration
+                except Exception:
+                    pass
+                recovered = True
+                logger.info(f"[Recovery] Successfully recovered abandoned WAV for session {session.id}")
+                # Clean up the raw file since we recovered the WAV
+                if os.path.exists(raw_path):
                     try:
-                        orphan_path = path + f".orphan.{int(time.time())}"
-                        os.rename(path, orphan_path)
-                        logger.info(f"[Recovery] Archived stranded file to: {orphan_path}")
-                    except Exception as e:
-                        logger.error(f"[Recovery] Failed to archive stranded file: {e}")
-
-        session.status = SessionStatus.FAILED
-        session.processing_error = "Session failed due to unexpected worker interruption (stale state recovery)."
+                        os.remove(raw_path)
+                    except Exception:
+                        pass
+                        
+            # If not recovered, archive them
+            if not recovered:
+                for path in [raw_path, wav_path]:
+                    if os.path.exists(path):
+                        try:
+                            orphan_path = path + f".orphan.{int(time.time())}"
+                            os.rename(path, orphan_path)
+                            logger.info(f"[Recovery] Archived stranded file to: {orphan_path}")
+                        except Exception as e:
+                            logger.error(f"[Recovery] Failed to archive stranded file: {e}")
+    
+                session.status = SessionStatus.FAILED
+                session.processing_error = "Session failed due to unexpected worker interruption (stale state recovery)."
 
     if stuck_sessions:
         db.commit()
