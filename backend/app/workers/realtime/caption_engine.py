@@ -1,13 +1,18 @@
 import time
 import numpy as np
+# pyrefly: ignore [missing-import]
+import eventlet
+# pyrefly: ignore [missing-import]
+import eventlet.tpool
 from flask_socketio import SocketIO
 from ...config.logging import get_logger
 from ...services.transcription.streaming import session_manager
-from .worker_state import transcriber, inference_executor
+from .worker_state import transcriber
 
 logger = get_logger(__name__)
 
-CAPTION_WINDOW_SECONDS = 5.0
+# Reduced from 5.0s to 3.0s to decrease Whisper CPU inference time and reduce latency
+CAPTION_WINDOW_SECONDS = 3.0
 CAPTION_INTERVAL_SECONDS = 0.3
 
 def emit_caption_update(socketio: SocketIO, sid: str, session) -> None:
@@ -33,10 +38,13 @@ def emit_caption_update(socketio: SocketIO, sid: str, session) -> None:
     def _do_caption_inference(audio_np, session_id, now):
         try:
             t0 = time.time()
-            logger.debug(f"[CaptionEngine] Whisper inference starting for {sid} at {t0:.3f}")
-            result = transcriber.transcribe(audio_np)
+            # tpool.execute runs the blocking C++ inference in a true OS thread,
+            # preventing it from freezing the Eventlet websocket loop.
+            # Always use fast mode for instant captions.
+            # Default to English until the transcript_engine detects the actual language.
+            lang = session.detected_language or "en"
+            result = eventlet.tpool.execute(transcriber.transcribe, audio_np, lang, True)
             t1 = time.time()
-            logger.debug(f"[CaptionEngine] Whisper inference finished for {sid} at {t1:.3f} (Duration: {t1-t0:.3f}s)")
             text = result.text.strip() if result.text else ""
 
             if text:
@@ -56,7 +64,8 @@ def emit_caption_update(socketio: SocketIO, sid: str, session) -> None:
             np.frombuffer(audio_window, dtype=np.int16).astype(np.float32)
             / 32768.0
         )
-        inference_executor.submit(_do_caption_inference, audio_np, session.session_id, now)
+        # Spawn a background greenthread so we don't block the caller
+        eventlet.spawn(_do_caption_inference, audio_np, session.session_id, now)
     except Exception as e:
         with session.lock:
             session.is_captioning = False

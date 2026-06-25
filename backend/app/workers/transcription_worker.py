@@ -53,11 +53,26 @@ def process_upload_session(
 
         update_session_status(db, session_id, SessionStatus.TRANSCRIBING)
         result = transcriber.transcribe(wav_path)
+
+        # Persist detected language
+        if result.language:
+            from ..models.session import Session as SessionModel
+            session_model = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+            if session_model:
+                session_model.detected_language = result.language
+                db.commit()
+
         update_session_status(db, session_id, SessionStatus.DIARIZING)
+        
+        logger.info("[Diarization] Starting pyannote inference")
         speaker_segments = diarizer.diarize(wav_path)
+        logger.info("[Diarization] Finished pyannote inference")
+        
+        logger.info("[Diarization] Starting transcript alignment")
         aligned_segments = align_transcript_with_speakers(
             result.segments, speaker_segments
         )
+        logger.info("[Diarization] Finished transcript alignment")
 
         update_session_status(db, session_id, SessionStatus.PROCESSING)
 

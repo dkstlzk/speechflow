@@ -40,9 +40,17 @@ def transcribe_and_persist_segment(
 
             t0 = time.time()
             logger.debug(f"[TranscriptEngine] Whisper inference starting for {sid} chunk #{current_chunk_index} at {t0:.3f}")
+            # pyrefly: ignore [missing-import]
+            import eventlet.tpool
             from .worker_state import transcriber
-            result = transcriber.transcribe(audio_np)
+            # Provide fast_mode=False for persisted chunks to always use strict language filtering
+            lang = session.detected_language
+            result = eventlet.tpool.execute(transcriber.transcribe, audio_np, lang, False)
             t1 = time.time()
+            
+            # Keep the detected language locked in for future fast-mode live captions
+            if result.language:
+                session.detected_language = result.language
             logger.debug(f"[TranscriptEngine] Whisper inference finished for {sid} chunk #{current_chunk_index} at {t1:.3f} (Duration: {t1-t0:.3f}s)")
             
             text = result.text.strip() if result.text else ""
@@ -119,5 +127,6 @@ def transcribe_and_persist_segment(
             with session.lock:
                 session.is_transcribing = False
 
-    from .worker_state import inference_executor
-    inference_executor.submit(_do_transcribe)
+    # pyrefly: ignore [missing-import]
+    import eventlet
+    eventlet.spawn(_do_transcribe)

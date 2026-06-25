@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Sparkles, RefreshCw, Music, Download, Pencil, Check, X } from "lucide-react";
+import { Sparkles, RefreshCw, Music, Download, Pencil, Check, X, Languages, ChevronDown } from "lucide-react";
 import { AppLayout } from "@/layouts/AppLayout";
 import { TranscriptViewer } from "@/components/TranscriptViewer";
 import { SummaryPanel } from "@/components/SummaryPanel";
@@ -35,12 +35,14 @@ import {
   getTranscript,
   processSession,
   processQuickDiarization,
-  processAccurateDiarization,
-  updateSessionTitle,
   updateSpeaker,
+  getSupportedLanguages,
+  translateSession,
+  getTranslations,
 } from "@/services/api";
+import type { TranslationResponse } from "@/services/api";
 import type { ActionItem, Session, SummaryResponse, TranscriptResponse } from "@/types";
-import { exportAsMarkdown, exportAsTxt, exportAsDocx, printAsPdf } from "@/lib/export";
+import { exportAsMarkdown, exportAsTxt, exportAsDocx, exportTranslatedAsDocx, exportTranslatedAsTxt, printAsPdf } from "@/lib/export";
 import { toast } from "sonner";
 
 interface State<T> {
@@ -70,9 +72,27 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editTitleValue, setEditTitleValue] = useState("");
   const [isSavingTitle, setIsSavingTitle] = useState(false);
+  const [translations, setTranslations] = useState<TranslationResponse[]>([]);
+  const [supportedLanguages, setSupportedLanguages] = useState<Record<string, string>>({});
+  const [selectedLanguage, setSelectedLanguage] = useState<string>("");
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isPolling = useRef(false);
   const audioRef = useRef<HTMLAudioElement>(null);
+
+  // Load supported languages on mount
+  useEffect(() => {
+    getSupportedLanguages()
+      .then((r) => {
+        setSupportedLanguages(r.data);
+        // Default to hindi if available
+        if (r.data.hindi) setSelectedLanguage("hindi");
+        else {
+          const first = Object.keys(r.data)[0];
+          if (first) setSelectedLanguage(first);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const onSeek = (time: number) => {
     if (audioRef.current) {
@@ -187,12 +207,22 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
       });
   }, [id]);
 
+  const fetchTranslations = useCallback((signal?: AbortSignal) => {
+    return getTranslations(id, signal)
+      .then((r) => setTranslations(r.data))
+      .catch((e: unknown) => {
+        if (e instanceof Error && (e.name === "AbortError" || e.message.includes("aborted")))
+          return;
+      });
+  }, [id]);
+
   const load = useCallback((signal?: AbortSignal) => {
     fetchSession(true, signal);
     fetchTranscript(signal);
     fetchSummary(signal);
     fetchActions(signal);
-  }, [fetchSession, fetchTranscript, fetchSummary, fetchActions]);
+    fetchTranslations(signal);
+  }, [fetchSession, fetchTranscript, fetchSummary, fetchActions, fetchTranslations]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -210,10 +240,14 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
 
   useEffect(() => {
     const status = session.data?.status;
-    if (status !== "processing" && status !== "diarizing" && status !== "finalizing") {
+    const isProcessingSession = status === "processing" || status === "diarizing" || status === "finalizing";
+    const hasActiveTranslation = translations.some(t => t.status === "translating");
+    
+    if (!isProcessingSession && !hasActiveTranslation) {
       stopPolling();
       return;
     }
+    
     if (pollRef.current) return;
     const controller = new AbortController();
 
@@ -222,14 +256,17 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
       isPolling.current = true;
       try {
         const next = await fetchSession(false, controller.signal);
+        await fetchTranslations(controller.signal);
+        
         if (!next) return;
-        if (next.status === "completed") {
-          stopPolling();
+        if (next.status === "completed" && isProcessingSession) {
           fetchTranscript();
           fetchSummary();
           fetchActions();
         } else if (next.status === "failed") {
-          stopPolling();
+          // If session failed, we might still have active translations, 
+          // but usually it means we stop polling. 
+          // The effect dependencies will clean up next render if hasActiveTranslation becomes false.
         }
       } finally {
         isPolling.current = false;
@@ -241,10 +278,12 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
     };
   }, [
     session.data?.status,
+    translations,
     fetchSession,
     fetchTranscript,
     fetchSummary,
     fetchActions,
+    fetchTranslations,
     stopPolling,
   ]);
 
@@ -323,14 +362,61 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
     }
   }
 
+  async function handleTranslate() {
+    if (!selectedLanguage) return;
+    try {
+      await translateSession(id, selectedLanguage);
+      toast.success(`Translation started for ${supportedLanguages[selectedLanguage] || selectedLanguage}`);
+      fetchTranslations();
+    } catch (e: any) {
+      toast.error(e.message || "Translation failed to start");
+    }
+  }
+
+  const activeTranslation = translations.find(t => t.target_language === selectedLanguage);
+  const isTranslating = activeTranslation?.status === "translating";
+
+  async function handleExportTranslated(format: string) {
+    if (!session.data || !activeTranslation || activeTranslation.status !== "completed") return;
+    const langLabel = supportedLanguages[activeTranslation.target_language] || activeTranslation.target_language;
+    try {
+      if (format === "docx") {
+        await exportTranslatedAsDocx({
+          session: session.data,
+          translatedTranscript: activeTranslation.translated_transcript || "",
+          translatedSummary: activeTranslation.translated_summary,
+          translatedMom: activeTranslation.translated_mom,
+          targetLanguage: langLabel,
+        });
+      } else {
+        exportTranslatedAsTxt({
+          session: session.data,
+          translatedTranscript: activeTranslation.translated_transcript || "",
+          translatedSummary: activeTranslation.translated_summary,
+          translatedMom: activeTranslation.translated_mom,
+          targetLanguage: langLabel,
+        });
+      }
+      toast.success(`Exported translated ${format.toUpperCase()}`);
+    } catch (err) {
+      toast.error("Failed to export translated document");
+      console.error(err);
+    }
+  }
+
   const duration = formatDuration(session.data?.durationSec);
   const title = session.data?.title || session.data?.fileName || "Session";
   const showSkeleton =
     processing || diarizing || 
     session.data?.status === "diarizing" || 
     session.data?.status === "finalizing" ||
-    (session.data?.status === "processing" && !summary.data && !actions.data?.length);
-  const progressMode = !transcript.data?.segments?.length ? "transcript" : "intelligence";
+    session.data?.status === "processing";
+    
+  const progressMode = 
+    (diarizing || session.data?.status === "diarizing") ? "diarization" :
+    (session.data?.status === "finalizing") ? "finalizing" :
+    (processing || session.data?.status === "processing") ? "intelligence" :
+    !transcript.data?.segments?.length ? "transcript" : "intelligence";
 
   return (
     <AppLayout>
@@ -342,6 +428,19 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
             {session.data?.transcriptType && (
               <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium capitalize text-muted-foreground">
                 {session.data.transcriptType.replace("_", " ")}
+              </span>
+            )}
+            {session.data?.detected_language && (
+              <span className="rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 px-2 py-0.5 text-[11px] font-medium">
+                🌐 {(() => {
+                  const langMap: Record<string, string> = {
+                    en: "English", hi: "Hindi", ta: "Tamil", te: "Telugu",
+                    mr: "Marathi", or: "Odia", es: "Spanish", nl: "Dutch",
+                    fr: "French", de: "German", ja: "Japanese", zh: "Chinese",
+                    ko: "Korean", ar: "Arabic", pt: "Portuguese", ru: "Russian",
+                  };
+                  return langMap[session.data.detected_language] || session.data.detected_language.toUpperCase();
+                })()}
               </span>
             )}
           </div>
@@ -443,6 +542,43 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
               </DropdownMenuContent>
             </DropdownMenu>
           )}
+          {/* Translation controls */}
+          {session.data && transcript.data?.segments && Object.keys(supportedLanguages).length > 0 && (
+            <div className="flex items-center gap-1.5">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="min-w-[100px]">
+                    {supportedLanguages[selectedLanguage] || "Language"}
+                    <ChevronDown className="h-3 w-3 ml-1" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {Object.entries(supportedLanguages).map(([key, label]) => (
+                    <DropdownMenuItem
+                      key={key}
+                      onClick={() => setSelectedLanguage(key)}
+                      className={selectedLanguage === key ? "bg-accent" : ""}
+                    >
+                      {label}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleTranslate}
+                disabled={isTranslating || !selectedLanguage}
+              >
+                {isTranslating ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                ) : (
+                  <Languages className="h-3.5 w-3.5 mr-1" />
+                )}
+                {isTranslating ? "Translating…" : "Translate"}
+              </Button>
+            </div>
+          )}
           <Button variant="outline" size="sm" onClick={onQuickDiarization} disabled={diarizing || session.data?.status === "diarizing" || session.data?.status === "processing"}>
             ⚡ Quick Labels
           </Button>
@@ -482,7 +618,7 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
 
       {showSkeleton ? (
         <div className="mb-8">
-          <IntelligenceProgress mode={progressMode} />
+          <IntelligenceProgress mode={progressMode} processingStage={session.data?.processing_stage} />
         </div>
       ) : null}
 
@@ -501,6 +637,67 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
           />
           <MomPanel mom={summary.data?.mom} loading={summary.loading} error={summary.error} />
           <ActionItemsPanel items={actions.data} loading={actions.loading} error={actions.error} />
+
+          {/* Translation Results */}
+          {isTranslating && (
+            <PanelShell title="Translation" icon={<Languages className="h-4 w-4" />}>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Translating to {supportedLanguages[selectedLanguage]}… This may take a few minutes.
+              </div>
+            </PanelShell>
+          )}
+          {activeTranslation?.status === "failed" && (
+            <PanelShell title="Translation Failed" icon={<Languages className="h-4 w-4" />}>
+              <div className="text-sm text-destructive">
+                Failed to translate to {supportedLanguages[selectedLanguage]}. {activeTranslation.error_message}
+              </div>
+            </PanelShell>
+          )}
+          {activeTranslation?.status === "completed" && (
+            <PanelShell
+              title={`Translation (${supportedLanguages[activeTranslation.target_language] || activeTranslation.target_language})`}
+              icon={<Languages className="h-4 w-4" />}
+            >
+              <div className="space-y-4">
+                <div className="flex gap-2 mb-3">
+                  <Button variant="outline" size="sm" onClick={() => handleExportTranslated("docx")}>
+                    <Download className="h-3 w-3 mr-1" /> Export DOCX
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => handleExportTranslated("txt")}>
+                    <Download className="h-3 w-3 mr-1" /> Export TXT
+                  </Button>
+                </div>
+
+                {activeTranslation.translated_summary && (
+                  <div>
+                    <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-1.5">Translated Summary</h4>
+                    <div className="whitespace-pre-wrap text-sm leading-relaxed bg-muted/30 rounded-md p-3">
+                      {activeTranslation.translated_summary}
+                    </div>
+                  </div>
+                )}
+
+                {activeTranslation.translated_mom && (
+                  <div>
+                    <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-1.5">Translated Meeting Minutes</h4>
+                    <div className="whitespace-pre-wrap text-sm leading-relaxed bg-muted/30 rounded-md p-3">
+                      {activeTranslation.translated_mom}
+                    </div>
+                  </div>
+                )}
+
+                {activeTranslation.translated_transcript && (
+                  <div>
+                    <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-1.5">Translated Transcript</h4>
+                    <div className="whitespace-pre-wrap text-sm leading-relaxed bg-muted/30 rounded-md p-3 max-h-[400px] overflow-y-auto">
+                      {activeTranslation.translated_transcript}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </PanelShell>
+          )}
         </aside>
 
         <div>

@@ -114,6 +114,7 @@ export async function getSessions(
     has_audio?: boolean;
     audio_url?: string;
     duration_seconds?: number;
+    detected_language?: string | null;
   };
   const url = query
     ? `${API_BASE}/api/sessions/?q=${encodeURIComponent(query)}`
@@ -129,6 +130,7 @@ export async function getSessions(
     has_audio: s.has_audio,
     audio_url: s.audio_url ? `${API_BASE}${s.audio_url}` : undefined,
     durationSec: s.duration_seconds ?? undefined,
+    detected_language: s.detected_language ?? undefined,
   }));
   return { data: sessions, ok: true };
 }
@@ -145,6 +147,7 @@ export async function getSession(id: string, signal?: AbortSignal): Promise<ApiR
     audio_url?: string;
     title?: string | null;
     duration_seconds?: number;
+    detected_language?: string | null;
   };
   const raw = await apiFetch<BS>(`${API_BASE}/api/sessions/${id}`, { signal, cache: "no-store" });
   return {
@@ -158,6 +161,7 @@ export async function getSession(id: string, signal?: AbortSignal): Promise<ApiR
       has_audio: raw.data.has_audio,
       audio_url: raw.data.audio_url ? `${API_BASE}${raw.data.audio_url}` : undefined,
       durationSec: raw.data.duration_seconds ?? undefined,
+      detected_language: raw.data.detected_language ?? undefined,
     },
     ok: true,
   };
@@ -389,3 +393,50 @@ export async function updateSpeaker(
     ok: true,
   };
 }
+
+// GET /api/sessions/languages
+export async function getSupportedLanguages(): Promise<ApiResponse<Record<string, string>>> {
+  const raw = await apiFetch<Record<string, string>>(`${API_BASE}/api/sessions/languages`);
+  return { data: raw.data, ok: true };
+}
+
+// POST /api/sessions/{id}/translate
+export interface TranslationResponse {
+  id: number;
+  session_id: number;
+  target_language: string;
+  translated_transcript: string | null;
+  translated_summary: string | null;
+  translated_mom: string | null;
+  status: "translating" | "completed" | "failed";
+  error_message: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function translateSession(
+  id: string,
+  targetLanguage: string,
+): Promise<ApiResponse<{ message: string }>> {
+  const raw = await apiFetch<{ message: string }>(
+    `${API_BASE}/api/sessions/${id}/translate`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ target_language: targetLanguage }),
+    },
+  );
+  return { data: raw.data, ok: true };
+}
+
+export async function getTranslations(
+  id: string,
+  signal?: AbortSignal,
+): Promise<ApiResponse<TranslationResponse[]>> {
+  const raw = await apiFetch<TranslationResponse[]>(
+    `${API_BASE}/api/sessions/${id}/translations`,
+    { signal },
+  );
+  return { data: raw.data ?? [], ok: true };
+}
+

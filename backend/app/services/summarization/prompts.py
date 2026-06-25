@@ -175,3 +175,42 @@ Action Items
 Partial Action Items:
 {partial_outputs}
 """
+
+COMBINED_PROMPT = """
+You are an expert meeting assistant. Analyze the transcript and generate a structured JSON response containing an executive summary, meeting takeaways, and action items.
+
+Internal guidance:
+- Use ONLY information present in the transcript.
+- Never output SPEAKER_XX identifiers. Prefer real names if mentioned.
+- If the transcript has no meaningful content for a section, provide an empty string for that section or an empty list for action items.
+- Ensure the output is valid JSON.
+
+Your output MUST be a JSON object with EXACTLY the following structure:
+{{
+  "summary": "Brief Overview\\n<2-4 sentence executive summary>\\n\\nKey Points\\n\\n• <Topic>\\n  - <supporting detail>\\n\\n• <Topic>\\n  - <supporting detail>",
+  "meeting_minutes": "Meeting Takeaways\\n• <takeaway>\\n• <takeaway>",
+  "action_items": "Action Items\\n• [Owner Name] -> [Actionable Task]\\n• [Actionable Task]"
+}}
+
+Transcript:
+{transcript}
+"""
+
+COMBINED_MERGE_PROMPT = """
+You are an expert meeting assistant. You are given a list of partial JSON objects extracted from different chunks of a meeting transcript.
+Your task is to merge them into a single, cohesive JSON object.
+
+Internal guidance:
+- Deduplicate topics, takeaways, and action items.
+- Ensure the output is valid JSON.
+
+Your output MUST be a JSON object with EXACTLY the following structure:
+{{
+  "summary": "Brief Overview\\n<2-4 sentence executive summary>\\n\\nKey Points\\n\\n• <Topic>\\n  - <supporting detail>\\n\\n• <Topic>\\n  - <supporting detail>",
+  "meeting_minutes": "Meeting Takeaways\\n• <takeaway>\\n• <takeaway>",
+  "action_items": "Action Items\\n• [Owner Name] -> [Actionable Task]\\n• [Actionable Task]"
+}}
+
+Partial JSON Outputs:
+{partial_outputs}
+"""

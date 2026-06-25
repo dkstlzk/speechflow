@@ -106,24 +106,9 @@ def create_app() -> Flask:
             daemon=True,
         ).start()
 
-        from .workers.realtime.worker_state import transcriber
-        threading.Thread(
-            target=transcriber._get_model,
-            daemon=True,
-        ).start()
-
-        from .services.diarization.pyannote import _get_pipeline
-        def _warm_pyannote():
-            try:
-                _get_pipeline()
-                logger.info("Pyannote warmup completed successfully")
-            except Exception as e:
-                logger.error(f"Pyannote warmup failed: {e}")
-
-        threading.Thread(
-            target=_warm_pyannote,
-            daemon=True,
-        ).start()
+        # Whisper and Pyannote models are intentionally lazy-loaded.
+        # Warming them up via threading.Thread under Eventlet blocks the event loop
+        # and hangs the application (including login) for 10-15s during startup.
 
         def periodic_recovery_loop():
             while True:
@@ -134,7 +119,7 @@ def create_app() -> Flask:
                     from .services.persistence.session_repository import recover_stale_sessions
                     from .db.session import SessionLocal
                     db = SessionLocal()
-                    recovered = recover_stale_sessions(db)
+                    recovered = recover_stale_sessions(db, include_recording=False)
                     if recovered > 0:
                         logger.info(f"Periodic recovery completed. Recovered={recovered}")
                 except Exception as e:

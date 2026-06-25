@@ -29,6 +29,8 @@ export interface Session {
   audio_url?: string;
   diarization_mode?: string;
   diarized_at?: string;
+  processing_stage?: string;
+  detected_language?: string;
 }
 
 export interface TranscriptSegment {

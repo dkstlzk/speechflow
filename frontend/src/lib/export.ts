@@ -230,3 +230,117 @@ export async function exportAsDocx(data: SessionData) {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
+
+
+// ─── Translated Export Functions ─────────────────────────────────────
+
+export interface TranslatedExportData {
+  session: Session;
+  translatedTranscript: string;
+  translatedSummary?: string | null;
+  translatedMom?: string | null;
+  targetLanguage: string;
+}
+
+export async function exportTranslatedAsDocx(data: TranslatedExportData) {
+  const { session, translatedTranscript, translatedSummary, translatedMom, targetLanguage } = data;
+  const title = session.title || session.fileName || "Session";
+  const date = session.createdAt ? new Date(session.createdAt).toLocaleString() : "Unknown Date";
+
+  const children: Paragraph[] = [
+    new Paragraph({
+      text: `${title} — ${targetLanguage} Translation`,
+      heading: HeadingLevel.HEADING_1,
+    }),
+    new Paragraph({
+      children: [
+        new TextRun({ text: "Date: ", bold: true }),
+        new TextRun(date),
+      ],
+    }),
+    new Paragraph({
+      children: [
+        new TextRun({ text: "Language: ", bold: true }),
+        new TextRun(targetLanguage),
+      ],
+    }),
+    new Paragraph({
+      children: [
+        new TextRun({ text: "ID: ", bold: true }),
+        new TextRun(session.id),
+      ],
+      spacing: { after: 400 },
+    }),
+  ];
+
+  if (translatedSummary) {
+    children.push(
+      new Paragraph({ text: "Translated Summary", heading: HeadingLevel.HEADING_2 }),
+      ...translatedSummary.split("\n").map(
+        (line) => new Paragraph({ text: line, spacing: { after: 100 } }),
+      ),
+      new Paragraph({ text: "", spacing: { after: 400 } }),
+    );
+  }
+
+  if (translatedMom) {
+    children.push(
+      new Paragraph({ text: "Translated Meeting Minutes", heading: HeadingLevel.HEADING_2 }),
+      ...translatedMom.split("\n").map(
+        (line) => new Paragraph({ text: line, spacing: { after: 100 } }),
+      ),
+      new Paragraph({ text: "", spacing: { after: 400 } }),
+    );
+  }
+
+  children.push(
+    new Paragraph({ text: "Translated Transcript", heading: HeadingLevel.HEADING_2 }),
+    ...translatedTranscript.split("\n").map(
+      (line) => new Paragraph({ text: line, spacing: { after: 100 } }),
+    ),
+  );
+
+  const doc = new Document({
+    sections: [{ children }],
+  });
+
+  const blob = await Packer.toBlob(doc);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = generateExportFilename(data.session, "docx", targetLanguage);
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+export function exportTranslatedAsTxt(data: TranslatedExportData) {
+  const { session, translatedTranscript, translatedSummary, translatedMom, targetLanguage } = data;
+  const title = session.title || session.fileName || "Session";
+  const date = session.createdAt ? new Date(session.createdAt).toLocaleString() : "Unknown Date";
+
+  let txt = `=================================================\n`;
+  txt += ` ${title.toUpperCase()} — ${targetLanguage.toUpperCase()} TRANSLATION\n`;
+  txt += ` Date: ${date}\n`;
+  txt += ` Language: ${targetLanguage}\n`;
+  txt += ` ID: ${session.id}\n`;
+  txt += `=================================================\n\n`;
+
+  if (translatedSummary) {
+    txt += `[ TRANSLATED SUMMARY ]\n\n${translatedSummary}\n\n`;
+  }
+
+  if (translatedMom) {
+    txt += `[ TRANSLATED MEETING MINUTES ]\n\n${translatedMom}\n\n`;
+  }
+
+  txt += `[ TRANSLATED TRANSCRIPT ]\n\n${translatedTranscript}\n`;
+
+  downloadFile(
+    txt,
+    generateExportFilename(session, "txt", targetLanguage),
+    "text/plain;charset=utf-8;",
+  );
+}
+

@@ -20,6 +20,7 @@ from ..services.persistence.session_repository import (
     update_transcript_type,
 )
 from ..services.persistence.speaker_repository import update_speaker_display_name
+from ..workers.worker_state import get_processing_stage
 from flask import request as flask_request
 from ..config.logging import get_logger
 
@@ -31,7 +32,7 @@ sessions_bp = Blueprint("sessions", __name__)
 def _serialize_session(row) -> dict:
     """Serialize a Session ORM row to the API shape."""
     status = row.status.value if hasattr(row.status, "value") else row.status
-    return {
+    data = {
         "id": row.id,
         "status": status,
         "transcript_type": row.transcript_type,
@@ -46,25 +47,14 @@ def _serialize_session(row) -> dict:
         "audio_url": f"/api/sessions/{row.id}/audio" if getattr(row, "audio_path", None) else None,
         "diarization_mode": getattr(row, "diarization_mode", None),
         "diarized_at": row.diarized_at.isoformat() if getattr(row, "diarized_at", None) else None,
+        "detected_language": getattr(row, "detected_language", None),
     }
+    
+    if status == "processing":
+        data["processing_stage"] = get_processing_stage(row.id) or "Processing..."
+            
+    return data
 
-
-def _parse_action_items_text(raw: str) -> list[str]:
-    """Parse the raw action items text into a list of individual items."""
-    if not raw or raw.strip().lower() == "no action items identified.":
-        return []
-    items = []
-    for line in raw.strip().splitlines():
-        line = line.strip()
-        if line.startswith("- "):
-            line = line[2:].strip()
-        elif line.startswith("* "):
-            line = line[2:].strip()
-        if line.lower() == "no action items identified.":
-            continue
-        if line and line.lower() not in ("action items", "action items:"):
-            items.append(line)
-    return items
 
 
 @sessions_bp.get("/")
@@ -276,10 +266,23 @@ def process_session(session_id: str):
     finally:
         db.close()
 
-    import multiprocessing
-    from ..workers.intelligence_worker import run_intelligence_pipeline
-    multiprocessing.get_context("spawn").Process(target=run_intelligence_pipeline, args=(session_id_int,), daemon=True).start()
-    return jsonify(ApiResponse.ok({"message": "Processing started"}).to_dict()), 202
+    try:
+        import multiprocessing
+        from ..workers.intelligence_worker import run_intelligence_pipeline
+        multiprocessing.get_context("spawn").Process(target=run_intelligence_pipeline, args=(session_id_int,)).start()
+        return jsonify(ApiResponse.ok({"message": "Processing started"}).to_dict()), 202
+    except Exception:
+        logger.exception(f"Failed to spawn process for session {session_id_int}")
+        rollback_db = SessionLocal()
+        try:
+            rollback_session = rollback_db.query(Session).filter(Session.id == session_id_int).first()
+            if rollback_session:
+                rollback_session.status = SessionStatus.FAILED
+                rollback_session.processing_error = "Server overloaded. Failed to start process."
+                rollback_db.commit()
+        finally:
+            rollback_db.close()
+        return jsonify(ApiResponse.fail("Server overloaded. Failed to start process.").to_dict()), 500
 
 
 
@@ -311,9 +314,22 @@ def trigger_quick_diarization(session_id: str):
 
     # TODO(TechDebt): Fire-and-forget threads risk job loss if the process restarts.
     # Acceptable for MVP, but should be migrated to Celery/Redis in production.
-    import multiprocessing
-    multiprocessing.get_context("spawn").Process(target=process_quick_diarization, args=(session_id_int,), daemon=True).start()
-    return jsonify(ApiResponse.ok({"message": "Quick diarization started"}).to_dict()), 202
+    try:
+        import multiprocessing
+        multiprocessing.get_context("spawn").Process(target=process_quick_diarization, args=(session_id_int,)).start()
+        return jsonify(ApiResponse.ok({"message": "Quick diarization started"}).to_dict()), 202
+    except Exception:
+        logger.exception(f"Failed to spawn quick diarization process for session {session_id_int}")
+        rollback_db = SessionLocal()
+        try:
+            rollback_session = rollback_db.query(Session).filter(Session.id == session_id_int).first()
+            if rollback_session:
+                rollback_session.status = SessionStatus.FAILED
+                rollback_session.processing_error = "Server overloaded. Failed to start quick diarization."
+                rollback_db.commit()
+        finally:
+            rollback_db.close()
+        return jsonify(ApiResponse.fail("Server overloaded. Failed to start process.").to_dict()), 500
 
 
 @sessions_bp.post("/<session_id>/accurate-diarization")
@@ -344,9 +360,22 @@ def trigger_accurate_diarization(session_id: str):
 
     # TODO(TechDebt): Fire-and-forget threads risk job loss if the process restarts.
     # Acceptable for MVP, but should be migrated to Celery/Redis in production.
-    import multiprocessing
-    multiprocessing.get_context("spawn").Process(target=process_accurate_diarization, args=(session_id_int,), daemon=True).start()
-    return jsonify(ApiResponse.ok({"message": "Accurate diarization started"}).to_dict()), 202
+    try:
+        import multiprocessing
+        multiprocessing.get_context("spawn").Process(target=process_accurate_diarization, args=(session_id_int,)).start()
+        return jsonify(ApiResponse.ok({"message": "Accurate diarization started"}).to_dict()), 202
+    except Exception:
+        logger.exception(f"Failed to spawn accurate diarization process for session {session_id_int}")
+        rollback_db = SessionLocal()
+        try:
+            rollback_session = rollback_db.query(Session).filter(Session.id == session_id_int).first()
+            if rollback_session:
+                rollback_session.status = SessionStatus.FAILED
+                rollback_session.processing_error = "Server overloaded. Failed to start accurate diarization."
+                rollback_db.commit()
+        finally:
+            rollback_db.close()
+        return jsonify(ApiResponse.fail("Server overloaded. Failed to start process.").to_dict()), 500
 
 
 @sessions_bp.get("/<session_id>/summary")
@@ -361,3 +390,117 @@ def get_session_summary(session_id: str):
         return jsonify(ApiResponse.ok({"exists": False}).to_dict()), 200
 
     return jsonify(ApiResponse.ok(data).to_dict()), 200
+
+
+@sessions_bp.get("/languages")
+def list_supported_languages():
+    from ..services.translation import TranslationService
+    languages = TranslationService.get_supported_languages()
+    return jsonify(ApiResponse.ok(languages).to_dict()), 200
+
+
+@sessions_bp.post("/<session_id>/translate")
+def translate_session(session_id: str):
+    try:
+        session_id_int = int(session_id)
+    except ValueError:
+        return jsonify(ApiResponse.fail("invalid session id").to_dict()), 400
+
+    body = flask_request.get_json(silent=True) or {}
+    target_language = body.get("target_language", "").strip().lower()
+
+    if not target_language:
+        return jsonify(ApiResponse.fail("target_language is required").to_dict()), 400
+
+    from ..services.translation import TranslationService, SUPPORTED_LANGUAGES
+    if target_language not in SUPPORTED_LANGUAGES:
+        return jsonify(
+            ApiResponse.fail(
+                f"Unsupported language: {target_language}. "
+                f"Supported: {', '.join(SUPPORTED_LANGUAGES.keys())}"
+            ).to_dict()
+        ), 400
+
+    # DB interaction
+    from ..db.session import SessionLocal
+    from ..models.translation import SessionTranslation
+    import multiprocessing
+    from ..workers.translation_worker import process_translation
+
+    db = SessionLocal()
+    try:
+        # Check if already translating or completed
+        translation = db.query(SessionTranslation).filter(
+            SessionTranslation.session_id == session_id_int,
+            SessionTranslation.target_language == target_language
+        ).first()
+
+        if translation:
+            if translation.status == "translating":
+                return jsonify(ApiResponse.ok({"message": "Translation already in progress"}).to_dict()), 202
+            # If completed or failed, we'll reset it to translating and re-run
+            translation.status = "translating"
+            translation.error_message = None
+        else:
+            translation = SessionTranslation(
+                session_id=session_id_int,
+                target_language=target_language,
+                status="translating"
+            )
+            db.add(translation)
+        
+        db.commit()
+
+        # Spawn background process
+        multiprocessing.get_context("spawn").Process(
+            target=process_translation, 
+            args=(session_id_int, target_language)
+        ).start()
+
+    except Exception as e:
+        logger.exception(f"Failed to start translation for session {session_id_int}")
+        return jsonify(ApiResponse.fail(f"Failed to start translation: {str(e)}").to_dict()), 500
+    finally:
+        db.close()
+
+    return jsonify(ApiResponse.ok({"message": "Translation started"}).to_dict()), 202
+
+@sessions_bp.get("/<session_id>/translations")
+def get_session_translations(session_id: str):
+    try:
+        session_id_int = int(session_id)
+    except ValueError:
+        return jsonify(ApiResponse.fail("invalid session id").to_dict()), 400
+
+    from ..db.session import SessionLocal
+    from ..models.translation import SessionTranslation
+
+    db = SessionLocal()
+    try:
+        translations = db.query(SessionTranslation).filter(
+            SessionTranslation.session_id == session_id_int
+        ).all()
+
+        data = []
+        for t in translations:
+            data.append({
+                "id": t.id,
+                "session_id": t.session_id,
+                "target_language": t.target_language,
+                "translated_transcript": t.translated_transcript,
+                "translated_summary": t.translated_summary,
+                "translated_mom": t.translated_mom,
+                "status": t.status,
+                "error_message": t.error_message,
+                "created_at": t.created_at.isoformat() if t.created_at else None,
+                "updated_at": t.updated_at.isoformat() if t.updated_at else None,
+            })
+            
+    except Exception as e:
+        logger.exception(f"Failed to get translations for session {session_id_int}")
+        return jsonify(ApiResponse.fail("Failed to get translations").to_dict()), 500
+    finally:
+        db.close()
+
+    return jsonify(ApiResponse.ok(data).to_dict()), 200
+

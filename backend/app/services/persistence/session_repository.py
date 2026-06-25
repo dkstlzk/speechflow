@@ -142,7 +142,7 @@ def update_transcript_type(
 
     return session
 
-def recover_stale_sessions(db: Session, max_hours: int = 2) -> int:
+def recover_stale_sessions(db: Session, max_hours: int = 2, include_recording: bool = True) -> int:
     """
     Find processing sessions that are stuck and mark them as failed.
     Cleans up orphaned audio files for RECORDING sessions.
@@ -158,13 +158,17 @@ def recover_stale_sessions(db: Session, max_hours: int = 2) -> int:
         SessionStatus.DIARIZING,
         SessionStatus.PROCESSING,
         SessionStatus.FINALIZING,
-        SessionStatus.RECORDING,
     ]
 
-    stuck_sessions = db.query(SessionModel).filter(
-        SessionModel.status.in_(stale_states),
-        SessionModel.updated_at < cutoff_time
-    ).all()
+    from sqlalchemy import or_, and_
+    conditions = [
+        and_(SessionModel.status.in_(stale_states), SessionModel.updated_at < cutoff_time)
+    ]
+
+    if include_recording:
+        conditions.append(SessionModel.status == SessionStatus.RECORDING)
+
+    stuck_sessions = db.query(SessionModel).filter(or_(*conditions)).all()
 
     for session in stuck_sessions:
         logger.warning(f"[Recovery] Session {session.id} stuck in {session.status.value}. Marking as FAILED.")
@@ -215,6 +219,22 @@ def recover_stale_sessions(db: Session, max_hours: int = 2) -> int:
 
     if stuck_sessions:
         db.commit()
+
+    # Recover stale translations
+    try:
+        from ...models.translation import SessionTranslation
+        stale_translations = db.query(SessionTranslation).filter(
+            SessionTranslation.status == "translating",
+            SessionTranslation.updated_at < cutoff_time
+        ).all()
+        for t in stale_translations:
+            t.status = "failed"
+            t.error_message = "Translation failed due to unexpected worker interruption (stale state recovery)."
+            logger.warning(f"[Recovery] Translation {t.id} stuck in translating. Marking as FAILED.")
+        if stale_translations:
+            db.commit()
+    except Exception as e:
+        logger.error(f"[Recovery] Failed to recover stale translations: {e}")
 
     # Clean up old orphan files (older than 7 days)
     audio_dir = os.path.abspath(os.path.join(settings.EXPORT_DIR, "audio"))

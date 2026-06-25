@@ -79,7 +79,7 @@ def test_get_summary_not_found(client, monkeypatch):
 
 
 def test_parse_action_items_text():
-    from backend.app.api.sessions import _parse_action_items_text
+    from backend.app.utils.text import _parse_action_items_text
 
     raw = """Action Items
 - Fix the deployment script
@@ -92,7 +92,7 @@ def test_parse_action_items_text():
 
 
 def test_parse_action_items_no_items():
-    from backend.app.api.sessions import _parse_action_items_text
+    from backend.app.utils.text import _parse_action_items_text
 
     assert _parse_action_items_text("No action items identified.") == []
     assert _parse_action_items_text("") == []

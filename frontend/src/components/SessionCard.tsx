@@ -82,6 +82,11 @@ export function SessionCard({ session, onDelete, searchQuery }: SessionCardProps
                 Recording Available
               </span>
             )}
+            {session.detected_language && (
+              <span className="rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 px-2 py-0.5 text-[11px] font-medium">
+                🌐 {({en:"English",hi:"Hindi",ta:"Tamil",te:"Telugu",mr:"Marathi",es:"Spanish"} as Record<string,string>)[session.detected_language] || session.detected_language.toUpperCase()}
+              </span>
+            )}
           </div>
           <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
             <span className="inline-flex items-center gap-1">

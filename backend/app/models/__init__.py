@@ -4,6 +4,7 @@ from .session import Session
 from .speaker import Speaker
 from .summary import SessionSummary
 from .transcript_chunk import TranscriptChunk
+from .translation import SessionTranslation
 
 __all__ = [
     "ActionItem",
@@ -12,4 +13,5 @@ __all__ = [
     "Speaker",
     "SessionSummary",
     "TranscriptChunk",
+    "SessionTranslation",
 ]

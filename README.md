@@ -50,6 +50,8 @@ The project is designed around fully local, CPU-only inference using open-source
 - Transcript classification (e.g., Meeting, Lecture, Brainstorm)
 - Summary and Meeting Minutes (MoM) generation
 - Action item extraction (with parsed deliverables)
+- Multilingual speech transcription (Hindi-English mixed speech, etc.)
+- Full transcript and summary translation (Hindi, Tamil, Telugu, Marathi, etc.)
 - Local LLM inference via Ollama (qwen2.5:3b)
 
 #### Persistence & Management
@@ -57,6 +59,7 @@ The project is designed around fully local, CPU-only inference using open-source
 - Support for streaming real-time persistence
 - History tracking, session deletion, and cascading cleanup
 - Indexed session discovery using PostgreSQL FTS (Full-Text Search)
+- Detected language metadata and badging
 
 #### Search & Retrieval
 - PostgreSQL Full-Text Search (FTS)
@@ -69,7 +72,7 @@ The project is designed around fully local, CPU-only inference using open-source
 - Intelligent loading skeletons and declarative state management
 - Realtime Audio Visualizer and connection status badge
 - Transcript seek navigation
-- Transcript export (.txt and .docx)
+- Transcript export (.txt and .docx) with Translation support
 
 #### Authentication & Access Control
 - Session-based authentication using Flask secure cookies

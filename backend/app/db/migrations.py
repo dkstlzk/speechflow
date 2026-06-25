@@ -80,6 +80,14 @@ def ensure_columns(engine: Engine) -> None:
                 conn.commit()
                 logger.info("Added 'diarized_at' column to sessions table")
 
+        if "detected_language" not in columns:
+            with engine.connect() as conn:
+                conn.execute(
+                    text("ALTER TABLE sessions ADD COLUMN detected_language VARCHAR(10)")
+                )
+                conn.commit()
+                logger.info("Added 'detected_language' column to sessions table")
+
     if inspector.has_table("transcript_chunks"):
         chunk_cols = {col["name"] for col in inspector.get_columns("transcript_chunks")}
         if "speaker_source" not in chunk_cols:
@@ -206,6 +214,30 @@ def ensure_fts_indexes(engine: Engine) -> None:
         conn.commit()
 
 
+def ensure_translation_table(engine: Engine) -> None:
+    """Ensure the session_translations table exists."""
+    inspector = inspect(engine)
+    if not inspector.has_table("session_translations"):
+        with engine.connect() as conn:
+            conn.execute(text("""
+                CREATE TABLE session_translations (
+                    id SERIAL PRIMARY KEY,
+                    session_id INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+                    target_language VARCHAR(10) NOT NULL,
+                    translated_transcript TEXT,
+                    translated_summary TEXT,
+                    translated_mom TEXT,
+                    status VARCHAR(20) NOT NULL DEFAULT 'translating',
+                    error_message TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    CONSTRAINT uix_session_translation_language UNIQUE (session_id, target_language)
+                )
+            """))
+            conn.commit()
+            logger.info("Created session_translations table")
+
+
 def run_migrations(engine: Engine) -> None:
     """Run all additive migrations. Safe to call on every startup."""
     try:
@@ -232,3 +264,8 @@ def run_migrations(engine: Engine) -> None:
         ensure_fts_indexes(engine)
     except Exception as e:
         logger.warning(f"ensure_fts_indexes failed (non-fatal): {e}")
+
+    try:
+        ensure_translation_table(engine)
+    except Exception as e:
+        logger.warning(f"ensure_translation_table failed (non-fatal): {e}")

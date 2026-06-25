@@ -7,27 +7,81 @@ interface Stage {
 }
 
 interface Props {
-  mode?: "transcript" | "intelligence";
+  mode?: "transcript" | "intelligence" | "diarization" | "finalizing";
+  processingStage?: string;
 }
 
-export function IntelligenceProgress({ mode = "intelligence" }: Props) {
-  const STAGES: Stage[] =
-    mode === "transcript"
-      ? [
-          { label: "Processing Audio...", delayMs: 0 },
-          { label: "Running Transcription...", delayMs: 1000 },
-        ]
-      : [
-          { label: "Transcript Loaded", delayMs: 0 },
-          { label: "Classification", delayMs: 1000 },
-          { label: "Generating Intelligence...", delayMs: 3000 },
-        ];
+export function IntelligenceProgress({ mode = "intelligence", processingStage }: Props) {
+  let STAGES: Stage[] = [];
 
-  const title = mode === "transcript" ? "Transcribing Audio" : "Processing Intelligence";
+  if (mode === "transcript") {
+    STAGES = [
+      { label: "Processing Audio...", delayMs: 0 },
+      { label: "Running Transcription...", delayMs: 1000 },
+    ];
+  } else if (mode === "diarization") {
+    STAGES = [
+      { label: "Loading Audio...", delayMs: 0 },
+      { label: "Running Pyannote Inference...", delayMs: 1000 },
+      { label: "Aligning Speaker Segments...", delayMs: 3000 },
+    ];
+  } else if (mode === "finalizing") {
+    STAGES = [
+      { label: "Saving Audio Stream...", delayMs: 0 },
+      { label: "Finalizing Session...", delayMs: 1000 },
+    ];
+  } else {
+    if (processingStage) {
+      const knownStages = [
+        "Transcript Loaded",
+        "Classifying Transcript...",
+        "Generating Summary...",
+        "Generating Meeting Minutes...",
+        "Generating Action Items...",
+        "Saving Outputs..."
+      ];
+      
+      const currentIndex = knownStages.indexOf(processingStage);
+      if (currentIndex >= 0) {
+        for (let i = 0; i <= currentIndex; i++) {
+          let label = knownStages[i];
+          if (i < currentIndex) {
+            if (label === "Classifying Transcript...") label = "Classified Transcript";
+            if (label === "Generating Summary...") label = "Summary Generated";
+            if (label === "Generating Meeting Minutes...") label = "Meeting Minutes Generated";
+            if (label === "Generating Action Items...") label = "Action Items Generated";
+            if (label === "Saving Outputs...") label = "Outputs Saved";
+          }
+          STAGES.push({ label, delayMs: 0 });
+        }
+      } else {
+         STAGES = [{ label: processingStage, delayMs: 0 }];
+      }
+    } else {
+      STAGES = [
+        { label: "Transcript Loaded", delayMs: 0 },
+        { label: "Generating Intelligence...", delayMs: 1000 },
+      ];
+    }
+  }
 
-  const [currentStage, setCurrentStage] = useState<number>(0);
+  const title = 
+    mode === "transcript" ? "Transcribing Audio" : 
+    mode === "diarization" ? "Identifying Speakers" :
+    mode === "finalizing" ? "Finalizing Recording" :
+    "Processing Intelligence";
+
+  const isDynamicIntelligence = mode === "intelligence" && processingStage;
+  const initialStage = isDynamicIntelligence ? STAGES.length - 1 : 0;
+
+  const [currentStage, setCurrentStage] = useState<number>(initialStage);
 
   useEffect(() => {
+    if (isDynamicIntelligence) {
+      setCurrentStage(STAGES.length - 1);
+      return;
+    }
+
     const timers = STAGES.map((stage, index) => {
       if (index === 0) return null;
       return setTimeout(() => {
@@ -38,7 +92,7 @@ export function IntelligenceProgress({ mode = "intelligence" }: Props) {
     return () => {
       timers.forEach((t) => t && clearTimeout(t));
     };
-  }, []);
+  }, [mode, processingStage, STAGES.length, isDynamicIntelligence]);
 
   return (
     <div className="flex flex-col items-center justify-center py-12 px-4 text-center border rounded-xl bg-card shadow-sm">

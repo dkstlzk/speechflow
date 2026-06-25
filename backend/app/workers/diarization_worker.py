@@ -43,9 +43,51 @@ def _get_embedding_inference():
                 _EMBEDDING_INFERENCE = Inference(_EMBEDDING_MODEL, window="whole")
     return _EMBEDDING_INFERENCE
 
+def _recover_wav_file(session, wav_path: Path, storage_dir: Path) -> bool:
+    import glob
+    import wave
+    recovered = False
+    raw_path = storage_dir / f"session_{session.id}.raw"
+    possible_orphans = glob.glob(str(storage_dir / f"session_{session.id}.raw.orphan.*"))
+    
+    recover_from = None
+    if raw_path.exists():
+        recover_from = raw_path
+    elif possible_orphans:
+        recover_from = Path(possible_orphans[0])
+        
+    if recover_from:
+        logger.info(f"[DiarizationWorker] Attempting to recover missing WAV from {recover_from}")
+        try:
+            with wave.open(str(wav_path), "wb") as f_wav:
+                f_wav.setnchannels(1)
+                f_wav.setsampwidth(2)
+                f_wav.setframerate(getattr(session, 'sample_rate', 16000))
+                with open(str(recover_from), "rb") as f_raw:
+                    while True:
+                        chunk = f_raw.read(1024 * 1024)
+                        if not chunk:
+                            break
+                        f_wav.writeframes(chunk)
+            with open(str(wav_path), "ab") as f:
+                f.flush()
+                import os
+                os.fsync(f.fileno())
+            if wav_path.exists() and wav_path.stat().st_size > 44:
+                recovered = True
+                logger.info(f"[DiarizationWorker] Successfully recovered WAV file: {wav_path}")
+        except Exception as e:
+            logger.error(f"[DiarizationWorker] Failed to recover WAV: {e}")
+            
+    return recovered
+
+
 def process_quick_diarization(session_id: int) -> None:
     """Extract embeddings per chunk and cluster them to assign speakers."""
     logger.info(f"[DiarizationWorker] Started QUICK diarization for session={session_id}")
+    
+    from ..db.session import engine
+    engine.dispose()
 
     db = SessionLocal()
     try:
@@ -69,43 +111,7 @@ def process_quick_diarization(session_id: int) -> None:
         wav_path = storage_dir / session.audio_path
 
         if not wav_path.exists():
-            # Attempt to recover from raw or orphan file
-            import glob
-            import wave
-            recovered = False
-            raw_path = storage_dir / f"session_{session_id}.raw"
-            possible_orphans = glob.glob(str(storage_dir / f"session_{session_id}.raw.orphan.*"))
-            
-            recover_from = None
-            if raw_path.exists():
-                recover_from = raw_path
-            elif possible_orphans:
-                recover_from = Path(possible_orphans[0])
-                
-            if recover_from:
-                logger.info(f"[DiarizationWorker] Attempting to recover missing WAV from {recover_from}")
-                try:
-                    with wave.open(str(wav_path), "wb") as f_wav:
-                        f_wav.setnchannels(1)
-                        f_wav.setsampwidth(2)
-                        # Default to 16000 if sample_rate is not on session
-                        f_wav.setframerate(getattr(session, 'sample_rate', 16000))
-                        with open(str(recover_from), "rb") as f_raw:
-                            while True:
-                                chunk = f_raw.read(1024 * 1024)
-                                if not chunk:
-                                    break
-                                f_wav.writeframes(chunk)
-                    with open(str(wav_path), "ab") as f:
-                        f.flush()
-                        os.fsync(f.fileno())
-                    if wav_path.exists() and wav_path.stat().st_size > 44:
-                        recovered = True
-                        logger.info(f"[DiarizationWorker] Successfully recovered WAV file: {wav_path}")
-                except Exception as e:
-                    logger.error(f"[DiarizationWorker] Failed to recover WAV: {e}")
-                    
-            if not recovered:
+            if not _recover_wav_file(session, wav_path, storage_dir):
                 logger.error(f"[DiarizationWorker] WAV file missing at {wav_path} and no recovery source found")
                 update_session_status(db, session_id, SessionStatus.FAILED, error="WAV file missing")
                 return
@@ -206,6 +212,9 @@ def process_quick_diarization(session_id: int) -> None:
 def process_accurate_diarization(session_id: int) -> None:
     """Run Whisper + Pyannote on existing WAV and rebuild transcript chunks."""
     logger.info(f"[DiarizationWorker] Started ACCURATE diarization for session={session_id}")
+    
+    from ..db.session import engine
+    engine.dispose()
 
     db = SessionLocal()
     try:
@@ -229,44 +238,7 @@ def process_accurate_diarization(session_id: int) -> None:
         wav_path = storage_dir / session.audio_path
 
         if not wav_path.exists():
-            # Attempt to recover from raw or orphan file
-            import glob
-            import wave
-            recovered = False
-            raw_path = storage_dir / f"session_{session_id}.raw"
-            possible_orphans = glob.glob(str(storage_dir / f"session_{session_id}.raw.orphan.*"))
-            
-            recover_from = None
-            if raw_path.exists():
-                recover_from = raw_path
-            elif possible_orphans:
-                recover_from = Path(possible_orphans[0])
-                
-            if recover_from:
-                logger.info(f"[DiarizationWorker] Attempting to recover missing WAV from {recover_from}")
-                try:
-                    with wave.open(str(wav_path), "wb") as f_wav:
-                        f_wav.setnchannels(1)
-                        f_wav.setsampwidth(2)
-                        # Default to 16000 if sample_rate is not on session
-                        f_wav.setframerate(getattr(session, 'sample_rate', 16000))
-                        with open(str(recover_from), "rb") as f_raw:
-                            while True:
-                                chunk = f_raw.read(1024 * 1024)
-                                if not chunk:
-                                    break
-                                f_wav.writeframes(chunk)
-                    with open(str(wav_path), "ab") as f:
-                        f.flush()
-                        import os
-                        os.fsync(f.fileno())
-                    if wav_path.exists() and wav_path.stat().st_size > 44:
-                        recovered = True
-                        logger.info(f"[DiarizationWorker] Successfully recovered WAV file: {wav_path}")
-                except Exception as e:
-                    logger.error(f"[DiarizationWorker] Failed to recover WAV: {e}")
-                    
-            if not recovered:
+            if not _recover_wav_file(session, wav_path, storage_dir):
                 logger.error(f"[DiarizationWorker] WAV file missing at {wav_path} and no recovery source found")
                 update_session_status(db, session_id, SessionStatus.FAILED, error="WAV file missing")
                 return
@@ -280,12 +252,16 @@ def process_accurate_diarization(session_id: int) -> None:
         result = transcriber.transcribe(str(wav_path))
 
         # 2. Run Pyannote on full WAV
+        logger.info("[Diarization] Starting pyannote inference")
         speaker_segments = diarizer.diarize(str(wav_path))
+        logger.info("[Diarization] Finished pyannote inference")
 
         # 3. Align (assigns one speaker per Whisper segment with hysteresis)
+        logger.info("[Diarization] Starting transcript alignment")
         aligned_segments = align_transcript_with_speakers(
             result.segments, speaker_segments
         )
+        logger.info("[Diarization] Finished transcript alignment")
 
         # 4. Map to new DB chunks and REPLACE
         payloads = []

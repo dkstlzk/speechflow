@@ -1,6 +1,7 @@
 """Transcript processing service for summarization outputs."""
 
 from typing import List, Optional
+import time
 
 from ...config.logging import get_logger
 from ...services.session.session_service import get_session_transcript
@@ -112,17 +113,31 @@ class TranscriptProcessor:
     def assemble_transcript(self, session_id: int) -> str:
         return "\n".join(self.assemble_chunks(session_id))
 
-    def generate_summary(self, session_id: int) -> str:
-        return self._generate(session_id, SUMMARY_PROMPT, SUMMARY_MERGE_PROMPT, "summary")
+    def generate_intelligence(self, session_id: int, chunks: List[str]) -> tuple[dict, dict]:
+        from .prompts import COMBINED_PROMPT, COMBINED_MERGE_PROMPT
+        out_str, timings = self._generate(session_id, COMBINED_PROMPT, COMBINED_MERGE_PROMPT, "intelligence", chunks, response_format="json")
+        import json
+        try:
+            data = json.loads(out_str)
+        except Exception as e:
+            logger.exception(
+                f"Failed to parse intelligence JSON: {e}", 
+                extra={
+                    "session_id": session_id,
+                    "output_length": len(out_str),
+                    "output_preview": out_str[:500]
+                }
+            )
+            # Fallback: if JSON fails, treat the entire output as summary to avoid data loss
+            data = {
+                "summary": out_str,
+                "meeting_minutes": None,
+                "action_items": None
+            }
+        return data, timings
 
-    def generate_mom(self, session_id: int) -> str:
-        return self._generate(session_id, MOM_PROMPT, MOM_MERGE_PROMPT, "mom")
-
-    def generate_action_items(self, session_id: int) -> str:
-        return self._generate(session_id, ACTION_ITEMS_PROMPT, ACTION_ITEMS_MERGE_PROMPT, "action_items")
-
-    def classify(self, session_id: int) -> str:
-        transcript = self.assemble_transcript(session_id)
+    def classify(self, session_id: int, chunks: List[str]) -> str:
+        transcript = "\n".join(chunks)
 
         if len(transcript.strip()) < 100:
             return "conversation"
@@ -134,8 +149,18 @@ class TranscriptProcessor:
         )
 
     def process_session(self, session_id: int) -> dict:
-
-        transcript_type = self.classify(session_id)
+        from ...workers.worker_state import set_processing_stage
+        
+        timings = {}
+        
+        # Assemble chunks once for the entire pipeline
+        chunks = self.assemble_chunks(session_id)
+        total_chars = sum(len(c) for c in chunks)
+        
+        set_processing_stage(session_id, "Classifying Transcript...")
+        t0 = time.time()
+        transcript_type = self.classify(session_id, chunks)
+        timings["Classification"] = time.time() - t0
 
         logger.info(
             "Transcript classified",
@@ -145,48 +170,43 @@ class TranscriptProcessor:
             },
         )
 
+        mom = None
+        action_items = None
+
         try:
-            summary = self.generate_summary(session_id)
-            if not summary or not summary.strip():
+            set_processing_stage(session_id, "Generating Intelligence...")
+            data, gen_timings = self.generate_intelligence(session_id, chunks)
+            timings["Intelligence"] = gen_timings
+
+            summary = data.get("summary")
+            if not summary or not str(summary).strip():
                 logger.error("Empty summary generated", extra={"session_id": session_id})
                 summary = None
             else:
                 summary = (
-                    summary
+                    str(summary)
                     .replace("SPEAKER_", "Participant ")
                     .replace("Speaker ", "Participant ")
                 )
-        except OllamaClientError:
-            raise
-        except Exception as e:
-            logger.error(f"Summary generation failed: {e}", extra={"session_id": session_id})
-            summary = None
 
-        mom = None
-        action_items = None
-
-        if transcript_type == "meeting":
-            try:
-                mom = self.generate_mom(session_id)
-                if not mom or not mom.strip():
-                    logger.error("Empty MoM generated", extra={"session_id": session_id})
+            if transcript_type == "meeting":
+                mom = data.get("meeting_minutes")
+                if not mom or not str(mom).strip():
                     mom = None
-            except OllamaClientError:
-                raise
-            except Exception as e:
-                logger.error(f"MoM generation failed: {e}", extra={"session_id": session_id})
-                mom = None
+                else:
+                    mom = str(mom)
 
-        try:
-            action_items = self.generate_action_items(session_id)
-            if not action_items or not action_items.strip():
-                logger.error("Empty Action Items generated", extra={"session_id": session_id})
+            action_items = data.get("action_items")
+            if not action_items or not str(action_items).strip():
                 action_items = None
+            else:
+                action_items = str(action_items)
+
         except OllamaClientError:
             raise
         except Exception as e:
-            logger.error(f"Action Items generation failed: {e}", extra={"session_id": session_id})
-            action_items = None
+            logger.error(f"Intelligence generation failed: {e}", extra={"session_id": session_id})
+            summary = None
 
         return {
             "session_id": session_id,
@@ -194,19 +214,58 @@ class TranscriptProcessor:
             "summary": summary,
             "mom": mom,
             "action_items": action_items,
+            "timings": timings,
+            "total_chars": total_chars,
         }
 
-    def _generate(self, session_id: int, template: str, merge_template: str, output_type: str) -> str:
-        chunks = self.assemble_chunks(session_id)
+    def _generate(self, session_id: int, template: str, merge_template: str, output_type: str, chunks: List[str], response_format: Optional[str] = None) -> tuple[str, dict]:
+        from ...workers.worker_state import set_processing_stage
+        
+        stage_map = {
+            "summary": "Generating Summary",
+            "mom": "Generating Meeting Minutes",
+            "action_items": "Generating Action Items"
+        }
+        base_stage = stage_map.get(output_type, f"Generating {output_type}")
+        
+        total_chars = sum(len(c) for c in chunks)
+        logger.info(
+            "[Profiling] Chunk Processing Started",
+            extra={
+                "session_id": session_id,
+                "output_type": output_type,
+                "chunk_count": len(chunks),
+                "total_chars": total_chars
+            }
+        )
         
         partial_outputs = []
+        chunk_timings = []
         for i, chunk in enumerate(chunks):
+            if len(chunks) > 1:
+                set_processing_stage(session_id, f"{base_stage} (Chunk {i+1} of {len(chunks)})...")
+            else:
+                set_processing_stage(session_id, f"{base_stage}...")
 
             prompt = template.format(transcript=chunk)
-
+            
+            start = time.time()
             try:
-                out = self._client.generate(prompt, model=self._model)
+                out = self._client.generate(prompt, model=self._model, response_format=response_format)
                 partial_outputs.append(out)
+                chunk_dur = time.time() - start
+                chunk_timings.append(chunk_dur)
+                
+                logger.info(
+                    "[Profiling] Chunk Complete",
+                    extra={
+                        "session_id": session_id,
+                        "output_type": output_type,
+                        "chunk": i + 1,
+                        "chunk_count": len(chunks),
+                        "duration": chunk_dur
+                    }
+                )
             except OllamaClientError as exc:
                 logger.exception(
                     "Ollama chunk generation failed",
@@ -220,13 +279,36 @@ class TranscriptProcessor:
                 raise
 
         if len(partial_outputs) == 1:
-            return partial_outputs[0]
+            return partial_outputs[0], {
+                "chunks": chunk_timings,
+                "merge": None,
+                "chars": total_chars,
+                "num_chunks": len(chunks)
+            }
+
+        set_processing_stage(session_id, f"{base_stage} (Merging)...")
 
         merged_text = "\n\n".join(f"--- PART {i+1} ---\n{text}" for i, text in enumerate(partial_outputs))
         merge_prompt = merge_template.format(partial_outputs=merged_text)
         
+        merge_start = time.time()
         try:
-            return self._client.generate(merge_prompt, model=self._model)
+            out = self._client.generate(merge_prompt, model=self._model, response_format=response_format)
+            merge_dur = time.time() - merge_start
+            logger.info(
+                "[Profiling] Merge Complete",
+                extra={
+                    "session_id": session_id,
+                    "output_type": output_type,
+                    "duration": merge_dur
+                }
+            )
+            return out, {
+                "chunks": chunk_timings,
+                "merge": merge_dur,
+                "chars": total_chars,
+                "num_chunks": len(chunks)
+            }
         except OllamaClientError as exc:
             logger.exception(
                 "Ollama merge generation failed",

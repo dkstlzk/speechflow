@@ -9,7 +9,7 @@ import requests
 from ...config.logging import get_logger
 
 DEFAULT_OLLAMA_ENDPOINT = "http://localhost:11434/api/generate"
-DEFAULT_TIMEOUT_SECONDS = 300.0
+DEFAULT_TIMEOUT_SECONDS = 3000.0
 
 logger = get_logger("summarization")
 
@@ -70,7 +70,7 @@ class OllamaClient:
         self.timeout_seconds = config.timeout_seconds
         self._session = session or requests.Session()
 
-    def generate(self, prompt: str, model: str = "qwen2.5:3b") -> str:
+    def generate(self, prompt: str, model: str = "qwen2.5:3b", response_format: Optional[str] = None) -> str:
         if not prompt or not prompt.strip():
             raise OllamaClientError("Prompt must not be empty")
 
@@ -79,6 +79,8 @@ class OllamaClient:
             "prompt": prompt,
             "stream": False,
         }
+        if response_format:
+            payload["format"] = response_format
 
         import time
         logger.info(

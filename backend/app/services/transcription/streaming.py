@@ -64,6 +64,7 @@ class StreamingSession:
     is_transcribing: bool = False
     is_captioning: bool = False
     final_chunk_submitted: bool = False
+    detected_language: Optional[str] = None
 
 
 @dataclass
@@ -125,6 +126,11 @@ class StreamingSessionManager:
                 try:
                     import wave
                     import os
+                    
+                    if not os.path.exists(session.raw_audio_path):
+                        logger.warning(f"[Playback] Raw audio missing (likely 0 bytes received) for session {session.session_id}. Marking FAILED.")
+                        raise RuntimeError("Raw audio file missing")
+
                     logger.info("[Playback] Converting raw to wav")
                     wav_path = session.raw_audio_path.replace(".raw", ".wav")
 

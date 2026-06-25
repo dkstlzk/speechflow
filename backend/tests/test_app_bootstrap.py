@@ -1,5 +1,5 @@
 def test_app_factory_bootstrap():
-    from backend.app import create_app
+    from backend.app.main import create_app
 
     app = create_app()
     assert app is not None

@@ -27,7 +27,7 @@ def logout():
         from flask import current_app
         if "socketio" in current_app.extensions:
             current_app.extensions["socketio"].emit("force_disconnect")
-        logger.info("Sent force_disconnect broadcast to admin room.")
+        logger.info("Sent force_disconnect broadcast to all clients.")
     except Exception as e:
         logger.error(f"Failed to broadcast disconnect: {e}")
     return jsonify({"success": True, "message": "Logged out successfully"})
