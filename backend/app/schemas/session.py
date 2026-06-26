@@ -12,6 +12,9 @@ class SessionResponseSchema:
     summary: str = ""
     mom: Optional[dict] = None
     action_items: Optional[list] = None
+    title: Optional[str] = None
+    host_name: Optional[str] = None
+    participants: Optional[str] = None
 
     def to_dict(self) -> dict:
         return asdict(self)

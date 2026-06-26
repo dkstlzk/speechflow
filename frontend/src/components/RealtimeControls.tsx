@@ -4,6 +4,7 @@ interface Props {
   status: RecordingStatus;
   micState: MicrophoneState;
   onStart: () => void;
+  onStartSystem: () => void;
   onPause: () => void;
   onResume: () => void;
   onStop: () => void;
@@ -17,6 +18,7 @@ export function RealtimeControls({
   status,
   micState,
   onStart,
+  onStartSystem,
   onPause,
   onResume,
   onStop,
@@ -39,13 +41,23 @@ export function RealtimeControls({
   return (
     <div className="flex flex-wrap items-center gap-2">
       {status !== "completed" && (
-        <button
-          onClick={onStart}
-          disabled={!idle}
-          className={`${btn} bg-primary text-primary-foreground hover:bg-primary/90`}
-        >
-          Start Recording
-        </button>
+        <>
+          <button
+            onClick={onStart}
+            disabled={!idle}
+            className={`${btn} bg-primary text-primary-foreground hover:bg-primary/90`}
+          >
+            Start Mic
+          </button>
+          <button
+            onClick={onStartSystem}
+            disabled={!idle}
+            className={`${btn} bg-blue-600 text-white hover:bg-blue-700`}
+            title="Record Google Meet, Zoom, or YouTube by capturing a browser tab or system audio."
+          >
+            Record Tab/System
+          </button>
+        </>
       )}
       <button
         onClick={onPause}

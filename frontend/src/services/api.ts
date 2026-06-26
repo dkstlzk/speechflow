@@ -12,7 +12,7 @@ import type {
   TranscriptType,
 } from "@/types";
 
-const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:5000";
+const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? "";
 
 export class ApiError extends Error {
   status: number;
@@ -73,7 +73,7 @@ function mapBackendStatus(s: string): ProcessingStatus {
     uploaded: "processing",
     preprocessing: "processing",
     transcribing: "processing",
-    diarizing: "processing",
+    diarizing: "diarizing",
     processing: "processing",
     completed: "completed",
     failed: "failed",
@@ -87,9 +87,15 @@ function mapBackendStatus(s: string): ProcessingStatus {
 }
 
 // POST /api/upload/
-export async function uploadFile(file: File): Promise<ApiResponse<{ sessionId: string }>> {
+export async function uploadFile(
+  file: File,
+  metadata?: { title?: string; host_name?: string; participants?: string }
+): Promise<ApiResponse<{ sessionId: string }>> {
   const fd = new FormData();
   fd.append("file", file);
+  if (metadata?.title) fd.append("title", metadata.title);
+  if (metadata?.host_name) fd.append("host_name", metadata.host_name);
+  if (metadata?.participants) fd.append("participants", metadata.participants);
   const raw = await apiFetch<{
     session_id: number;
     status: string;
@@ -127,6 +133,8 @@ export async function getSessions(
     transcriptType: (s.transcript_type as TranscriptType) ?? undefined,
     fileName: s.original_filename ?? undefined,
     title: s.title ?? undefined,
+    host_name: (s as any).host_name ?? undefined,
+    participants: (s as any).participants ?? undefined,
     has_audio: s.has_audio,
     audio_url: s.audio_url ? `${API_BASE}${s.audio_url}` : undefined,
     durationSec: s.duration_seconds ?? undefined,
@@ -158,6 +166,8 @@ export async function getSession(id: string, signal?: AbortSignal): Promise<ApiR
       transcriptType: raw.data.transcript_type as TranscriptType | undefined,
       fileName: raw.data.original_filename ?? undefined,
       title: raw.data.title ?? undefined,
+      host_name: (raw.data as any).host_name ?? undefined,
+      participants: (raw.data as any).participants ?? undefined,
       has_audio: raw.data.has_audio,
       audio_url: raw.data.audio_url ? `${API_BASE}${raw.data.audio_url}` : undefined,
       durationSec: raw.data.duration_seconds ?? undefined,
@@ -275,6 +285,19 @@ export async function processSession(
   };
 }
 
+// POST /api/sessions/{id}/retry
+export async function retrySession(
+  id: string,
+): Promise<ApiResponse<{ message: string }>> {
+  const raw = await apiFetch<{ message: string }>(`${API_BASE}/api/sessions/${id}/retry`, {
+    method: "POST",
+  });
+  return {
+    data: raw.data,
+    ok: true,
+  };
+}
+
 // POST /api/sessions/{id}/quick-diarization
 export async function processQuickDiarization(
   id: string,
@@ -301,12 +324,16 @@ export async function processAccurateDiarization(
   };
 }
 
-export async function startRealtimeSession(): Promise<ApiResponse<{ sessionId: string }>> {
+export async function startRealtimeSession(
+  metadata?: { title?: string; host_name?: string; participants?: string }
+): Promise<ApiResponse<{ sessionId: string }>> {
   const raw = await apiFetch<{
     session_id: number;
     status: string;
   }>(`${API_BASE}/api/realtime/session`, {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(metadata || {}),
   });
 
   return {

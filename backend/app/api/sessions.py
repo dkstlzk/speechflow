@@ -40,6 +40,8 @@ def _serialize_session(row) -> dict:
         "original_filename": row.original_filename,
         "duration_seconds": row.duration_seconds,
         "title": row.title,
+        "host_name": getattr(row, "host_name", None),
+        "participants": getattr(row, "participants", None),
         "created_at": row.created_at.isoformat()
             if row.created_at
             else None,
@@ -249,6 +251,10 @@ def process_session(session_id: str):
     except ValueError:
         return jsonify(ApiResponse.fail("invalid session id").to_dict()), 400
 
+    import multiprocessing
+    if len(multiprocessing.active_children()) >= 4:
+        return jsonify(ApiResponse.fail("Server overloaded. Too many active jobs.").to_dict()), 503
+
     from ..models.enums import SessionStatus
     from ..models.session import Session
     from ..db.session import SessionLocal
@@ -258,8 +264,8 @@ def process_session(session_id: str):
         session = db.query(Session).with_for_update().filter(Session.id == session_id_int).first()
         if not session:
             return jsonify(ApiResponse.fail("Session not found").to_dict()), 404
-        if session.status != SessionStatus.COMPLETED:
-            return jsonify(ApiResponse.fail("Session must be COMPLETED to process").to_dict()), 400
+        if session.status not in (SessionStatus.COMPLETED, SessionStatus.FAILED):
+            return jsonify(ApiResponse.fail("Session must be COMPLETED or FAILED to process").to_dict()), 400
         
         session.status = SessionStatus.PROCESSING
         db.commit()
@@ -285,6 +291,60 @@ def process_session(session_id: str):
         return jsonify(ApiResponse.fail("Server overloaded. Failed to start process.").to_dict()), 500
 
 
+@sessions_bp.post("/<session_id>/retry")
+def retry_session_endpoint(session_id: str):
+    try:
+        session_id_int = int(session_id)
+    except ValueError:
+        return jsonify(ApiResponse.fail("invalid session id").to_dict()), 400
+
+    from ..models.enums import SessionStatus
+    from ..models.session import Session
+    from ..db.session import SessionLocal
+
+    db = SessionLocal()
+    try:
+        session = db.query(Session).with_for_update().filter(Session.id == session_id_int).first()
+        if not session:
+            return jsonify(ApiResponse.fail("Session not found").to_dict()), 404
+        # Guard against active sessions (PROCESSING, TRANSCRIBING, DIARIZING, RECORDING) being accidentally updated
+        if session.status != SessionStatus.FAILED:
+            return jsonify(ApiResponse.fail("Only failed sessions can be retried").to_dict()), 400
+        
+        from ..services.session.session_service import get_session_transcript
+        has_transcript = get_session_transcript(session_id_int) is not None
+        
+        if not has_transcript:
+            return jsonify(ApiResponse.fail("Cannot retry session: audio transcription failed. Please re-upload the file.").to_dict()), 400
+            
+        session.status = SessionStatus.PROCESSING
+        session.processing_error = None
+        db.commit()
+        
+    finally:
+        db.close()
+
+    try:
+        import multiprocessing
+        from ..workers.intelligence_worker import run_intelligence_pipeline
+        multiprocessing.get_context("spawn").Process(target=run_intelligence_pipeline, args=(session_id_int,)).start()
+            
+        return jsonify(ApiResponse.ok({"message": "Retry started"}).to_dict()), 202
+    except Exception as e:
+        logger.exception(f"Failed to spawn retry process for session {session_id_int}")
+        rollback_db = SessionLocal()
+        try:
+            rollback_session = rollback_db.query(Session).filter(Session.id == session_id_int).first()
+            if rollback_session:
+                rollback_session.status = SessionStatus.FAILED
+                rollback_session.processing_error = f"Failed to start process: {str(e)}"
+                rollback_db.commit()
+        finally:
+            rollback_db.close()
+        return jsonify(ApiResponse.fail("Server overloaded. Failed to start process.").to_dict()), 500
+
+
+
 
 @sessions_bp.post("/<session_id>/quick-diarization")
 def trigger_quick_diarization(session_id: str):
@@ -304,8 +364,8 @@ def trigger_quick_diarization(session_id: str):
         session = db.query(Session).with_for_update().filter(Session.id == session_id_int).first()
         if not session:
             return jsonify(ApiResponse.fail("Session not found").to_dict()), 404
-        if session.status != SessionStatus.COMPLETED:
-            return jsonify(ApiResponse.fail("Session must be COMPLETED to run diarization").to_dict()), 400
+        if session.status not in (SessionStatus.COMPLETED, SessionStatus.FAILED):
+            return jsonify(ApiResponse.fail("Session must be COMPLETED or FAILED to run diarization").to_dict()), 400
         
         session.status = SessionStatus.DIARIZING
         db.commit()
@@ -340,6 +400,10 @@ def trigger_accurate_diarization(session_id: str):
     except ValueError:
         return jsonify(ApiResponse.fail("invalid session id").to_dict()), 400
 
+    import multiprocessing
+    if len(multiprocessing.active_children()) >= 4:
+        return jsonify(ApiResponse.fail("Server overloaded. Too many active jobs.").to_dict()), 503
+
     from ..models.enums import SessionStatus
     from ..models.session import Session
     from ..db.session import SessionLocal
@@ -350,8 +414,8 @@ def trigger_accurate_diarization(session_id: str):
         session = db.query(Session).with_for_update().filter(Session.id == session_id_int).first()
         if not session:
             return jsonify(ApiResponse.fail("Session not found").to_dict()), 404
-        if session.status != SessionStatus.COMPLETED:
-            return jsonify(ApiResponse.fail("Session must be COMPLETED to run diarization").to_dict()), 400
+        if session.status not in (SessionStatus.COMPLETED, SessionStatus.FAILED):
+            return jsonify(ApiResponse.fail("Session must be COMPLETED or FAILED to run diarization").to_dict()), 400
         
         session.status = SessionStatus.DIARIZING
         db.commit()
@@ -360,8 +424,8 @@ def trigger_accurate_diarization(session_id: str):
 
     # TODO(TechDebt): Fire-and-forget threads risk job loss if the process restarts.
     # Acceptable for MVP, but should be migrated to Celery/Redis in production.
+
     try:
-        import multiprocessing
         multiprocessing.get_context("spawn").Process(target=process_accurate_diarization, args=(session_id_int,)).start()
         return jsonify(ApiResponse.ok({"message": "Accurate diarization started"}).to_dict()), 202
     except Exception:
@@ -405,6 +469,10 @@ def translate_session(session_id: str):
         session_id_int = int(session_id)
     except ValueError:
         return jsonify(ApiResponse.fail("invalid session id").to_dict()), 400
+
+    import multiprocessing
+    if len(multiprocessing.active_children()) >= 4:
+        return jsonify(ApiResponse.fail("Server overloaded. Too many active jobs.").to_dict()), 503
 
     body = flask_request.get_json(silent=True) or {}
     target_language = body.get("target_language", "").strip().lower()
@@ -452,14 +520,30 @@ def translate_session(session_id: str):
         db.commit()
 
         # Spawn background process
-        multiprocessing.get_context("spawn").Process(
-            target=process_translation, 
-            args=(session_id_int, target_language)
-        ).start()
+        try:
+            multiprocessing.get_context("spawn").Process(
+                target=process_translation, 
+                args=(session_id_int, target_language)
+            ).start()
+        except Exception as e:
+            logger.exception(f"Failed to start translation for session {session_id_int}")
+            rollback_db = SessionLocal()
+            try:
+                rollback_translation = rollback_db.query(SessionTranslation).filter(
+                    SessionTranslation.session_id == session_id_int,
+                    SessionTranslation.target_language == target_language
+                ).first()
+                if rollback_translation:
+                    rollback_translation.status = "failed"
+                    rollback_translation.error_message = "Server overloaded. Failed to start translation."
+                    rollback_db.commit()
+            finally:
+                rollback_db.close()
+            return jsonify(ApiResponse.fail(f"Failed to start translation: {str(e)}").to_dict()), 500
 
     except Exception as e:
-        logger.exception(f"Failed to start translation for session {session_id_int}")
-        return jsonify(ApiResponse.fail(f"Failed to start translation: {str(e)}").to_dict()), 500
+        logger.exception(f"Database error while starting translation for session {session_id_int}")
+        return jsonify(ApiResponse.fail(f"Failed to setup translation: {str(e)}").to_dict()), 500
     finally:
         db.close()
 

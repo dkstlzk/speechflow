@@ -1,4 +1,9 @@
 # pyrefly: ignore [missing-import]
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="eventlet")
+warnings.filterwarnings("ignore", message=".*Eventlet is deprecated.*")
+
+# pyrefly: ignore [missing-import]
 import eventlet
 eventlet.monkey_patch()
 
@@ -14,6 +19,7 @@ from .api import register_blueprints
 from .config.logging import configure_logging
 from .config.settings import settings
 from .websocket import register_socketio_events
+from .config.extensions import limiter
 
 from .db.base import Base
 from .db.session import engine, SessionLocal
@@ -27,6 +33,8 @@ configure_logging()
 logger = get_logger(__name__)
 
 cors_origins = [o.strip() for o in settings.CORS_ORIGINS.split(",")] if settings.CORS_ORIGINS and settings.CORS_ORIGINS != "*" else "*"
+if not settings.DEBUG and cors_origins == "*":
+    raise RuntimeError("CORS_ORIGINS must be configured to an explicit whitelist in production.")
 
 socketio = SocketIO(
     cors_allowed_origins=cors_origins,
@@ -55,6 +63,7 @@ def create_app() -> Flask:
     register_blueprints(app)
     register_socketio_events(socketio)
     socketio.init_app(app)
+    limiter.init_app(app)
 
 
 

@@ -5,9 +5,10 @@ interface Props {
   mom?: string | null;
   loading?: boolean;
   error?: string | null;
+  emptyMessage?: string;
 }
 
-export function MomPanel({ mom, loading, error }: Props) {
+export function MomPanel({ mom, loading, error, emptyMessage }: Props) {
   return (
     <PanelShell
       title="Meeting Minutes"
@@ -15,7 +16,7 @@ export function MomPanel({ mom, loading, error }: Props) {
       loading={loading}
       error={error}
       empty={!loading && !error && !mom}
-      emptyMessage="Meeting minutes unavailable or generation failed."
+      emptyMessage={emptyMessage || "Not generated yet."}
     >
       <pre className="whitespace-pre-wrap font-sans text-[14px] leading-7 text-foreground/90">
         {mom}

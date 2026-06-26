@@ -39,6 +39,7 @@ class Settings:
     )
     HF_TOKEN: str = os.getenv("HF_TOKEN", "")
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
+    DEBUG: bool = os.getenv("FLASK_DEBUG", "0") == "1"
     ADMIN_PASSWORD: str = os.getenv("ADMIN_PASSWORD")
     QUICK_DIARIZATION_THRESHOLD: float = float(os.getenv("QUICK_DIARIZATION_THRESHOLD", "0.3"))
 

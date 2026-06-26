@@ -88,6 +88,22 @@ def ensure_columns(engine: Engine) -> None:
                 conn.commit()
                 logger.info("Added 'detected_language' column to sessions table")
 
+        if "host_name" not in columns:
+            with engine.connect() as conn:
+                conn.execute(
+                    text("ALTER TABLE sessions ADD COLUMN host_name VARCHAR(255)")
+                )
+                conn.commit()
+                logger.info("Added 'host_name' column to sessions table")
+
+        if "participants" not in columns:
+            with engine.connect() as conn:
+                conn.execute(
+                    text("ALTER TABLE sessions ADD COLUMN participants TEXT")
+                )
+                conn.commit()
+                logger.info("Added 'participants' column to sessions table")
+
     if inspector.has_table("transcript_chunks"):
         chunk_cols = {col["name"] for col in inspector.get_columns("transcript_chunks")}
         if "speaker_source" not in chunk_cols:

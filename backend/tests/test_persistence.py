@@ -46,3 +46,16 @@ def test_action_items_roundtrip(db_session):
     assert len(result) == 2
     assert result[0]["text"] == "item one"
     assert result[1]["text"] == "item two"
+
+def test_metadata_persistence(db_session):
+    from backend.app.services.persistence.session_repository import get_session_by_id
+    session = create_session(db_session, "test", "test.wav")
+    session.title = "Q3 Roadmap"
+    session.host_name = "Alice"
+    session.participants = "Bob, Charlie"
+    db_session.commit()
+    
+    fetched = get_session_by_id(db_session, session.id)
+    assert fetched.title == "Q3 Roadmap"
+    assert fetched.host_name == "Alice"
+    assert fetched.participants == "Bob, Charlie"

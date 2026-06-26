@@ -10,7 +10,7 @@
 import { io, Socket } from "socket.io-client";
 import type { CaptionUpdate, StreamingEvent, TranscriptSegment } from "@/types";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_URL = import.meta.env.VITE_API_URL ?? "";
 
 export const socket: Socket = io(API_URL, {
   autoConnect: false,

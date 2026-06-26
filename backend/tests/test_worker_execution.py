@@ -34,7 +34,8 @@ class DummyTranscriber:
                 "segments": [
                     {"start": 0.0, "end": 1.0, "text": "hello", "order": 0},
                     {"start": 1.0, "end": 2.0, "text": "world", "order": 1},
-                ]
+                ],
+                "language": "en"
             },
         )()
 
@@ -65,7 +66,8 @@ class SequentialTranscriber:
             {
                 "segments": [
                     {"start": 0.0, "end": 1.0, "text": text, "order": 0},
-                ]
+                ],
+                "language": "en"
             },
         )()
 

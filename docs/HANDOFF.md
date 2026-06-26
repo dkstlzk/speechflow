@@ -47,3 +47,68 @@ To ensure a high-quality, stable release without introducing excessive technical
 The current platform successfully answers the core business questions raised by leadership. It proves that SpeechFlow can take a messy, multilingual Indian context meeting, transcribe it, structure it, translate it, and export it as a professional document—all while running completely locally.
 
 This is a clean, highly functional v1.
+
+## 🏗️ Architecture Overview
+
+```mermaid
+flowchart TD
+    subgraph Frontend [React SPA (Vite)]
+        UI[User Interface]
+        WS_Client[Socket.IO Client]
+    end
+
+    subgraph Backend [Flask + Eventlet]
+        API[REST API / Blueprint]
+        WS_Server[Socket.IO Server]
+        
+        subgraph Workers [Multiprocessing Pool]
+            UploadWorker[Upload Worker]
+            RealtimeWorker[Realtime Worker]
+            IntelligenceWorker[Intelligence Worker]
+            TranslationWorker[Translation Worker]
+        end
+    end
+
+    subgraph Persistence [PostgreSQL & Filesystem]
+        DB[(PostgreSQL)]
+        AudioStorage[(WAV Storage)]
+    end
+
+    subgraph AI [Local ML Models]
+        Whisper[Faster-Whisper]
+        Pyannote[Pyannote Diarization]
+        Ollama[Ollama (qwen2.5:3b)]
+    end
+
+    UI <--> |HTTP/REST| API
+    WS_Client <--> |WebSocket| WS_Server
+    
+    API --> Workers
+    WS_Server --> Workers
+    
+    Workers <--> DB
+    Workers <--> AudioStorage
+    
+    UploadWorker --> Whisper
+    RealtimeWorker --> Whisper
+    IntelligenceWorker --> Ollama
+    TranslationWorker --> Ollama
+```
+
+## 🐳 Docker Deployment
+
+To run SpeechFlow in a containerized environment (ideal for demos or final production deployment):
+
+1. **Ensure Ollama is running locally** on your host machine (with the `qwen2.5:3b` model pulled).
+2. Set your HuggingFace token for Pyannote:
+   ```bash
+   export HF_TOKEN="your_huggingface_token"
+   ```
+3. Bring up the stack:
+   ```bash
+   docker-compose up --build -d
+   ```
+
+The application will be available at:
+- **Frontend**: `http://localhost:8085`
+- **Backend API**: `http://localhost:5000`

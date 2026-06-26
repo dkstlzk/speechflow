@@ -27,12 +27,20 @@ def create_realtime_session():
     """
     db = SessionLocal()
 
+    body = flask_request.get_json(silent=True) or {}
+    title = body.get("title")
+    host_name = body.get("host_name")
+    participants = body.get("participants")
+
     try:
         session = create_session(
             db,
             session_type="realtime",
             original_filename=None,
             status=SessionStatus.RECORDING,
+            title=title,
+            host_name=host_name,
+            participants=participants,
         )
 
         return jsonify(

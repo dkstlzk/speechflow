@@ -47,13 +47,21 @@ function buildSpeakerMap(segments: TranscriptSegment[]): Record<string, string> 
   return map;
 }
 
+function escapeMarkdown(text: string): string {
+  if (!text) return text;
+  // Escape markdown control characters to prevent layout breakage
+  return text.replace(/([\\`*_{}[\]()#+|<>~])/g, '\\$1');
+}
+
 function buildMarkdown(data: SessionData): string {
   const { session, transcript, summary, mom, actions } = data;
   const title = session.title || session.fileName || "Session";
   const date = session.createdAt ? new Date(session.createdAt).toLocaleString() : "Unknown Date";
 
-  let md = `# ${title}\n\n`;
+  let md = `# ${escapeMarkdown(title)}\n\n`;
   md += `**Date:** ${date}\n`;
+  if (session.host_name) md += `**Host:** ${escapeMarkdown(session.host_name)}\n`;
+  if (session.participants) md += `**Participants:** ${escapeMarkdown(session.participants)}\n`;
   md += `**ID:** ${session.id}\n\n`;
   md += `---\n\n`;
 
@@ -93,6 +101,8 @@ function buildTxt(data: SessionData): string {
   let txt = `=================================================\n`;
   txt += ` ${title.toUpperCase()}\n`;
   txt += ` Date: ${date}\n`;
+  if (session.host_name) txt += ` Host: ${session.host_name}\n`;
+  if (session.participants) txt += ` Participants: ${session.participants}\n`;
   txt += ` ID: ${session.id}\n`;
   txt += `=================================================\n\n`;
 
@@ -168,6 +178,31 @@ export async function exportAsDocx(data: SessionData) {
         new TextRun(date),
       ],
     }),
+  ];
+
+  if (session.host_name) {
+    children.push(
+      new Paragraph({
+        children: [
+          new TextRun({ text: "Host: ", bold: true }),
+          new TextRun(session.host_name),
+        ],
+      })
+    );
+  }
+
+  if (session.participants) {
+    children.push(
+      new Paragraph({
+        children: [
+          new TextRun({ text: "Participants: ", bold: true }),
+          new TextRun(session.participants),
+        ],
+      })
+    );
+  }
+
+  children.push(
     new Paragraph({
       children: [
         new TextRun({ text: "ID: ", bold: true }),
@@ -175,7 +210,7 @@ export async function exportAsDocx(data: SessionData) {
       ],
       spacing: { after: 400 },
     }),
-  ];
+  );
 
   if (summary) {
     children.push(
@@ -264,6 +299,31 @@ export async function exportTranslatedAsDocx(data: TranslatedExportData) {
         new TextRun(targetLanguage),
       ],
     }),
+  ];
+
+  if (session.host_name) {
+    children.push(
+      new Paragraph({
+        children: [
+          new TextRun({ text: "Host: ", bold: true }),
+          new TextRun(session.host_name),
+        ],
+      })
+    );
+  }
+
+  if (session.participants) {
+    children.push(
+      new Paragraph({
+        children: [
+          new TextRun({ text: "Participants: ", bold: true }),
+          new TextRun(session.participants),
+        ],
+      })
+    );
+  }
+
+  children.push(
     new Paragraph({
       children: [
         new TextRun({ text: "ID: ", bold: true }),
@@ -271,7 +331,7 @@ export async function exportTranslatedAsDocx(data: TranslatedExportData) {
       ],
       spacing: { after: 400 },
     }),
-  ];
+  );
 
   if (translatedSummary) {
     children.push(
@@ -323,6 +383,8 @@ export function exportTranslatedAsTxt(data: TranslatedExportData) {
   let txt = `=================================================\n`;
   txt += ` ${title.toUpperCase()} — ${targetLanguage.toUpperCase()} TRANSLATION\n`;
   txt += ` Date: ${date}\n`;
+  if (session.host_name) txt += ` Host: ${session.host_name}\n`;
+  if (session.participants) txt += ` Participants: ${session.participants}\n`;
   txt += ` Language: ${targetLanguage}\n`;
   txt += ` ID: ${session.id}\n`;
   txt += `=================================================\n\n`;

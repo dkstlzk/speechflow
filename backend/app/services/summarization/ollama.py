@@ -70,7 +70,7 @@ class OllamaClient:
         self.timeout_seconds = config.timeout_seconds
         self._session = session or requests.Session()
 
-    def generate(self, prompt: str, model: str = "qwen2.5:3b", response_format: Optional[str] = None) -> str:
+    def generate(self, prompt: str, model: str = "qwen2.5:3b", response_format: Optional[str] = None, temperature: float = 0.1) -> str:
         if not prompt or not prompt.strip():
             raise OllamaClientError("Prompt must not be empty")
 
@@ -78,6 +78,9 @@ class OllamaClient:
             "model": model,
             "prompt": prompt,
             "stream": False,
+            "options": {
+                "temperature": temperature
+            }
         }
         if response_format:
             payload["format"] = response_format

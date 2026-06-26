@@ -25,6 +25,8 @@ export interface Session {
   fileName?: string;
   durationSec?: number;
   title?: string;
+  host_name?: string;
+  participants?: string;
   has_audio?: boolean;
   audio_url?: string;
   diarization_mode?: string;

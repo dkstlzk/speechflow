@@ -57,6 +57,7 @@ The project is designed around fully local, CPU-only inference using open-source
 #### Persistence & Management
 - Unified session and transcript chunk storage with strict Unique Constraints
 - Support for streaming real-time persistence
+- Meeting Metadata Tracking (Title, Host, Participants)
 - History tracking, session deletion, and cascading cleanup
 - Indexed session discovery using PostgreSQL FTS (Full-Text Search)
 - Detected language metadata and badging
@@ -72,7 +73,8 @@ The project is designed around fully local, CPU-only inference using open-source
 - Intelligent loading skeletons and declarative state management
 - Realtime Audio Visualizer and connection status badge
 - Transcript seek navigation
-- Transcript export (.txt and .docx) with Translation support
+- Transcript export (.txt and .docx) with Translation and Metadata support
+- Native Web Audio API tab/system capture combined with local microphone recording
 
 #### Authentication & Access Control
 - Session-based authentication using Flask secure cookies
@@ -206,6 +208,7 @@ LOG_LEVEL=INFO
 - Multi-user ownership and permissions are not implemented.
 - **Deployment Architecture Constraint**: SpeechFlow currently assumes a single-process deployment (`gunicorn -w 1`) using Eventlet, without a Redis message queue backplane. Horizontal scaling requires migrating to a Redis-backed Socket.IO configuration.
 - Eventlet remains the realtime transport layer and is a future migration candidate.
+- **Production Recommendation**: Background jobs (Diarization, Intelligence, Translation) currently use local `multiprocessing`. If the backend crashes, jobs are lost. For production, replace local multiprocessing workers with **Celery + Redis task queues**.
 - No application-level storage quotas are enforced.
 - Delete requests during active diarization may still waste processing resources.
 - Browser audio preprocessing (AGC, noise suppression, echo cancellation, microphone quality, room acoustics) can reduce speaker separability and lower realtime diarization accuracy compared to uploaded audio.

@@ -39,6 +39,9 @@ import {
   getSupportedLanguages,
   translateSession,
   getTranslations,
+  processAccurateDiarization,
+  updateSessionTitle,
+  retrySession,
 } from "@/services/api";
 import type { TranslationResponse } from "@/services/api";
 import type { ActionItem, Session, SummaryResponse, TranscriptResponse } from "@/types";
@@ -91,7 +94,7 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
           if (first) setSelectedLanguage(first);
         }
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   const onSeek = (time: number) => {
@@ -242,12 +245,12 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
     const status = session.data?.status;
     const isProcessingSession = status === "processing" || status === "diarizing" || status === "finalizing";
     const hasActiveTranslation = translations.some(t => t.status === "translating");
-    
+
     if (!isProcessingSession && !hasActiveTranslation) {
       stopPolling();
       return;
     }
-    
+
     if (pollRef.current) return;
     const controller = new AbortController();
 
@@ -257,7 +260,7 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
       try {
         const next = await fetchSession(false, controller.signal);
         await fetchTranslations(controller.signal);
-        
+
         if (!next) return;
         if (next.status === "completed" && isProcessingSession) {
           fetchTranscript();
@@ -301,6 +304,20 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
         loading: false,
         error: e instanceof Error ? e.message : "Failed to process transcript.",
       });
+    } finally {
+      setProcessing(false);
+    }
+  }
+
+  async function onRetry() {
+    if (processing) return;
+    setProcessing(true);
+    try {
+      await retrySession(id);
+      toast.success("Retry started. Refresh the session after processing completes.");
+      fetchSession(false);
+    } catch (e: any) {
+      toast.error(e.message || "Failed to retry session.");
     } finally {
       setProcessing(false);
     }
@@ -407,21 +424,21 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
   const duration = formatDuration(session.data?.durationSec);
   const title = session.data?.title || session.data?.fileName || "Session";
   const showSkeleton =
-    processing || diarizing || 
-    session.data?.status === "diarizing" || 
+    processing || diarizing ||
+    session.data?.status === "diarizing" ||
     session.data?.status === "finalizing" ||
     session.data?.status === "processing";
-    
-  const progressMode = 
+
+  const progressMode =
     (diarizing || session.data?.status === "diarizing") ? "diarization" :
-    (session.data?.status === "finalizing") ? "finalizing" :
-    (processing || session.data?.status === "processing") ? "intelligence" :
-    !transcript.data?.segments?.length ? "transcript" : "intelligence";
+      (session.data?.status === "finalizing") ? "finalizing" :
+        (processing || session.data?.status === "processing") ? "intelligence" :
+          !transcript.data?.segments?.length ? "transcript" : "intelligence";
 
   return (
     <AppLayout>
       {/* Session header */}
-      <div className="mb-8 flex flex-wrap items-start justify-between gap-4 border-b border-border/70 pb-6">
+      <div className="sticky top-14 z-30 -mx-4 mb-8 flex flex-wrap items-start justify-between gap-4 border-b border-border/70 bg-background/85 px-4 pb-6 pt-4 backdrop-blur supports-[backdrop-filter]:bg-background/65 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
         <div className="min-w-0">
           <div className="mb-1.5 flex items-center gap-2">
             {session.data?.status && <StatusBadge status={session.data.status} />}
@@ -503,6 +520,22 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
             )}
             {duration && <span>· {duration}</span>}
           </div>
+          {(session.data?.host_name || session.data?.participants) && (
+            <div className="mt-3 flex flex-wrap gap-x-6 gap-y-2 text-sm">
+              {session.data.host_name && (
+                <div>
+                  <span className="font-semibold text-foreground">Host: </span>
+                  <span className="text-muted-foreground">{session.data.host_name}</span>
+                </div>
+              )}
+              {session.data.participants && (
+                <div>
+                  <span className="font-semibold text-foreground">Participants: </span>
+                  <span className="text-muted-foreground">{session.data.participants}</span>
+                </div>
+              )}
+            </div>
+          )}
           {session.data?.diarization_mode && session.data?.diarized_at && (
             <div className="mt-3 flex items-center gap-2 text-xs">
               <span className="font-medium text-muted-foreground">Diarization:</span>
@@ -602,17 +635,28 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
             </AlertDialogContent>
           </AlertDialog>
           <Button variant="outline" size="sm" onClick={() => load()}>
-            <RefreshCw className="h-3.5 w-3.5" />
+            <RefreshCw className="h-3.5 w-3.5 mr-1" />
             Refresh
           </Button>
-          <Button size="sm" onClick={onProcess} disabled={processing}>
-            {processing ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Sparkles className="h-3.5 w-3.5" />
-            )}
-            {processing ? "Generating…" : "Generate Intelligence"}
-          </Button>
+          {session.data?.status === "failed" ? (
+            <Button size="sm" onClick={onRetry} disabled={processing} variant="destructive">
+              {processing ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+              ) : (
+                <RefreshCw className="h-3.5 w-3.5 mr-1" />
+              )}
+              {processing ? "Retrying…" : "Retry Processing"}
+            </Button>
+          ) : (
+            <Button size="sm" onClick={onProcess} disabled={processing}>
+              {processing ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+              ) : (
+                <Sparkles className="h-3.5 w-3.5 mr-1" />
+              )}
+              {processing ? "Generating…" : "Generate Intelligence"}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -634,9 +678,33 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
             summary={summary.data?.summary}
             loading={summary.loading}
             error={summary.error}
+            emptyMessage={session.data?.status === "failed" ? "Generation failed." : "Not generated yet."}
           />
-          <MomPanel mom={summary.data?.mom} loading={summary.loading} error={summary.error} />
-          <ActionItemsPanel items={actions.data} loading={actions.loading} error={actions.error} />
+          <MomPanel 
+            mom={summary.data?.mom} 
+            loading={summary.loading} 
+            error={summary.error} 
+            emptyMessage={session.data?.status === "failed" ? "Generation failed." : "Not generated yet."}
+          />
+          <ActionItemsPanel 
+            items={actions.data} 
+            loading={actions.loading} 
+            error={actions.error} 
+            emptyMessage={session.data?.status === "failed" ? "Generation failed." : "Not generated yet."}
+          />
+
+        </aside>
+
+        <div className="flex flex-col gap-6">
+          <TranscriptViewer
+            segments={transcript.data?.segments}
+            loading={transcript.loading}
+            error={transcript.error}
+            session={session.data ?? undefined}
+            onRenameSpeaker={handleRenameSpeaker}
+            searchQuery={initialSearch}
+            onSeek={onSeek}
+          />
 
           {/* Translation Results */}
           {isTranslating && (
@@ -698,18 +766,6 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
               </div>
             </PanelShell>
           )}
-        </aside>
-
-        <div>
-          <TranscriptViewer
-            segments={transcript.data?.segments}
-            loading={transcript.loading}
-            error={transcript.error}
-            session={session.data ?? undefined}
-            onRenameSpeaker={handleRenameSpeaker}
-            searchQuery={initialSearch}
-            onSeek={onSeek}
-          />
         </div>
       </div>
     </AppLayout>

@@ -5,9 +5,10 @@ interface Props {
   summary?: string;
   loading?: boolean;
   error?: string | null;
+  emptyMessage?: string;
 }
 
-export function SummaryPanel({ summary, loading, error }: Props) {
+export function SummaryPanel({ summary, loading, error, emptyMessage }: Props) {
   return (
     <PanelShell
       title="Summary"
@@ -15,7 +16,7 @@ export function SummaryPanel({ summary, loading, error }: Props) {
       loading={loading}
       error={error}
       empty={!loading && !error && !summary}
-      emptyMessage="No intelligence generated yet."
+      emptyMessage={emptyMessage || "Not generated yet."}
     >
       <p className="whitespace-pre-line text-[14px] leading-7 text-foreground/90">{summary}</p>
     </PanelShell>

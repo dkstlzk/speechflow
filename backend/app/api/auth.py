@@ -4,9 +4,12 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+from ..config.extensions import limiter
+
 auth_bp = Blueprint("auth", __name__)
 
 @auth_bp.post("/login")
+@limiter.limit("5 per minute")
 def login():
     data = request.get_json() or {}
     password = data.get("password")

@@ -24,7 +24,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const checkStatus = async () => {
     try {
       // Direct fetch to avoid the apiFetch wrapper's error throwing logic just for checking status
-      const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+      const API_BASE = import.meta.env.VITE_API_URL ?? "";
       const res = await fetch(`${API_BASE}/api/auth/status`, { credentials: "include" });
       const data = await res.json();
       setIsAuthenticated(data.authenticated === true);
@@ -41,7 +41,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   
   const logout = async () => {
     try {
-      const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+      const API_BASE = import.meta.env.VITE_API_URL ?? "";
       await fetch(`${API_BASE}/api/auth/logout`, { method: "POST", credentials: "include" });
     } catch (err) {
       console.error("Logout failed", err);

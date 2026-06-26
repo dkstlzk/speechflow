@@ -20,7 +20,12 @@ class SessionContext:
     original_filename: str
 
 
-def create_upload_session(original_filename: str) -> SessionContext:
+def create_upload_session(
+    original_filename: str,
+    title: Optional[str] = None,
+    host_name: Optional[str] = None,
+    participants: Optional[str] = None,
+) -> SessionContext:
     """Create a new upload session and return its context."""
     db = SessionLocal()
     try:
@@ -29,6 +34,9 @@ def create_upload_session(original_filename: str) -> SessionContext:
             session_type="upload",
             original_filename=original_filename,
             status=SessionStatus.PENDING,
+            title=title,
+            host_name=host_name,
+            participants=participants,
         )
         logger.info("Created upload session", extra={"session_id": record.id})
         return SessionContext(

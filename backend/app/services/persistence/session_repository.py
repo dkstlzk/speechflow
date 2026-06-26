@@ -20,12 +20,18 @@ def create_session(
     session_type: str,
     original_filename: Optional[str] = None,
     status: SessionStatus = SessionStatus.PENDING,
+    title: Optional[str] = None,
+    host_name: Optional[str] = None,
+    participants: Optional[str] = None,
 ) -> SessionModel:
     """Persist a new session row."""
     session = SessionModel(
         session_type=session_type,
         status=status,
         original_filename=original_filename,
+        title=title,
+        host_name=host_name,
+        participants=participants,
     )
     db.add(session)
     db.commit()

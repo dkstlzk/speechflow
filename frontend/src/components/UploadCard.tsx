@@ -19,6 +19,9 @@ export function UploadCard() {
   const [error, setError] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [title, setTitle] = useState("");
+  const [hostName, setHostName] = useState("");
+  const [participants, setParticipants] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
 
@@ -50,7 +53,11 @@ export function UploadCard() {
     if (!file) return;
     try {
       setStatus("uploading");
-      const res = await uploadFile(file);
+      const res = await uploadFile(file, {
+        title: title.trim() || undefined,
+        host_name: hostName.trim() || undefined,
+        participants: participants.trim() || undefined,
+      });
       setStatus("processing");
       setSessionId(res.data.sessionId);
       navigate({ to: "/session/$id", params: { id: res.data.sessionId } });
@@ -73,6 +80,42 @@ export function UploadCard() {
       <div className="mb-4">
         <h2 className="text-lg font-semibold">Upload Recording</h2>
         <p className="mt-1 text-sm text-muted-foreground">Supported formats: MP3, MP4, WAV</p>
+      </div>
+
+      <div className="mb-6 grid gap-4 sm:grid-cols-3">
+        <div>
+          <label className="text-xs font-medium text-foreground">Title (Optional)</label>
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="e.g. Q3 Sync"
+            maxLength={255}
+            className="mt-1 flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          />
+        </div>
+        <div>
+          <label className="text-xs font-medium text-foreground">Host (Optional)</label>
+          <input
+            type="text"
+            value={hostName}
+            onChange={(e) => setHostName(e.target.value)}
+            placeholder="e.g. John Doe"
+            maxLength={255}
+            className="mt-1 flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          />
+        </div>
+        <div>
+          <label className="text-xs font-medium text-foreground">Participants (Optional)</label>
+          <input
+            type="text"
+            value={participants}
+            onChange={(e) => setParticipants(e.target.value)}
+            placeholder="e.g. Alice, Bob"
+            maxLength={255}
+            className="mt-1 flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          />
+        </div>
       </div>
 
       <div

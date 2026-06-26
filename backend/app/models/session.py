@@ -34,6 +34,8 @@ class Session(Base):
         nullable=True,
     )
     title = Column(String(255), nullable=True)
+    host_name = Column(String(255), nullable=True)
+    participants = Column(Text, nullable=True)
     audio_path = Column(String(512), nullable=True)
     diarization_mode = Column(String(32), nullable=True)
     diarized_at = Column(DateTime, nullable=True)

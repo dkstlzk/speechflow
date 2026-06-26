@@ -69,6 +69,7 @@ export function RealtimePage() {
   const [autoScroll, setAutoScroll] = useState(true);
   const [resetKey, setResetKey] = useState(0);
   const [micState, setMicState] = useState<MicrophoneState>("initializing");
+  const [isSystemAudio, setIsSystemAudio] = useState(false);
 
   const startInProgressRef = useRef(false);
 
@@ -77,7 +78,11 @@ export function RealtimePage() {
   const [processing, setProcessing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
-    const [savedTitle, setSavedTitle] = useState<string | undefined>();
+  const [savedTitle, setSavedTitle] = useState<string | undefined>();
+  
+  const [title, setTitle] = useState("");
+  const [hostName, setHostName] = useState("");
+  const [participants, setParticipants] = useState("");
   useEffect(() => {
     // Subscribe to committed transcript chunks (persisted in DB)
     const off1 = subscribeToTranscript((seg) => {
@@ -207,6 +212,14 @@ export function RealtimePage() {
   }
 
   async function onStart() {
+    return _doStart(false);
+  }
+
+  async function onStartSystem() {
+    return _doStart(true);
+  }
+
+  async function _doStart(captureSystem: boolean) {
     if (rec !== "idle" && rec !== "completed") {
       return;
     }
@@ -227,13 +240,16 @@ export function RealtimePage() {
         return;
       }
 
-      const res = await startRealtimeSession();
+      const res = await startRealtimeSession({
+        title: title.trim() || undefined,
+        host_name: hostName.trim() || undefined,
+        participants: participants.trim() || undefined,
+      });
       const newSessionId = String(res.data.sessionId);
       sessionIdRef.current = newSessionId;
       setSessionId(newSessionId);
       
       // Clear transcript state exactly once when starting a fresh recording
-      // This prevents late-arriving chunks from the previous session from leaking into the new session.
       setSegments([]);
       setCaption("");
       setEvents([]);
@@ -242,11 +258,15 @@ export function RealtimePage() {
       
       setRec("recording");
       setMicState("recording");
+      setIsSystemAudio(captureSystem);
 
       try {
         const rate = initAudioContext();
         startRecording(newSessionId, rate);
-        await startAudioCapture();
+        await startAudioCapture(captureSystem, () => {
+          toast.info("Audio capture stopped externally.");
+          onStop();
+        });
       } catch (err: any) {
         await deleteRealtimeSession(newSessionId);
         stopAudioCapture();
@@ -270,12 +290,15 @@ export function RealtimePage() {
 
   async function onResume() {
     try {
-      await startAudioCapture();
+      await startAudioCapture(isSystemAudio, () => {
+        toast.info("Audio capture stopped externally.");
+        onStop();
+      });
       resumeRecording();
       setRec("recording");
       setMicState("recording");
     } catch (err: any) {
-      toast.error("Failed to resume microphone access.");
+      toast.error("Failed to resume audio capture.");
     }
   }
 
@@ -390,11 +413,56 @@ export function RealtimePage() {
             </div>
           </div>
         </div>
+
+        {rec === "idle" && (
+          <div className="mt-5 border-t border-border pt-4">
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-3">
+              Meeting Details (Optional)
+            </h3>
+            <div className="grid gap-4 sm:grid-cols-3 mb-4">
+              <div>
+                <label className="text-xs font-medium text-foreground">Title</label>
+                <input
+                  type="text"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="e.g. Q3 Sync"
+                  maxLength={255}
+                  className="mt-1 flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-foreground">Host</label>
+                <input
+                  type="text"
+                  value={hostName}
+                  onChange={(e) => setHostName(e.target.value)}
+                  placeholder="e.g. John Doe"
+                  maxLength={255}
+                  className="mt-1 flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-foreground">Participants</label>
+                <input
+                  type="text"
+                  value={participants}
+                  onChange={(e) => setParticipants(e.target.value)}
+                  placeholder="e.g. Alice, Bob"
+                  maxLength={255}
+                  className="mt-1 flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="mt-5 border-t border-border pt-4">
           <RealtimeControls
             status={rec}
             micState={micState}
             onStart={onStart}
+            onStartSystem={onStartSystem}
             onPause={onPause}
             onResume={onResume}
             onStop={onStop}

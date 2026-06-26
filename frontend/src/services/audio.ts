@@ -3,6 +3,8 @@ import { sendAudioChunk } from "./socket";
 let audioContext: AudioContext | null = null;
 let mediaStream: MediaStream | null = null;
 let sourceNode: MediaStreamAudioSourceNode | null = null;
+let micStream: MediaStream | null = null;
+let micSourceNode: MediaStreamAudioSourceNode | null = null;
 let workletNode: AudioWorkletNode | null = null;
 
 export function initAudioContext(): number {
@@ -12,23 +14,68 @@ export function initAudioContext(): number {
   return audioContext.sampleRate;
 }
 
-export async function startAudioCapture(): Promise<void> {
+export async function startAudioCapture(
+  captureSystem: boolean = false,
+  onStreamEnded?: () => void
+): Promise<void> {
   if (!audioContext) {
     initAudioContext();
   }
 
-  try {
-    mediaStream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        channelCount: 1,
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true,
-      },
-    });
+  if (!navigator.mediaDevices) {
+    throw new Error("Your browser does not support media devices.");
+  }
+  if (captureSystem && !navigator.mediaDevices.getDisplayMedia) {
+    throw new Error("System audio capture requires Chrome/Edge.");
+  }
+  if (typeof AudioWorkletNode === "undefined") {
+    throw new Error("Your browser does not support AudioWorklets. Please update to a modern browser.");
+  }
 
-    // Request 16000Hz baseline. True sample rate will be logged empirically.
-    audioContext = new AudioContext({ sampleRate: 16000 });
+  try {
+    if (captureSystem) {
+      mediaStream = await navigator.mediaDevices.getDisplayMedia({
+        audio: true,
+        video: true, // required by some browsers, but we will ignore it
+      });
+      // Also capture the microphone to mix the local user's voice
+      micStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
+    } else {
+      mediaStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
+    }
+
+    if (onStreamEnded) {
+      let endedFired = false;
+      mediaStream.getTracks().forEach((track) => {
+        track.onended = () => {
+          console.log(`[Audio] Track ${track.kind} ended externally.`);
+          if (!endedFired) {
+            endedFired = true;
+            onStreamEnded();
+          }
+        };
+      });
+    }
+
+    if (!audioContext) {
+      throw new Error("Failed to initialize AudioContext");
+    }
+
+    // Use the initialized context
     console.log(
       `[Audio] Capture context initialized. System rate reported: ${audioContext.sampleRate}Hz`,
     );
@@ -38,6 +85,9 @@ export async function startAudioCapture(): Promise<void> {
     await audioContext.audioWorklet.addModule(workletUrl);
 
     sourceNode = audioContext.createMediaStreamSource(mediaStream);
+    if (micStream) {
+      micSourceNode = audioContext.createMediaStreamSource(micStream);
+    }
     workletNode = new AudioWorkletNode(audioContext, "audio-capture-processor");
 
     workletNode.port.onmessage = (event) => {
@@ -46,6 +96,9 @@ export async function startAudioCapture(): Promise<void> {
     };
 
     sourceNode.connect(workletNode);
+    if (micSourceNode) {
+      micSourceNode.connect(workletNode);
+    }
 
     if (audioContext.state === "suspended") {
       await audioContext.resume();
@@ -70,6 +123,10 @@ export function stopAudioCapture() {
     sourceNode.disconnect();
     sourceNode = null;
   }
+  if (micSourceNode) {
+    micSourceNode.disconnect();
+    micSourceNode = null;
+  }
   if (audioContext) {
     audioContext.close().catch(() => {});
     audioContext = null;
@@ -77,6 +134,10 @@ export function stopAudioCapture() {
   if (mediaStream) {
     mediaStream.getTracks().forEach((track) => track.stop());
     mediaStream = null;
+  }
+  if (micStream) {
+    micStream.getTracks().forEach((track) => track.stop());
+    micStream = null;
   }
   console.log("[Audio] Graph teardown complete. Capture stopped.");
 }

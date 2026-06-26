@@ -6,9 +6,10 @@ interface Props {
   items?: ActionItem[];
   loading?: boolean;
   error?: string | null;
+  emptyMessage?: string;
 }
 
-export function ActionItemsPanel({ items, loading, error }: Props) {
+export function ActionItemsPanel({ items, loading, error, emptyMessage }: Props) {
   return (
     <PanelShell
       title="Action Items"
@@ -16,7 +17,7 @@ export function ActionItemsPanel({ items, loading, error }: Props) {
       loading={loading}
       error={error}
       empty={!loading && !error && (!items || items.length === 0)}
-      emptyMessage="Action items unavailable or generation failed."
+      emptyMessage={emptyMessage || "Not generated yet."}
     >
       <ul className="divide-y divide-border/70">
         {items?.map((it) => (

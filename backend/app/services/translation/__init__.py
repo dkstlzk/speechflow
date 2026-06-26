@@ -16,9 +16,11 @@ SUPPORTED_LANGUAGES = {
     "english": "English",
     "spanish": "Spanish",
     "dutch": "Dutch",
+    "gu": "Gujarati",
+    "ru": "Russian",
 }
 
-TRANSLATION_PROMPT = """Translate the following text to {language}.
+TRANSLATION_PROMPT = """Translate the following text strictly to {language}.
 
 Rules:
 - Translate ALL text faithfully and completely.
@@ -28,19 +30,21 @@ Rules:
 - Do NOT add any commentary, notes, or explanations.
 - Do NOT omit any content.
 - If a word or name has no direct translation, keep it in its original form.
+- CRITICAL: Output ONLY in {language}. Do NOT output any other languages like Japanese, Chinese, or English.
 - Output ONLY the translated text.
 
 Text to translate:
 {text}
 """
 
-SUMMARY_TRANSLATION_PROMPT = """Translate the following meeting summary to {language}.
+SUMMARY_TRANSLATION_PROMPT = """Translate the following meeting summary strictly to {language}.
 
 Rules:
 - Translate ALL text faithfully and completely.
 - Preserve bullet points, headings, and formatting structure.
 - Do NOT add any commentary, notes, or explanations.
 - Do NOT omit any content.
+- CRITICAL: Output ONLY in {language}. Do NOT output any other languages like Japanese, Chinese, or English.
 - Output ONLY the translated text.
 
 Text to translate:
@@ -127,51 +131,7 @@ class TranslationService:
 
         return result.strip()
 
-    def translate_transcript_chunks(
-        self,
-        chunks: list[dict],
-        target_language: str,
-    ) -> list[dict]:
-        """Translate transcript chunks while preserving structure.
 
-        Args:
-            chunks: List of transcript segment dicts with 'text', 'speaker', etc.
-            target_language: Target language key.
-
-        Returns:
-            List of translated segment dicts (same structure, translated text).
-        """
-        # Build a single block of text with speaker labels for context
-        lines = []
-        for chunk in chunks:
-            speaker = chunk.get("speaker", "")
-            display_name = chunk.get("display_name")
-            text = chunk.get("text", "")
-            label = display_name or speaker or "Speaker"
-            lines.append(f"{label}: {text}")
-
-        combined = "\n".join(lines)
-        translated = self.translate_text(combined, target_language)
-
-        # Parse translated lines back into chunks
-        translated_lines = translated.strip().split("\n")
-        result = []
-
-        for i, chunk in enumerate(chunks):
-            translated_chunk = dict(chunk)  # shallow copy
-            if i < len(translated_lines):
-                line = translated_lines[i]
-                # Try to strip the speaker label prefix if present
-                if ": " in line:
-                    parts = line.split(": ", 1)
-                    translated_chunk["text"] = parts[1]
-                else:
-                    translated_chunk["text"] = line
-            result.append(translated_chunk)
-
-        return result
-
-    @staticmethod
     def get_supported_languages() -> dict[str, str]:
         """Return dict of supported language keys to display names."""
         return dict(SUPPORTED_LANGUAGES)
