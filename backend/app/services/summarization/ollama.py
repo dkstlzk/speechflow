@@ -73,10 +73,12 @@ class OllamaClient:
     def generate(
         self,
         prompt: str,
-        model: str = "qwen2.5:3b",
+        model: Optional[str] = None,
         response_format: Optional[str] = None,
         temperature: float = 0.1,
     ) -> str:
+        from ...config.settings import settings
+        model = model or settings.OLLAMA_MODEL
         if not prompt or not prompt.strip():
             raise OllamaClientError("Prompt must not be empty")
 

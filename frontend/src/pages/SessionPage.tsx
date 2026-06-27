@@ -54,6 +54,7 @@ import {
   processAccurateDiarization,
   updateSessionTitle,
   retrySession,
+  cancelSessionJob,
 } from "@/services/api";
 import type { TranslationResponse } from "@/services/api";
 import type { ActionItem, Session, SummaryResponse, TranscriptResponse } from "@/types";
@@ -460,6 +461,22 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
   const activeTranslation = translations.find((t) => t.target_language === selectedLanguage);
   const isTranslating = activeTranslation?.status === "translating";
 
+  async function handleCancelJob(jobType: string) {
+    try {
+      await cancelSessionJob(id, jobType);
+      toast.success("Cancellation requested");
+      if (jobType.startsWith("translation_")) {
+        fetchTranslations();
+      } else {
+        setProcessing(false);
+        setDiarizing(false);
+        fetchSession(false);
+      }
+    } catch (e: any) {
+      toast.error(e.message || "Failed to cancel process");
+    }
+  }
+
   async function handleExportTranslated(format: string) {
     if (!session.data || !activeTranslation || activeTranslation.status !== "completed") return;
     const langLabel =
@@ -493,8 +510,6 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
   const title = session.data?.title || session.data?.fileName || "Session";
   const showSkeleton =
     processing ||
-    diarizing ||
-    session.data?.status === "diarizing" ||
     session.data?.status === "finalizing" ||
     session.data?.status === "processing";
 
@@ -789,6 +804,7 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
           <IntelligenceProgress
             mode={progressMode}
             processingStage={session.data?.processing_stage}
+            onCancel={() => handleCancelJob(progressMode === "diarization" ? "accurate_diarization" : "intelligence")}
           />
         </div>
       ) : null}
@@ -878,6 +894,17 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
         </aside>
 
         <div className="flex flex-col gap-6">
+          {(diarizing || session.data?.status === "diarizing") && (
+            <div className="bg-blue-50 border border-blue-200 text-blue-800 px-4 py-3 rounded-lg flex items-center gap-3 shadow-sm mb-2">
+              <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
+              <div className="text-sm">
+                <p className="font-medium">Transcript is ready!</p>
+                <p className="text-blue-700/80">
+                  We are running background AI to identify individual speakers. Speaker labels will update automatically soon.
+                </p>
+              </div>
+            </div>
+          )}
           <TranscriptViewer
             segments={transcript.data?.segments}
             loading={transcript.loading}
@@ -886,25 +913,35 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
             onRenameSpeaker={handleRenameSpeaker}
             searchQuery={initialSearch}
             onSeek={onSeek}
+            isDiarizing={diarizing || session.data?.status === "diarizing"}
           />
 
           {/* Translation Results */}
-          {isTranslating && (
+          {isTranslating ? (
             <PanelShell title="Translation" icon={<Languages className="h-4 w-4" />}>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Translating to {supportedLanguages[selectedLanguage]}… This may take a few minutes.
+              <div className="flex flex-col items-center justify-center p-8 border rounded-lg bg-muted/20">
+                <Loader2 className="h-6 w-6 animate-spin mb-4 text-primary" />
+                <p className="text-sm text-muted-foreground font-medium mb-4">
+                  Translating to {supportedLanguages[selectedLanguage] || selectedLanguage}...
+                </p>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="text-destructive hover:bg-destructive/10"
+                  onClick={() => handleCancelJob(`translation_${selectedLanguage}`)}
+                >
+                  Cancel Translation
+                </Button>
               </div>
             </PanelShell>
-          )}
-          {activeTranslation?.status === "failed" && (
+          ) : activeTranslation?.status === "failed" ? (
             <PanelShell title="Translation Failed" icon={<Languages className="h-4 w-4" />}>
               <div className="text-sm text-destructive">
                 Failed to translate to {supportedLanguages[selectedLanguage]}.{" "}
                 {activeTranslation.error_message}
               </div>
             </PanelShell>
-          )}
+          ) : null}
           {activeTranslation?.status === "invalidated" && (
             <PanelShell title="Translation Invalidated" icon={<Languages className="h-4 w-4" />}>
               <div className="text-sm text-amber-600 bg-amber-50 p-3 rounded-md border border-amber-200">

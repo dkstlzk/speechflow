@@ -1,5 +1,3 @@
-import pytest
-
 from backend.app.schemas.response import ApiResponse
 from backend.app.services.summarization.transcript_processor import (
     TranscriptNotFoundError,

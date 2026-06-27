@@ -72,6 +72,25 @@ def process_upload_session(
                 session_model.detected_language = result.language
                 db.commit()
 
+        # [Progressive Rendering] Save raw un-diarized transcript immediately
+        logger.info("[TranscriptionWorker] Saving raw transcript before diarization")
+        raw_speaker = get_or_create_speaker(db, session_id, "Unknown Speaker")
+        raw_payloads = []
+        for i, segment in enumerate(result.segments):
+            raw_payloads.append(
+                {
+                    "session_id": session_id,
+                    "speaker_id": raw_speaker.id,
+                    "start_time": segment["start"],
+                    "end_time": segment["end"],
+                    "text": segment["text"],
+                    "chunk_index": i,
+                    "is_partial": False,
+                    "language": result.language,
+                }
+            )
+        replace_session_chunks(db, session_id, raw_payloads)
+
         update_session_status(db, session_id, SessionStatus.DIARIZING)
 
         logger.info("[Diarization] Starting pyannote inference")

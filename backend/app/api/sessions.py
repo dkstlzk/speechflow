@@ -1,10 +1,14 @@
 import os
 
+# pyrefly: ignore [missing-import]
 from flask import Blueprint, jsonify, send_file
+# pyrefly: ignore [missing-import]
 from flask import request as flask_request
 
 from ..config.constants import MAX_FIELD_LENGTH
+from ..config.extensions import limiter
 from ..config.logging import get_logger
+from ..config.settings import settings
 from ..db.session import SessionLocal
 from ..schemas.response import ApiResponse
 from ..services.persistence.session_repository import (
@@ -56,6 +60,7 @@ def _serialize_session(row) -> dict:
 
 @sessions_bp.get("/")
 def list_sessions():
+    # pyrefly: ignore [missing-import]
     from flask import request
 
     query = request.args.get("q")
@@ -146,6 +151,28 @@ def delete_session_endpoint(session_id: str):
     return jsonify(ApiResponse.ok({"session_id": session_id_int}).to_dict()), 200
 
 
+@sessions_bp.post("/<session_id>/cancel")
+def cancel_session_job_endpoint(session_id: str):
+    try:
+        session_id_int = int(session_id)
+    except ValueError:
+        return jsonify(ApiResponse.fail("invalid session id").to_dict()), 400
+
+    body = flask_request.get_json(silent=True) or {}
+    job_type = body.get("job_type", "").strip()
+
+    if not job_type:
+        return jsonify(ApiResponse.fail("job_type is required").to_dict()), 400
+
+    from ..workers.job_manager import cancel_job
+    was_killed = cancel_job(session_id_int, job_type)
+
+    return jsonify(ApiResponse.ok({
+        "message": f"Job {job_type} cancellation processed",
+        "was_killed": was_killed
+    }).to_dict()), 200
+
+
 @sessions_bp.patch("/<session_id>/title")
 def update_session_title_endpoint(session_id: str):
     try:
@@ -218,6 +245,12 @@ def update_speaker_endpoint(session_id: str, speaker_label: str):
             db, session_id_int, speaker_label, display_name
         )
 
+        from ..models.translation import SessionTranslation
+        db.query(SessionTranslation).filter(
+            SessionTranslation.session_id == session_id_int
+        ).delete()
+        db.commit()
+
         return jsonify(
             ApiResponse.ok(
                 {
@@ -248,6 +281,7 @@ def get_session_transcript_endpoint(session_id: str):
 
 
 @sessions_bp.post("/<session_id>/process")
+@limiter.limit("5 per minute")
 def process_session(session_id: str):
     try:
         session_id_int = int(session_id)
@@ -256,7 +290,7 @@ def process_session(session_id: str):
 
     import multiprocessing
 
-    if len(multiprocessing.active_children()) >= 4:
+    if len(multiprocessing.active_children()) >= settings.MAX_BACKGROUND_WORKERS:
         return jsonify(
             ApiResponse.fail("Server overloaded. Too many active jobs.").to_dict()
         ), 503
@@ -297,13 +331,19 @@ def process_session(session_id: str):
         import multiprocessing
 
         from ..workers.intelligence_worker import run_intelligence_pipeline
+        from ..workers.job_manager import register_job
 
-        multiprocessing.get_context("spawn").Process(
+        p = multiprocessing.get_context("spawn").Process(
             target=run_intelligence_pipeline, args=(session_id_int,)
-        ).start()
+        )
+        p.start()
+        register_job(session_id_int, "intelligence", p.pid)
         return jsonify(ApiResponse.ok({"message": "Processing started"}).to_dict()), 202
-    except Exception:
-        logger.exception(f"Failed to spawn process for session {session_id_int}")
+    except Exception as e:
+        import traceback
+        with open("debug_error.log", "w") as f:
+            f.write(traceback.format_exc())
+        logger.exception(f"Failed to spawn process for session {session_id_int}: {e}")
         rollback_db = SessionLocal()
         try:
             rollback_session = (
@@ -378,13 +418,19 @@ def retry_session_endpoint(session_id: str):
         import multiprocessing
 
         from ..workers.intelligence_worker import run_intelligence_pipeline
+        from ..workers.job_manager import register_job
 
-        multiprocessing.get_context("spawn").Process(
+        p = multiprocessing.get_context("spawn").Process(
             target=run_intelligence_pipeline, args=(session_id_int,)
-        ).start()
+        )
+        p.start()
+        register_job(session_id_int, "intelligence", p.pid)
 
         return jsonify(ApiResponse.ok({"message": "Retry started"}).to_dict()), 202
     except Exception as e:
+        import traceback
+        with open("debug_error.log", "w") as f:
+            f.write(traceback.format_exc())
         logger.exception(f"Failed to spawn retry process for session {session_id_int}")
         rollback_db = SessionLocal()
         try:
@@ -403,6 +449,7 @@ def retry_session_endpoint(session_id: str):
 
 
 @sessions_bp.post("/<session_id>/quick-diarization")
+@limiter.limit("5 per minute")
 def trigger_quick_diarization(session_id: str):
     from ..workers.diarization_worker import process_quick_diarization
 
@@ -458,9 +505,12 @@ def trigger_quick_diarization(session_id: str):
     try:
         import multiprocessing
 
-        multiprocessing.get_context("spawn").Process(
+        from ..workers.job_manager import register_job
+        p = multiprocessing.get_context("spawn").Process(
             target=process_quick_diarization, args=(session_id_int,)
-        ).start()
+        )
+        p.start()
+        register_job(session_id_int, "quick_diarization", p.pid)
         return jsonify(
             ApiResponse.ok({"message": "Quick diarization started"}).to_dict()
         ), 202
@@ -487,6 +537,7 @@ def trigger_quick_diarization(session_id: str):
 
 
 @sessions_bp.post("/<session_id>/accurate-diarization")
+@limiter.limit("5 per minute")
 def trigger_accurate_diarization(session_id: str):
     from ..workers.diarization_worker import process_accurate_diarization
 
@@ -497,7 +548,7 @@ def trigger_accurate_diarization(session_id: str):
 
     import multiprocessing
 
-    if len(multiprocessing.active_children()) >= 4:
+    if len(multiprocessing.active_children()) >= settings.MAX_BACKGROUND_WORKERS:
         return jsonify(
             ApiResponse.fail("Server overloaded. Too many active jobs.").to_dict()
         ), 503
@@ -539,9 +590,12 @@ def trigger_accurate_diarization(session_id: str):
     # Acceptable for MVP, but should be migrated to Celery/Redis in production.
 
     try:
-        multiprocessing.get_context("spawn").Process(
+        from ..workers.job_manager import register_job
+        p = multiprocessing.get_context("spawn").Process(
             target=process_accurate_diarization, args=(session_id_int,)
-        ).start()
+        )
+        p.start()
+        register_job(session_id_int, "accurate_diarization", p.pid)
         return jsonify(
             ApiResponse.ok({"message": "Accurate diarization started"}).to_dict()
         ), 202
@@ -590,6 +644,7 @@ def list_supported_languages():
 
 
 @sessions_bp.post("/<session_id>/translate")
+@limiter.limit("5 per minute")
 def translate_session(session_id: str):
     try:
         session_id_int = int(session_id)
@@ -654,9 +709,12 @@ def translate_session(session_id: str):
 
         # Spawn background process
         try:
-            multiprocessing.get_context("spawn").Process(
+            from ..workers.job_manager import register_job
+            p = multiprocessing.get_context("spawn").Process(
                 target=process_translation, args=(session_id_int, target_language)
-            ).start()
+            )
+            p.start()
+            register_job(session_id_int, f"translation_{target_language}", p.pid)
         except Exception as e:
             logger.exception(
                 f"Failed to start translation for session {session_id_int}"

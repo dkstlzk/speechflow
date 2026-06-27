@@ -127,8 +127,8 @@ class WhisperTranscriptionService:
         for index, segment in enumerate(segments):
             ordered_segments.append(
                 {
-                    "start": float(segment.start),
-                    "end": float(segment.end),
+                    "start": float(segment.start) if getattr(segment, 'start', None) is not None else 0.0,
+                    "end": float(segment.end) if getattr(segment, 'end', None) is not None else 0.0,
                     "text": segment.text.strip(),
                     "order": index,
                 }

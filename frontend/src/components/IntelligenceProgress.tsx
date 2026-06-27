@@ -9,9 +9,10 @@ interface Stage {
 interface Props {
   mode?: "transcript" | "intelligence" | "diarization" | "finalizing";
   processingStage?: string;
+  onCancel?: () => void;
 }
 
-export function IntelligenceProgress({ mode = "intelligence", processingStage }: Props) {
+export function IntelligenceProgress({ mode = "intelligence", processingStage, onCancel }: Props) {
   let STAGES: Stage[] = [];
 
   if (mode === "transcript") {
@@ -132,6 +133,16 @@ export function IntelligenceProgress({ mode = "intelligence", processingStage }:
           );
         })}
       </div>
+      {onCancel && (
+        <div className="mt-6">
+          <button 
+            onClick={onCancel}
+            className="text-sm text-destructive hover:text-destructive/80 transition-colors py-2 px-4 rounded-md hover:bg-destructive/10"
+          >
+            Cancel Process
+          </button>
+        </div>
+      )}
     </div>
   );
 }

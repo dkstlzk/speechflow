@@ -14,6 +14,7 @@ import sys
 import threading
 import time
 
+# pyrefly: ignore [missing-import]
 from flask import Flask, jsonify
 from flask_cors import CORS
 from flask_socketio import SocketIO
@@ -87,6 +88,16 @@ def create_app() -> Flask:
     @app.get("/health")
     def health():
         return jsonify({"status": "ok"})
+
+    # pyrefly: ignore [missing-import]
+    from werkzeug.exceptions import HTTPException
+    @app.errorhandler(Exception)
+    def handle_exception(e):
+        from .schemas.response import ApiResponse
+        if isinstance(e, HTTPException):
+            return jsonify(ApiResponse.fail(str(e)).to_dict()), e.code
+        logger.exception("Unhandled exception occurred")
+        return jsonify(ApiResponse.fail("An unexpected error occurred.").to_dict()), 500
 
     # IMPORTANT: Gunicorn / Multi-Worker Deployment
     # Because this app uses Flask-SocketIO with eventlet and DOES NOT use a message queue

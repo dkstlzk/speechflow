@@ -20,6 +20,8 @@ htmlcov/
 # Virtual environments
 .sf-env/
 venv/
+.venv/
+.venv
 
 # Database
 *.db

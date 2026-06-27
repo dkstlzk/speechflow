@@ -83,10 +83,11 @@ class TranslationService:
     def __init__(
         self,
         ollama_client: Optional[OllamaClient] = None,
-        model: str = "qwen2.5:3b",
+        model: Optional[str] = None,
     ) -> None:
+        from ...config.settings import settings
         self._client = ollama_client or OllamaClient()
-        self._model = model
+        self._model = model or settings.OLLAMA_MODEL
 
     def translate_text(
         self,

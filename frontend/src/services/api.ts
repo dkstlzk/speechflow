@@ -476,3 +476,15 @@ export async function getTranslations(
   });
   return { data: raw.data ?? [], ok: true };
 }
+
+export async function cancelSessionJob(
+  id: string,
+  jobType: string,
+): Promise<ApiResponse<{ message: string; was_killed: boolean }>> {
+  const raw = await apiFetch<{ message: string; was_killed: boolean }>(`${API_BASE}/api/sessions/${id}/cancel`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ job_type: jobType }),
+  });
+  return { data: raw.data, ok: true };
+}

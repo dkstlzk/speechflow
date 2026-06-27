@@ -53,6 +53,72 @@ function escapeMarkdown(text: string): string {
   return text.replace(/([\\`*_{}[\]()#+|<>~])/g, "\\$1");
 }
 
+function parseMarkdownLine(line: string): TextRun[] {
+  const runs: TextRun[] = [];
+  const regex = /(\*\*(.*?)\*\*|\*(.*?)\*)/g;
+  let lastIndex = 0;
+  let match;
+
+  while ((match = regex.exec(line)) !== null) {
+    if (match.index > lastIndex) {
+      runs.push(new TextRun(line.substring(lastIndex, match.index)));
+    }
+
+    if (match[2]) {
+      runs.push(new TextRun({ text: match[2], bold: true }));
+    } else if (match[3]) {
+      runs.push(new TextRun({ text: match[3], italics: true }));
+    }
+
+    lastIndex = regex.lastIndex;
+  }
+
+  if (lastIndex < line.length) {
+    runs.push(new TextRun(line.substring(lastIndex)));
+  }
+
+  return runs.length > 0 ? runs : [new TextRun(line)];
+}
+
+function buildMarkdownParagraphs(text: string, spacingAfter = 400): Paragraph[] {
+  const lines = text.split("\n");
+  const paragraphs: Paragraph[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const isLast = i === lines.length - 1;
+    const spacing = isLast ? { after: spacingAfter } : { after: 100 };
+
+    if (line.trim().startsWith("- ")) {
+      paragraphs.push(
+        new Paragraph({
+          children: parseMarkdownLine(line.substring(2)),
+          bullet: { level: 0 },
+          spacing,
+        })
+      );
+    } else if (line.trim().match(/^[0-9]+\.\s/)) {
+      const match = line.trim().match(/^[0-9]+\.\s/);
+      paragraphs.push(
+        new Paragraph({
+          children: parseMarkdownLine(line.substring(match![0].length)),
+          bullet: { level: 0 },
+          spacing,
+        })
+      );
+    } else {
+      paragraphs.push(
+        new Paragraph({
+          children: parseMarkdownLine(line),
+          spacing,
+        })
+      );
+    }
+  }
+
+  return paragraphs;
+}
+
 function buildMarkdown(data: SessionData): string {
   const { session, transcript, summary, mom, actions } = data;
   const title = session.title || session.fileName || "Session";
@@ -206,14 +272,14 @@ export async function exportAsDocx(data: SessionData) {
   if (summary) {
     children.push(
       new Paragraph({ text: "Intelligence Summary", heading: HeadingLevel.HEADING_2 }),
-      new Paragraph({ text: summary, spacing: { after: 400 } }),
+      ...buildMarkdownParagraphs(summary, 400),
     );
   }
 
   if (mom) {
     children.push(
       new Paragraph({ text: "Meeting Minutes", heading: HeadingLevel.HEADING_2 }),
-      new Paragraph({ text: mom, spacing: { after: 400 } }),
+      ...buildMarkdownParagraphs(mom, 400),
     );
   }
 
@@ -314,20 +380,14 @@ export async function exportTranslatedAsDocx(data: TranslatedExportData) {
   if (translatedSummary) {
     children.push(
       new Paragraph({ text: "Translated Summary", heading: HeadingLevel.HEADING_2 }),
-      ...translatedSummary
-        .split("\n")
-        .map((line) => new Paragraph({ text: line, spacing: { after: 100 } })),
-      new Paragraph({ text: "", spacing: { after: 400 } }),
+      ...buildMarkdownParagraphs(translatedSummary, 400),
     );
   }
 
   if (translatedMom) {
     children.push(
       new Paragraph({ text: "Translated Meeting Minutes", heading: HeadingLevel.HEADING_2 }),
-      ...translatedMom
-        .split("\n")
-        .map((line) => new Paragraph({ text: line, spacing: { after: 100 } })),
-      new Paragraph({ text: "", spacing: { after: 400 } }),
+      ...buildMarkdownParagraphs(translatedMom, 400),
     );
   }
 

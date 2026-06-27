@@ -1,5 +1,7 @@
 """Lightweight prompt-based transcript type classifier."""
 
+from typing import Optional
+
 from ...config.logging import get_logger
 from .ollama import OllamaClient, OllamaClientError
 
@@ -67,14 +69,27 @@ VALID_TYPES = frozenset(
 def classify_transcript(
     transcript: str,
     client: OllamaClient,
-    model: str = "qwen2.5:3b",
+    model: Optional[str] = None,
     max_excerpt_chars: int = 1500,
 ) -> str:
     """Classify transcript type using a single LLM call on a short excerpt.
 
     Returns one of the VALID_TYPES strings. Falls back to 'unknown' on any error.
     """
-    excerpt = transcript[:max_excerpt_chars].strip()
+    from ...config.settings import settings
+    model = model or settings.OLLAMA_MODEL
+
+    t_len = len(transcript)
+    if t_len <= max_excerpt_chars:
+        excerpt = transcript.strip()
+    else:
+        chunk_size = max_excerpt_chars // 3
+        mid_idx = t_len // 2
+        beginning = transcript[:chunk_size]
+        middle = transcript[mid_idx - chunk_size // 2 : mid_idx + chunk_size // 2]
+        end = transcript[-chunk_size:]
+        excerpt = f"{beginning}\n...\n{middle}\n...\n{end}".strip()
+
     if not excerpt:
         return "unknown"
 

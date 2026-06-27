@@ -13,10 +13,12 @@ function SpeakerBadge({
   seg,
   speakerMapping,
   onRenameSpeaker,
+  disabled,
 }: {
   seg: TranscriptSegment;
   speakerMapping: Record<string, string>;
   onRenameSpeaker?: (speaker: string, newName: string) => void;
+  disabled?: boolean;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState("");
@@ -73,9 +75,9 @@ function SpeakerBadge({
   return (
     <Badge
       variant="secondary"
-      className={`${getSpeakerColor(seg.speaker)} cursor-pointer border-0 font-medium hover:opacity-80 transition-opacity`}
+      className={`${getSpeakerColor(seg.speaker)} ${disabled ? "opacity-70 cursor-not-allowed" : "cursor-pointer hover:opacity-80"} border-0 font-medium transition-opacity`}
       onClick={() => {
-        if (onRenameSpeaker) {
+        if (onRenameSpeaker && !disabled) {
           setEditValue(currentName);
           setIsEditing(true);
         }
@@ -95,6 +97,7 @@ interface Props {
   searchQuery?: string;
   onSeek?: (time: number) => void;
   activeTranslation?: import("@/services/api").TranslationResponse | null;
+  isDiarizing?: boolean;
 }
 
 export function TranscriptViewer({
@@ -106,6 +109,7 @@ export function TranscriptViewer({
   searchQuery,
   onSeek,
   activeTranslation,
+  isDiarizing,
 }: Props) {
   const hasSegments = !!segments && segments.length > 0;
 
@@ -190,6 +194,7 @@ export function TranscriptViewer({
                     seg={seg}
                     speakerMapping={speakerMapping}
                     onRenameSpeaker={onRenameSpeaker}
+                    disabled={isDiarizing}
                   />
                   {seg.language && (
                     <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60 bg-muted px-1.5 py-0.5 rounded-sm">

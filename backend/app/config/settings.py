@@ -2,6 +2,7 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+# pyrefly: ignore [missing-import]
 from dotenv import load_dotenv
 
 ENV_PATH = Path(__file__).resolve().parents[3] / ".env"
@@ -18,6 +19,8 @@ class Settings:
     SOCKETIO_ASYNC_MODE: str = os.getenv("SOCKETIO_ASYNC_MODE", "threading")
     CORS_ORIGINS: str = os.getenv("CORS_ORIGINS", "*")
     PROJECT_ROOT: str = str(Path(__file__).resolve().parents[3])
+    OLLAMA_ENDPOINT: str = os.getenv("OLLAMA_ENDPOINT", "http://localhost:11434")
+    OLLAMA_MODEL: str = os.getenv("OLLAMA_MODEL", "qwen2.5:3b")
     UPLOAD_DIR: str = os.getenv("UPLOAD_DIR", str(Path(PROJECT_ROOT) / "temp"))
     EXPORT_DIR: str = os.getenv("EXPORT_DIR", str(Path(PROJECT_ROOT) / "exports"))
     MODEL_DIR: str = os.getenv("MODEL_DIR", str(Path(PROJECT_ROOT) / "ml_models"))

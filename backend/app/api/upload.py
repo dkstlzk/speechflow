@@ -1,3 +1,4 @@
+# pyrefly: ignore [missing-import]
 from flask import Blueprint, jsonify, request
 
 from ..config.constants import MAX_FIELD_LENGTH
@@ -23,7 +24,7 @@ logger = get_logger("upload")
 def upload_audio():
     import multiprocessing
 
-    if len(multiprocessing.active_children()) >= 4:
+    if len(multiprocessing.active_children()) >= settings.MAX_BACKGROUND_WORKERS:
         return jsonify(
             ApiResponse.fail("Server overloaded. Too many active jobs.").to_dict()
         ), 503
