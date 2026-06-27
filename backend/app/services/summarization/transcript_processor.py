@@ -7,10 +7,7 @@ from ...config.logging import get_logger
 from ...services.session.session_service import get_session_transcript
 from .classify import classify_transcript
 from .ollama import OllamaClient, OllamaClientError
-from .prompts import (
-    INTELLIGENCE_MERGE_PROMPT,
-    INTELLIGENCE_PROMPT,
-)
+from .prompts import get_prompts
 
 logger = get_logger("summarization")
 
@@ -115,10 +112,13 @@ class TranscriptProcessor:
     def generate_intelligence(
         self, session_id: int, chunks: List[str], transcript_type: str = "meeting"
     ) -> tuple[dict, dict]:
+        
+        intelligence_prompt, intelligence_merge_prompt = get_prompts(transcript_type)
+
         out_str, timings = self._generate(
             session_id,
-            INTELLIGENCE_PROMPT,
-            INTELLIGENCE_MERGE_PROMPT,
+            intelligence_prompt,
+            intelligence_merge_prompt,
             "intelligence",
             chunks,
             response_format="json",
@@ -198,8 +198,7 @@ class TranscriptProcessor:
             },
         )
 
-        mom = None
-        action_items = None
+
 
         try:
             set_processing_stage(session_id, "Generating Intelligence...")
@@ -260,7 +259,7 @@ class TranscriptProcessor:
             else:
                 set_processing_stage(session_id, f"{base_stage}...")
 
-            prompt = template.format(transcript_type=transcript_type, transcript=chunk)
+            prompt = template.replace("{transcript_type}", transcript_type).replace("{transcript}", chunk)
 
             start = time.time()
             try:
@@ -306,7 +305,7 @@ class TranscriptProcessor:
         merged_text = "\n\n".join(
             f"--- PART {i + 1} ---\n{text}" for i, text in enumerate(partial_outputs)
         )
-        merge_prompt = merge_template.format(transcript_type=transcript_type, partial_outputs=merged_text)
+        merge_prompt = merge_template.replace("{transcript_type}", transcript_type).replace("{partial_outputs}", merged_text)
 
         merge_start = time.time()
         try:

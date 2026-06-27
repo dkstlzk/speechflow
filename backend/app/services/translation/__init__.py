@@ -20,61 +20,96 @@ SUPPORTED_LANGUAGES = {
     "ru": "Russian",
 }
 
-TRANSLATION_PROMPT = """Translate the following text to {language}.
+def build_translation_prompt(text: str, target_language: str, transcript_type: str, is_chunk: bool = False, is_summary: bool = False) -> str:
+    """Builds a context-aware translation prompt."""
+    
+    base_prompt = f"""You are an expert professional translator.
+Your task is to translate the following text.
 
-Rules:
-- Translate ALL text faithfully and completely.
-- Use natural, modern, and conversational {language}. Prefer commonly spoken words over overly formal terms.
-- Do NOT translate technical terms unnecessarily. Keep terms like Meeting ID, WhatsApp, Email, Transcript, Summary, Action Items, Workflow, and Translation as-is when appropriate.
-- Preserve the speaker labels exactly as they appear (e.g. "Participant A:", "Participant B:").
-- Preserve timestamps if present.
-- Preserve paragraph structure and line breaks.
-- Do NOT add any commentary, notes, or explanations.
-- Do NOT omit any content.
-- CRITICAL: Output ONLY in {language}. Do NOT output any other languages like Japanese, Chinese, or English unless it's a technical term kept as-is.
-- The output should sound like a professional meeting note written by a native speaker.
-- Output ONLY the translated text.
+Transcript Type:
+{transcript_type}
 
-Text to translate:
-{text}
+The transcript originates from automatic speech recognition.
+It may contain:
+- recognition errors
+- incomplete sentences
+- false starts
+- repeated words
+- filler words
+Do NOT "correct" the transcript.
+Translate what was actually transcribed.
+Do not guess what the speaker intended beyond what is reasonably inferable from the text.
+
+The transcript may contain English, Hindi, Hinglish, Code-switched speech, colloquial expressions, incomplete sentences, and spoken language.
+Your goal is to preserve the speaker's intended meaning, tone and style.
+
+CRITICAL RULES:
+1. Translate faithfully. Never summarize. Never explain. Never omit.
+2. Preserve timestamps, speaker labels, paragraph breaks, and punctuation.
+3. Keep proper nouns unchanged. Keep product names unchanged. Keep technical terms when they are commonly used in the target language. Examples: WhatsApp, Email, API, GitHub, Meeting ID, Transcript, Workflow, Server, Database, Deployment.
+4. Do NOT translate names.
+5. If speakers switch languages naturally, preserve that intent. Do NOT over-normalize.
+6. Use language that sounds like a native person actually speaking. Avoid textbook translations. Avoid government-style wording. Avoid archaic vocabulary. Prefer contemporary spoken language.
+7. If the transcript is casual, produce casual translation. If professional, produce professional translation. If interview, preserve interview tone. If lecture, preserve educational tone. If podcast, preserve conversational tone. Never convert every transcript into formal meeting language.
+8. Never: summarize, paraphrase, rewrite, improve grammar, remove repetitions, infer missing words, or complete unfinished sentences. Translate exactly what exists. If the source contains mistakes, translate those mistakes faithfully.
 """
 
-CHUNK_TRANSLATION_PROMPT = """You are an expert translator. 
-Translate the following JSON array of transcript chunks into {language}.
+    if target_language.lower() in ("hindi", "hi"):
+        base_prompt += """
+When translating into Hindi:
+- Prefer modern spoken Hindi.
+- Use the type of Hindi commonly spoken in India today.
+- Avoid overly Sanskritized vocabulary.
+- Keep commonly used English technical words when they are naturally used by native speakers.
+Examples: ✓ मीटिंग, ✓ प्रोजेक्ट, ✓ ईमेल, ✓ WhatsApp, ✓ API, ✓ Workflow, ✓ अपडेट
+✗ बैठक (unless formal), ✗ कार्यप्रवाह, ✗ विद्युतीय डाक
+Do not force unnatural Hindi replacements.
+"""
+    elif target_language.lower() in ("english", "en"):
+        base_prompt += """
+When translating into English:
+- Do not translate every Hindi phrase literally.
+- Produce natural fluent English.
+- Preserve cultural meaning.
+- Avoid robotic sentence structures.
+- Prefer spoken business English over literal translations.
+"""
 
-Rules:
-- You must return STRICT JSON and ONLY JSON. Do not use markdown blocks.
-- The output must be a JSON array of objects, with the exact same "id" values as the input.
-- Translate the "text" field to {language}.
-- Preserve context across chunks. Return exact same ids. Do not merge chunks. Do not reorder chunks.
-- Use natural, modern, and conversational {language}. Prefer commonly spoken words over overly formal terms.
-- Do NOT translate technical terms unnecessarily. Keep terms like Meeting ID, WhatsApp, Email, Transcript, Summary, Action Items, Workflow, and Translation as-is when appropriate.
-- The translation should sound like a professional meeting transcript written by a native speaker.
+    base_prompt += f"\nReturn ONLY translated text in {target_language}.\n"
+
+    if is_chunk:
+        base_prompt += f"""
+Translate the values of the JSON object. The keys of the JSON object are the chunk IDs.
+You MUST preserve the EXACT same keys from the Input JSON. Do not change the keys.
+Never reorder. Never merge. Never split.
+Return EXACTLY one key-value pair for every input key-value pair.
+If one chunk cannot be translated, return the original text instead of removing it.
+
+You must return STRICT JSON and ONLY JSON. Do not use markdown blocks.
+The output must be a JSON object mapping the chunk ID to the translated text.
 
 Input JSON:
 {text}
-
-Output JSON format:
-[
-  {{"id": 1, "text": "translated text here"}},
-  {{"id": 2, "text": "translated text here"}}
-]
 """
-
-SUMMARY_TRANSLATION_PROMPT = """Translate the following meeting summary strictly to {language}.
-
-Rules:
-- Translate ALL text faithfully and completely.
+    elif is_summary:
+        base_prompt += f"""
+Translate the following meeting summary strictly to {target_language}.
 - Preserve bullet points, headings, and formatting structure.
 - Do NOT add any commentary, notes, or explanations.
-- Do NOT omit any content.
-- Use natural, contemporary language suitable for native speakers of the target language.
-- CRITICAL: Output ONLY in {language}. Do NOT output any other languages like Japanese, Chinese, or English.
 - Output ONLY the translated text.
 
 Text to translate:
 {text}
 """
+    else:
+        base_prompt += f"""
+Output ONLY the translated text.
+
+Text to translate:
+{text}
+"""
+
+    return base_prompt
 
 
 class TranslationService:
@@ -93,6 +128,7 @@ class TranslationService:
         self,
         text: str,
         target_language: str,
+        transcript_type: str = "conversation",
         is_summary: bool = False,
     ) -> str:
         """Translate text to the target language.
@@ -100,6 +136,7 @@ class TranslationService:
         Args:
             text: The text to translate.
             target_language: Target language key (e.g., 'hi', 'ta').
+            transcript_type: Type of the transcript to inform translation tone.
             is_summary: If True, uses summary-optimized prompt.
 
         Returns:
@@ -120,8 +157,13 @@ class TranslationService:
             return ""
 
         language_display = SUPPORTED_LANGUAGES[lang_key]
-        template = SUMMARY_TRANSLATION_PROMPT if is_summary else TRANSLATION_PROMPT
-        prompt = template.format(language=language_display, text=text)
+        prompt = build_translation_prompt(
+            text=text, 
+            target_language=language_display, 
+            transcript_type=transcript_type, 
+            is_chunk=False, 
+            is_summary=is_summary
+        )
 
         logger.info(
             "Starting translation",
@@ -129,6 +171,7 @@ class TranslationService:
                 "target_language": lang_key,
                 "text_length": len(text),
                 "is_summary": is_summary,
+                "transcript_type": transcript_type,
             },
         )
 
@@ -162,6 +205,7 @@ class TranslationService:
         self,
         chunks: list[dict],
         target_language: str,
+        transcript_type: str = "conversation",
     ) -> list[dict]:
         import json
 
@@ -172,9 +216,20 @@ class TranslationService:
         if not chunks:
             return []
 
+        chunk_map = {}
+        for c in chunks:
+            c_id = str(c.get("id", ""))
+            c_text = c.get("text", "")
+            if c_id:
+                chunk_map[c_id] = c_text
+
         language_display = SUPPORTED_LANGUAGES[lang_key]
-        prompt = CHUNK_TRANSLATION_PROMPT.format(
-            language=language_display, text=json.dumps(chunks, ensure_ascii=False)
+        prompt = build_translation_prompt(
+            text=json.dumps(chunk_map, ensure_ascii=False),
+            target_language=language_display,
+            transcript_type=transcript_type,
+            is_chunk=True,
+            is_summary=False
         )
 
         logger.info(
@@ -202,14 +257,14 @@ class TranslationService:
                     except json.JSONDecodeError:
                         pass
 
-                # Layer 2: Extract raw array brackets
+                # Layer 2: Extract raw object brackets
                 if parsed is None:
-                    array_match = re.search(
-                        r"\[\s*{.*}\s*\]", translated_json, re.DOTALL
+                    obj_match = re.search(
+                        r"\{\s*.*?\s*\}", translated_json, re.DOTALL
                     )
-                    if array_match:
+                    if obj_match:
                         try:
-                            parsed = json.loads(array_match.group(0))
+                            parsed = json.loads(obj_match.group(0))
                         except json.JSONDecodeError:
                             pass
 
@@ -219,17 +274,34 @@ class TranslationService:
                     )
                     return []
 
-            if isinstance(parsed, dict):
-                # If LLM wrapped the array in an object, find the array
-                for v in parsed.values():
-                    if isinstance(v, list):
-                        return v
-                return [parsed]  # fallback
-            elif isinstance(parsed, list):
-                return parsed
+            def _extract_dict(data: any) -> dict:
+                res = {}
+                if isinstance(data, dict):
+                    for k, v in data.items():
+                        if isinstance(v, str):
+                            res[k] = v
+                        elif isinstance(v, dict):
+                            if "text" in v:
+                                res[k] = v["text"]
+                            else:
+                                res.update(_extract_dict(v))
+                elif isinstance(data, list):
+                    for item in data:
+                        res.update(_extract_dict(item))
+                return res
+
+            extracted_dict = _extract_dict(parsed)
+            if extracted_dict:
+                result_chunks = []
+                for k, v in extracted_dict.items():
+                    if str(k).isdigit():
+                        result_chunks.append({"id": int(k), "text": str(v)})
+                    else:
+                        result_chunks.append({"id": k, "text": str(v)})
+                return result_chunks
             else:
                 logger.error(
-                    f"Unexpected JSON format from chunk translation: {type(parsed)}"
+                    f"Unexpected JSON format from chunk translation: {type(parsed)} - {str(parsed)[:200]}"
                 )
                 return []
         except Exception as e:

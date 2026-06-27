@@ -2,6 +2,7 @@ import os
 
 # pyrefly: ignore [missing-import]
 from flask import Blueprint, jsonify, send_file
+
 # pyrefly: ignore [missing-import]
 from flask import request as flask_request
 
@@ -113,7 +114,10 @@ def get_session_audio(session_id: str):
         from ..config.settings import settings
 
         filename = os.path.basename(session.audio_path)
-        safe_path = os.path.join(settings.EXPORT_DIR, "audio", filename)
+        if session.session_type == "upload":
+            safe_path = os.path.join(settings.UPLOAD_DIR, filename)
+        else:
+            safe_path = os.path.join(settings.EXPORT_DIR, "audio", filename)
 
         if not os.path.exists(safe_path):
             return jsonify(ApiResponse.fail("audio not found").to_dict()), 404

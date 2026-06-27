@@ -1,8 +1,9 @@
-import pytest
 from unittest.mock import MagicMock, patch
-from backend.app.workers.translation_worker import process_translation
-from backend.app.services.summarization.ollama import OllamaClientError
+
 from backend.app.models.translation import TranslatedChunk
+from backend.app.services.summarization.ollama import OllamaClientError
+from backend.app.workers.translation_worker import process_translation
+
 
 @patch("backend.app.workers.translation_worker.SessionLocal")
 @patch("backend.app.workers.translation_worker.TranslationService")
@@ -21,7 +22,9 @@ def test_translation_worker_exception(mock_get_summary, mock_translation_service
     
     def side_effect_query(model):
         query_mock = MagicMock()
-        if model.__name__ == "SessionTranslation":
+        if model.__name__ == "Session":
+            query_mock.filter.return_value.first.return_value = MagicMock(id=1, transcript_type="conversation")
+        elif model.__name__ == "SessionTranslation":
             query_mock.filter.return_value.first.return_value = mock_translation
         elif model.__name__ == "TranscriptChunk":
             mock_chunk = MagicMock(id=1, text="Hello world")
@@ -88,7 +91,9 @@ def test_translation_duplicate_request(mock_translation_service, mock_session_lo
     
     def side_effect_query(model):
         query_mock = MagicMock()
-        if model.__name__ == "SessionTranslation":
+        if model.__name__ == "Session":
+            query_mock.filter.return_value.first.return_value = MagicMock(id=1, transcript_type="conversation")
+        elif model.__name__ == "SessionTranslation":
             query_mock.filter.return_value.first.return_value = mock_translation
         return query_mock
         

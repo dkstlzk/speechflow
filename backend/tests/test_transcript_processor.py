@@ -71,7 +71,7 @@ def test_transcript_processor_generation_calls_ollama(monkeypatch):
         lambda _session_id: _sample_payload(),
     )
 
-    client = QueueOllamaClient(['{"overview": "summary", "meeting_outcome": {"objective": "mom"}, "action_items": []}'])
+    client = QueueOllamaClient(['{"overview": "summary", "overall_context": {"purpose": "mom"}, "action_items": []}'])
     processor = TranscriptProcessor(ollama_client=client)
 
     data, timings = processor.generate_intelligence(1, processor.assemble_chunks(1))

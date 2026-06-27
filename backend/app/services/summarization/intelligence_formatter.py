@@ -5,16 +5,22 @@ def format_mom(intel_data: Dict[str, Any]) -> Optional[str]:
     """Formats raw intelligence JSON data into a Markdown Minutes of Meeting (MoM)."""
     mom_parts = []
 
-    meeting_outcome = intel_data.get("meeting_outcome", {})
-    if meeting_outcome:
-        mom_parts.append("## Meeting Outcome\n")
-        if meeting_outcome.get("objective"):
-            mom_parts.append(f"**Objective:** {meeting_outcome.get('objective')}")
-        if meeting_outcome.get("result"):
-            mom_parts.append(f"**Result:** {meeting_outcome.get('result')}")
-        if meeting_outcome.get("status"):
+    overall_context = intel_data.get("overall_context", {})
+    if not overall_context:
+        # Fallback for old data
+        overall_context = intel_data.get("meeting_outcome", {})
+
+    if overall_context:
+        mom_parts.append("## Overall Context\n")
+        purpose = overall_context.get("purpose") or overall_context.get("objective")
+        if purpose:
+            mom_parts.append(f"**Purpose:** {purpose}")
+        summary = overall_context.get("summary") or overall_context.get("result")
+        if summary:
+            mom_parts.append(f"**Summary:** {summary}")
+        if overall_context.get("status"):
             mom_parts.append(
-                f"**Status:** {str(meeting_outcome.get('status')).title()}"
+                f"**Status:** {str(overall_context.get('status')).title()}"
             )
         mom_parts.append("")
 

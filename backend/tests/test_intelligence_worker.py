@@ -20,11 +20,11 @@ def test_intelligence_empty_transcript():
 def test_intelligence_markdown_wrapped_json():
     """Test that the processor correctly extracts JSON if LLM wraps it in markdown blocks."""
     processor = TranscriptProcessor()
-    markdown_json = "```json\n{\n  \"meeting_title\": \"Test\"\n}\n```"
+    markdown_json = "```json\n{\n  \"title\": \"Test\"\n}\n```"
     
     with patch.object(processor, '_generate', return_value=(markdown_json, {})):
         parsed, _ = processor.generate_intelligence(1, ["chunk"])
-        assert parsed == {"meeting_title": "Test"}
+        assert parsed == {"title": "Test"}
 
 def test_intelligence_malformed_json():
     """Test that the processor gracefully fails when the LLM outputs garbage."""

@@ -41,6 +41,11 @@ def process_translation(session_id: int, target_language: str) -> None:
                 f"No SessionTranslation row found for session {session_id} and language {target_language}"
             )
             return
+            
+        # Get transcript_type from Session
+        from ..models.session import Session
+        session_row = db.query(Session).filter(Session.id == session_id).first()
+        transcript_type = session_row.transcript_type if session_row and session_row.transcript_type else "conversation"
 
         # Get chunks
         from ..models.transcript_chunk import TranscriptChunk
@@ -91,7 +96,7 @@ def process_translation(session_id: int, target_language: str) -> None:
                 logger.info(
                     f"Translating batch {i // BATCH_SIZE + 1} of {total_batches}"
                 )
-                batch_res = service.translate_chunks(batch, target_language)
+                batch_res = service.translate_chunks(batch, target_language, transcript_type=transcript_type)
                 if batch_res:
                     translated_dicts.extend(batch_res)
                 else:
@@ -104,6 +109,7 @@ def process_translation(session_id: int, target_language: str) -> None:
 
             # Save translated chunks in bulk
             new_chunks = []
+            seen_chunk_ids = set()
             for t_dict in translated_dicts:
                 if not isinstance(t_dict, dict):
                     continue
@@ -113,7 +119,8 @@ def process_translation(session_id: int, target_language: str) -> None:
                     t_text = str(t_text).strip()
                 else:
                     t_text = ""
-                if c_id and t_text:
+                if c_id and t_text and c_id not in seen_chunk_ids:
+                    seen_chunk_ids.add(c_id)
                     new_chunks.append(
                         TranslatedChunk(
                             translation_id=translation_row.id,
@@ -138,19 +145,11 @@ def process_translation(session_id: int, target_language: str) -> None:
                 id_to_speaker[c.id] = speaker
 
             translated_lines = []
-            for t_dict in translated_dicts:
-                if not isinstance(t_dict, dict):
-                    continue
-                c_id = t_dict.get("id")
-                t_text = t_dict.get("text")
-                if t_text is not None:
-                    t_text = str(t_text).strip()
-                else:
-                    t_text = ""
-                if c_id and t_text:
-                    translated_lines.append(
-                        f"{id_to_speaker.get(c_id, 'Speaker')}: {t_text}"
-                    )
+            for chunk in new_chunks:
+                speaker = id_to_speaker.get(chunk.chunk_id, 'Speaker')
+                translated_lines.append(
+                    f"{speaker}: {chunk.translated_text}"
+                )
 
             translated_transcript = "\n".join(translated_lines)
 
@@ -165,7 +164,7 @@ def process_translation(session_id: int, target_language: str) -> None:
                     f"Translating summary for session {session_id} to {target_language}"
                 )
                 summary_text = service.translate_text(
-                    summary_data["summary"], target_language, is_summary=True
+                    summary_data["summary"], target_language, transcript_type=transcript_type, is_summary=True
                 )
             except Exception as e:
                 logger.warning(f"Summary translation failed: {e}")
@@ -177,7 +176,7 @@ def process_translation(session_id: int, target_language: str) -> None:
                     f"Translating MoM for session {session_id} to {target_language}"
                 )
                 mom_text = service.translate_text(
-                    summary_data["mom"], target_language, is_summary=True
+                    summary_data["mom"], target_language, transcript_type=transcript_type, is_summary=True
                 )
             except Exception as e:
                 logger.warning(f"MoM translation failed: {e}")
