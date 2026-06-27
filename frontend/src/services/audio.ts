@@ -16,7 +16,7 @@ export function initAudioContext(): number {
 
 export async function startAudioCapture(
   captureSystem: boolean = false,
-  onStreamEnded?: () => void
+  onStreamEnded?: () => void,
 ): Promise<void> {
   if (!audioContext) {
     initAudioContext();
@@ -29,7 +29,9 @@ export async function startAudioCapture(
     throw new Error("System audio capture requires Chrome/Edge.");
   }
   if (typeof AudioWorkletNode === "undefined") {
-    throw new Error("Your browser does not support AudioWorklets. Please update to a modern browser.");
+    throw new Error(
+      "Your browser does not support AudioWorklets. Please update to a modern browser.",
+    );
   }
 
   try {

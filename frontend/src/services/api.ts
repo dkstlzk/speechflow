@@ -89,7 +89,7 @@ function mapBackendStatus(s: string): ProcessingStatus {
 // POST /api/upload/
 export async function uploadFile(
   file: File,
-  metadata?: { title?: string; host_name?: string; participants?: string }
+  metadata?: { title?: string; host_name?: string; participants?: string },
 ): Promise<ApiResponse<{ sessionId: string }>> {
   const fd = new FormData();
   fd.append("file", file);
@@ -295,9 +295,7 @@ export async function processSession(
 }
 
 // POST /api/sessions/{id}/retry
-export async function retrySession(
-  id: string,
-): Promise<ApiResponse<{ message: string }>> {
+export async function retrySession(id: string): Promise<ApiResponse<{ message: string }>> {
   const raw = await apiFetch<{ message: string }>(`${API_BASE}/api/sessions/${id}/retry`, {
     method: "POST",
   });
@@ -311,9 +309,12 @@ export async function retrySession(
 export async function processQuickDiarization(
   id: string,
 ): Promise<ApiResponse<{ message: string }>> {
-  const raw = await apiFetch<{ message: string }>(`${API_BASE}/api/sessions/${id}/quick-diarization`, {
-    method: "POST",
-  });
+  const raw = await apiFetch<{ message: string }>(
+    `${API_BASE}/api/sessions/${id}/quick-diarization`,
+    {
+      method: "POST",
+    },
+  );
   return {
     data: raw.data,
     ok: true,
@@ -324,18 +325,23 @@ export async function processQuickDiarization(
 export async function processAccurateDiarization(
   id: string,
 ): Promise<ApiResponse<{ message: string }>> {
-  const raw = await apiFetch<{ message: string }>(`${API_BASE}/api/sessions/${id}/accurate-diarization`, {
-    method: "POST",
-  });
+  const raw = await apiFetch<{ message: string }>(
+    `${API_BASE}/api/sessions/${id}/accurate-diarization`,
+    {
+      method: "POST",
+    },
+  );
   return {
     data: raw.data,
     ok: true,
   };
 }
 
-export async function startRealtimeSession(
-  metadata?: { title?: string; host_name?: string; participants?: string }
-): Promise<ApiResponse<{ sessionId: string }>> {
+export async function startRealtimeSession(metadata?: {
+  title?: string;
+  host_name?: string;
+  participants?: string;
+}): Promise<ApiResponse<{ sessionId: string }>> {
   const raw = await apiFetch<{
     session_id: number;
     status: string;
@@ -367,8 +373,6 @@ export async function finalizeRealtimeSession(
     ok: true,
   };
 }
-
-
 
 export async function deleteRealtimeSession(
   id: string,
@@ -455,14 +459,11 @@ export async function translateSession(
   id: string,
   targetLanguage: string,
 ): Promise<ApiResponse<{ message: string }>> {
-  const raw = await apiFetch<{ message: string }>(
-    `${API_BASE}/api/sessions/${id}/translate`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ target_language: targetLanguage }),
-    },
-  );
+  const raw = await apiFetch<{ message: string }>(`${API_BASE}/api/sessions/${id}/translate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ target_language: targetLanguage }),
+  });
   return { data: raw.data, ok: true };
 }
 
@@ -470,10 +471,8 @@ export async function getTranslations(
   id: string,
   signal?: AbortSignal,
 ): Promise<ApiResponse<TranslationResponse[]>> {
-  const raw = await apiFetch<TranslationResponse[]>(
-    `${API_BASE}/api/sessions/${id}/translations`,
-    { signal },
-  );
+  const raw = await apiFetch<TranslationResponse[]>(`${API_BASE}/api/sessions/${id}/translations`, {
+    signal,
+  });
   return { data: raw.data ?? [], ok: true };
 }
-

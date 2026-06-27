@@ -615,7 +615,6 @@ def translate_session(session_id: str):
         ), 400
 
     # DB interaction
-    import multiprocessing
 
     from ..db.session import SessionLocal
     from ..models.translation import SessionTranslation

@@ -79,7 +79,7 @@ export function RealtimePage() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [savedTitle, setSavedTitle] = useState<string | undefined>();
-  
+
   const [title, setTitle] = useState("");
   const [hostName, setHostName] = useState("");
   const [participants, setParticipants] = useState("");
@@ -135,10 +135,9 @@ export function RealtimePage() {
       stopAudioCapture();
       setRec("completed");
       setMicState("ready");
-      toast.error(
-        "Connection lost or error occurred. Recording was interrupted.",
-        { duration: 10000 }
-      );
+      toast.error("Connection lost or error occurred. Recording was interrupted.", {
+        duration: 10000,
+      });
     }
   }, [conn, rec]);
 
@@ -248,14 +247,14 @@ export function RealtimePage() {
       const newSessionId = String(res.data.sessionId);
       sessionIdRef.current = newSessionId;
       setSessionId(newSessionId);
-      
+
       // Clear transcript state exactly once when starting a fresh recording
       setSegments([]);
       setCaption("");
       setEvents([]);
       setSummary(null);
       setActions(null);
-      
+
       setRec("recording");
       setMicState("recording");
       setIsSystemAudio(captureSystem);
@@ -326,8 +325,6 @@ export function RealtimePage() {
       setRec("completed");
     }
   }
-
-
 
   async function onDelete() {
     if (!sessionId) return;
@@ -537,7 +534,7 @@ export function RealtimePage() {
       {(summary || actions) && (
         <div className="mb-6 grid gap-6 lg:grid-cols-2">
           <SummaryPanel summary={summary?.summary} />
-          <MomPanel mom={summary?.mom} />
+          <MomPanel mom={summary?.mom} transcriptType="meeting" />
           <div className="lg:col-span-2">
             <ActionItemsPanel items={actions ?? []} />
           </div>
@@ -546,8 +543,6 @@ export function RealtimePage() {
 
       {import.meta.env.DEV && (
         <>
-
-
           <StreamingEventLog events={events} />
         </>
       )}

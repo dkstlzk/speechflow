@@ -7,12 +7,26 @@ interface Props {
   loading?: boolean;
   error?: string | null;
   emptyMessage?: string;
+  transcriptType?: string;
 }
 
-export function MomPanel({ mom, loading, error, emptyMessage }: Props) {
+export function MomPanel({ mom, loading, error, emptyMessage, transcriptType }: Props) {
+  const getTitle = (type?: string) => {
+    switch (type) {
+      case "lecture": return "Lecture Notes";
+      case "interview": return "Interview Notes";
+      case "presentation": return "Presentation Notes";
+      case "voice_note": return "Voice Note Details";
+      case "conversation": return "Conversation Details";
+      case "meeting":
+      default:
+        return "Meeting Minutes";
+    }
+  };
+
   return (
     <PanelShell
-      title="Meeting Minutes"
+      title={getTitle(transcriptType)}
       icon={<ScrollText className="h-3.5 w-3.5" />}
       loading={loading}
       error={error}

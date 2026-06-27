@@ -1,5 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Sparkles, RefreshCw, Music, Download, Pencil, Check, X, Languages, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  Sparkles,
+  RefreshCw,
+  Music,
+  Download,
+  Pencil,
+  Check,
+  X,
+  Languages,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 import { AppLayout } from "@/layouts/AppLayout";
 import { TranscriptViewer } from "@/components/TranscriptViewer";
 import { SummaryPanel } from "@/components/SummaryPanel";
@@ -45,7 +57,14 @@ import {
 } from "@/services/api";
 import type { TranslationResponse } from "@/services/api";
 import type { ActionItem, Session, SummaryResponse, TranscriptResponse } from "@/types";
-import { exportAsMarkdown, exportAsTxt, exportAsDocx, exportTranslatedAsDocx, exportTranslatedAsTxt, printAsPdf } from "@/lib/export";
+import {
+  exportAsMarkdown,
+  exportAsTxt,
+  exportAsDocx,
+  exportTranslatedAsDocx,
+  exportTranslatedAsTxt,
+  printAsPdf,
+} from "@/lib/export";
 import { toast } from "sonner";
 
 interface State<T> {
@@ -95,7 +114,7 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
           if (first) setSelectedLanguage(first);
         }
       })
-      .catch(() => { });
+      .catch(() => {});
   }, []);
 
   const onSeek = (time: number) => {
@@ -125,7 +144,6 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
     }
   };
 
-
   const handleRenameSpeaker = async (speaker: string, newName: string) => {
     try {
       await updateSpeaker(id, speaker, newName);
@@ -136,7 +154,7 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
           data: {
             ...prev.data,
             segments: prev.data.segments.map((seg) =>
-              seg.speaker === speaker ? { ...seg, displayName: newName } : seg
+              seg.speaker === speaker ? { ...seg, displayName: newName } : seg,
             ),
           },
         };
@@ -166,73 +184,88 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
     [id],
   );
 
-  const fetchTranscript = useCallback((signal?: AbortSignal) => {
-    setTranscript(prev => ({ ...prev, loading: true, error: null }));
-    return getTranscript(id, signal)
-      .then((r) => setTranscript({ data: r.data, loading: false, error: null }))
-      .catch((e: unknown) => {
-        if (e instanceof Error && (e.name === "AbortError" || e.message.includes("aborted")))
-          return;
-        if (e instanceof ApiError && e.status === 404) {
-          setTranscript({ data: undefined, loading: false, error: null });
-        } else {
-          setTranscript({ loading: false, error: "Failed to load transcript." });
-        }
-      });
-  }, [id]);
+  const fetchTranscript = useCallback(
+    (signal?: AbortSignal) => {
+      setTranscript((prev) => ({ ...prev, loading: true, error: null }));
+      return getTranscript(id, signal)
+        .then((r) => setTranscript({ data: r.data, loading: false, error: null }))
+        .catch((e: unknown) => {
+          if (e instanceof Error && (e.name === "AbortError" || e.message.includes("aborted")))
+            return;
+          if (e instanceof ApiError && e.status === 404) {
+            setTranscript({ data: undefined, loading: false, error: null });
+          } else {
+            setTranscript({ loading: false, error: "Failed to load transcript." });
+          }
+        });
+    },
+    [id],
+  );
 
-  const fetchSummary = useCallback((signal?: AbortSignal) => {
-    setSummary(prev => ({ ...prev, loading: true, error: null }));
-    return getSummary(id, signal)
-      .then((r) => {
-        setSummary({ data: r.data, loading: false, error: null });
-        if (r.data?.history && r.data.history.length > 0) {
-          const maxIter = Math.max(...r.data.history.map(h => h.iteration));
-          setActiveIteration(maxIter);
-        }
-      })
-      .catch((e: unknown) => {
-        if (e instanceof Error && (e.name === "AbortError" || e.message.includes("aborted")))
-          return;
-        if (e instanceof ApiError && e.status === 404) {
-          setSummary({ data: undefined, loading: false, error: null });
-        } else {
-          setSummary({ loading: false, error: "Failed to load summary." });
-        }
-      });
-  }, [id]);
+  const fetchSummary = useCallback(
+    (signal?: AbortSignal) => {
+      setSummary((prev) => ({ ...prev, loading: true, error: null }));
+      return getSummary(id, signal)
+        .then((r) => {
+          setSummary({ data: r.data, loading: false, error: null });
+          if (r.data?.history && r.data.history.length > 0) {
+            const maxIter = Math.max(...r.data.history.map((h) => h.iteration));
+            setActiveIteration(maxIter);
+          }
+        })
+        .catch((e: unknown) => {
+          if (e instanceof Error && (e.name === "AbortError" || e.message.includes("aborted")))
+            return;
+          if (e instanceof ApiError && e.status === 404) {
+            setSummary({ data: undefined, loading: false, error: null });
+          } else {
+            setSummary({ loading: false, error: "Failed to load summary." });
+          }
+        });
+    },
+    [id],
+  );
 
-  const fetchActions = useCallback((signal?: AbortSignal) => {
-    setActions(prev => ({ ...prev, loading: true, error: null }));
-    return getActions(id, signal)
-      .then((r) => setActions({ data: r.data, loading: false, error: null }))
-      .catch((e: unknown) => {
-        if (e instanceof Error && (e.name === "AbortError" || e.message.includes("aborted")))
-          return;
-        if (e instanceof ApiError && e.status === 404) {
-          setActions({ data: [], loading: false, error: null });
-        } else {
-          setActions({ loading: false, error: "Failed to load action items." });
-        }
-      });
-  }, [id]);
+  const fetchActions = useCallback(
+    (signal?: AbortSignal) => {
+      setActions((prev) => ({ ...prev, loading: true, error: null }));
+      return getActions(id, signal)
+        .then((r) => setActions({ data: r.data, loading: false, error: null }))
+        .catch((e: unknown) => {
+          if (e instanceof Error && (e.name === "AbortError" || e.message.includes("aborted")))
+            return;
+          if (e instanceof ApiError && e.status === 404) {
+            setActions({ data: [], loading: false, error: null });
+          } else {
+            setActions({ loading: false, error: "Failed to load action items." });
+          }
+        });
+    },
+    [id],
+  );
 
-  const fetchTranslations = useCallback((signal?: AbortSignal) => {
-    return getTranslations(id, signal)
-      .then((r) => setTranslations(r.data))
-      .catch((e: unknown) => {
-        if (e instanceof Error && (e.name === "AbortError" || e.message.includes("aborted")))
-          return;
-      });
-  }, [id]);
+  const fetchTranslations = useCallback(
+    (signal?: AbortSignal) => {
+      return getTranslations(id, signal)
+        .then((r) => setTranslations(r.data))
+        .catch((e: unknown) => {
+          if (e instanceof Error && (e.name === "AbortError" || e.message.includes("aborted")))
+            return;
+        });
+    },
+    [id],
+  );
 
-  const load = useCallback((signal?: AbortSignal) => {
-    fetchSession(true, signal);
-    fetchTranscript(signal);
-    fetchSummary(signal);
-    fetchActions(signal);
-    fetchTranslations(signal);
-  }, [fetchSession, fetchTranscript, fetchSummary, fetchActions, fetchTranslations]);
+  const load = useCallback(
+    (signal?: AbortSignal) => {
+      fetchSession(true, signal);
+      fetchTranscript(signal);
+      fetchSummary(signal);
+      fetchActions(signal);
+      fetchTranslations(signal);
+    },
+    [fetchSession, fetchTranscript, fetchSummary, fetchActions, fetchTranslations],
+  );
 
   useEffect(() => {
     const controller = new AbortController();
@@ -250,8 +283,16 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
 
   useEffect(() => {
     const status = session.data?.status;
-    const isProcessingSession = ["pending", "uploaded", "preprocessing", "transcribing", "diarizing", "processing", "finalizing"].includes(status || "");
-    const hasActiveTranslation = translations.some(t => t.status === "translating");
+    const isProcessingSession = [
+      "pending",
+      "uploaded",
+      "preprocessing",
+      "transcribing",
+      "diarizing",
+      "processing",
+      "finalizing",
+    ].includes(status || "");
+    const hasActiveTranslation = translations.some((t) => t.status === "translating");
 
     if (!isProcessingSession && !hasActiveTranslation) {
       stopPolling();
@@ -274,8 +315,8 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
           fetchSummary();
           fetchActions();
         } else if (next.status === "failed") {
-          // If session failed, we might still have active translations, 
-          // but usually it means we stop polling. 
+          // If session failed, we might still have active translations,
+          // but usually it means we stop polling.
           // The effect dependencies will clean up next render if hasActiveTranslation becomes false.
         }
       } finally {
@@ -297,13 +338,14 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
     stopPolling,
   ]);
 
-
   async function onProcess() {
     if (processing) return;
     setProcessing(true);
     try {
       await processSession(id);
-      toast.success("Intelligence generation started. Refresh the session after processing completes.");
+      toast.success(
+        "Intelligence generation started. Refresh the session after processing completes.",
+      );
       fetchSession(false); // F-1: Immediately reflect PROCESSING status
     } catch (e: any) {
       toast.error(e.message || "Failed to process transcript.");
@@ -358,19 +400,19 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
 
   async function handleExport(format: string) {
     if (!session.data || !transcript.data?.segments) return;
-    
+
     let curSummary = summary.data?.summary;
     let curMom = summary.data?.mom;
-    
+
     if (summary.data?.history && summary.data.history.length > 0) {
-      const hist = summary.data.history.find(h => h.iteration === activeIteration);
+      const hist = summary.data.history.find((h) => h.iteration === activeIteration);
       if (hist) {
         curSummary = hist.summary;
         curMom = hist.mom;
       }
     }
-    
-    const curActions = actions.data?.filter(a => a.iteration === activeIteration) || actions.data;
+
+    const curActions = actions.data?.filter((a) => a.iteration === activeIteration) || actions.data;
 
     const data = {
       session: session.data!,
@@ -406,19 +448,22 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
     if (!selectedLanguage) return;
     try {
       await translateSession(id, selectedLanguage);
-      toast.success(`Translation started for ${supportedLanguages[selectedLanguage] || selectedLanguage}`);
+      toast.success(
+        `Translation started for ${supportedLanguages[selectedLanguage] || selectedLanguage}`,
+      );
       fetchTranslations();
     } catch (e: any) {
       toast.error(e.message || "Translation failed to start");
     }
   }
 
-  const activeTranslation = translations.find(t => t.target_language === selectedLanguage);
+  const activeTranslation = translations.find((t) => t.target_language === selectedLanguage);
   const isTranslating = activeTranslation?.status === "translating";
 
   async function handleExportTranslated(format: string) {
     if (!session.data || !activeTranslation || activeTranslation.status !== "completed") return;
-    const langLabel = supportedLanguages[activeTranslation.target_language] || activeTranslation.target_language;
+    const langLabel =
+      supportedLanguages[activeTranslation.target_language] || activeTranslation.target_language;
     try {
       if (format === "docx") {
         await exportTranslatedAsDocx({
@@ -447,16 +492,22 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
   const duration = formatDuration(session.data?.durationSec);
   const title = session.data?.title || session.data?.fileName || "Session";
   const showSkeleton =
-    processing || diarizing ||
+    processing ||
+    diarizing ||
     session.data?.status === "diarizing" ||
     session.data?.status === "finalizing" ||
     session.data?.status === "processing";
 
   const progressMode =
-    (diarizing || session.data?.status === "diarizing") ? "diarization" :
-      (session.data?.status === "finalizing") ? "finalizing" :
-        (processing || session.data?.status === "processing") ? "intelligence" :
-          !transcript.data?.segments?.length ? "transcript" : "intelligence";
+    diarizing || session.data?.status === "diarizing"
+      ? "diarization"
+      : session.data?.status === "finalizing"
+        ? "finalizing"
+        : processing || session.data?.status === "processing"
+          ? "intelligence"
+          : !transcript.data?.segments?.length
+            ? "transcript"
+            : "intelligence";
 
   return (
     <AppLayout>
@@ -470,20 +521,41 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
                 {session.data.transcriptType.replace("_", " ")}
               </span>
             )}
-            {session.data?.detected_languages && session.data.detected_languages.length > 0 && session.data.transcriptType !== ("upload" as any) ? (
+            {session.data?.detected_languages &&
+            session.data.detected_languages.length > 0 &&
+            session.data.transcriptType !== ("upload" as any) ? (
               <span className="rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 px-2 py-0.5 text-[11px] font-medium">
-                🌐 {session.data.detected_languages.map(l => `${l.code.toUpperCase()} ${l.percentage}%`).join(" • ")}
+                🌐{" "}
+                {session.data.detected_languages
+                  .map((l) => `${l.code.toUpperCase()} ${l.percentage}%`)
+                  .join(" • ")}
               </span>
             ) : session.data?.detected_language ? (
               <span className="rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 px-2 py-0.5 text-[11px] font-medium">
-                🌐 Primary Language: {(() => {
+                🌐 Primary Language:{" "}
+                {(() => {
                   const langMap: Record<string, string> = {
-                    en: "English", hi: "Hindi", ta: "Tamil", te: "Telugu",
-                    mr: "Marathi", or: "Odia", es: "Spanish", nl: "Dutch",
-                    fr: "French", de: "German", ja: "Japanese", zh: "Chinese",
-                    ko: "Korean", ar: "Arabic", pt: "Portuguese", ru: "Russian",
+                    en: "English",
+                    hi: "Hindi",
+                    ta: "Tamil",
+                    te: "Telugu",
+                    mr: "Marathi",
+                    or: "Odia",
+                    es: "Spanish",
+                    nl: "Dutch",
+                    fr: "French",
+                    de: "German",
+                    ja: "Japanese",
+                    zh: "Chinese",
+                    ko: "Korean",
+                    ar: "Arabic",
+                    pt: "Portuguese",
+                    ru: "Russian",
                   };
-                  return langMap[session.data.detected_language] || session.data.detected_language.toUpperCase();
+                  return (
+                    langMap[session.data.detected_language] ||
+                    session.data.detected_language.toUpperCase()
+                  );
                 })()}
               </span>
             ) : null}
@@ -570,8 +642,13 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
                 {session.data.diarization_mode.replace("_", " ")}
               </span>
               <span className="text-muted-foreground">
-                Completed: {new Date(session.data.diarized_at).toLocaleString(undefined, {
-                  day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit"
+                Completed:{" "}
+                {new Date(session.data.diarized_at).toLocaleString(undefined, {
+                  day: "numeric",
+                  month: "short",
+                  year: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
                 })}
               </span>
             </div>
@@ -603,48 +680,67 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
             </DropdownMenu>
           )}
           {/* Translation controls */}
-          {session.data && transcript.data?.segments && Object.keys(supportedLanguages).length > 0 && (
-            <div className="flex items-center gap-1.5">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="min-w-[100px]">
-                    {supportedLanguages[selectedLanguage] || "Language"}
-                    <ChevronDown className="h-3 w-3 ml-1" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  {Object.entries(supportedLanguages).map(([key, label]) => (
-                    <DropdownMenuItem
-                      key={key}
-                      onClick={() => setSelectedLanguage(key)}
-                      className={selectedLanguage === key ? "bg-accent" : ""}
-                    >
-                      {label}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleTranslate}
-                disabled={isTranslating || !selectedLanguage}
-              >
-                {isTranslating ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
-                ) : (
-                  <Languages className="h-3.5 w-3.5 mr-1" />
-                )}
-                {isTranslating ? "Translating…" : "Translate"}
-              </Button>
-            </div>
-          )}
-          <Button variant="outline" size="sm" onClick={onQuickDiarization} disabled={diarizing || session.data?.status === "diarizing" || session.data?.status === "processing"}>
+          {session.data &&
+            transcript.data?.segments &&
+            Object.keys(supportedLanguages).length > 0 && (
+              <div className="flex items-center gap-1.5">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" className="min-w-[100px]">
+                      {supportedLanguages[selectedLanguage] || "Language"}
+                      <ChevronDown className="h-3 w-3 ml-1" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    {Object.entries(supportedLanguages).map(([key, label]) => (
+                      <DropdownMenuItem
+                        key={key}
+                        onClick={() => setSelectedLanguage(key)}
+                        className={selectedLanguage === key ? "bg-accent" : ""}
+                      >
+                        {label}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleTranslate}
+                  disabled={isTranslating || !selectedLanguage}
+                >
+                  {isTranslating ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                  ) : (
+                    <Languages className="h-3.5 w-3.5 mr-1" />
+                  )}
+                  {isTranslating ? "Translating…" : "Translate"}
+                </Button>
+              </div>
+            )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onQuickDiarization}
+            disabled={
+              diarizing ||
+              session.data?.status === "diarizing" ||
+              session.data?.status === "processing"
+            }
+          >
             ⚡ Quick Labels
           </Button>
           <AlertDialog>
             <AlertDialogTrigger asChild>
-              <Button variant="outline" size="sm" disabled={diarizing || session.data?.status === "diarizing" || session.data?.status === "processing"}>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={
+                  diarizing ||
+                  session.data?.status === "diarizing" ||
+                  session.data?.status === "processing"
+                }
+              >
                 🎯 Accurate Diarization
               </Button>
             </AlertDialogTrigger>
@@ -652,7 +748,8 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
               <AlertDialogHeader>
                 <AlertDialogTitle>Run Accurate Diarization?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  This will run a full Whisper + Pyannote rebuild. Your existing transcript will be permanently overwritten. Proceed?
+                  This will run a full Whisper + Pyannote rebuild. Your existing transcript will be
+                  permanently overwritten. Proceed?
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -689,7 +786,10 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
 
       {showSkeleton ? (
         <div className="mb-8">
-          <IntelligenceProgress mode={progressMode} processingStage={session.data?.processing_stage} />
+          <IntelligenceProgress
+            mode={progressMode}
+            processingStage={session.data?.processing_stage}
+          />
         </div>
       ) : null}
 
@@ -698,32 +798,45 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
         <aside className="space-y-6 lg:sticky lg:top-20 lg:self-start lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto lg:pr-1">
           {session.data?.has_audio && session.data?.audio_url && (
             <PanelShell title="Recording" icon={<Music className="h-4 w-4" />} bare>
-              <audio ref={audioRef} controls src={`${session.data.audio_url}?t=${session.data.createdAt || Date.now()}`} className="w-full" />
+              <audio
+                ref={audioRef}
+                controls
+                src={`${session.data.audio_url}?t=${session.data.createdAt || Date.now()}`}
+                className="w-full"
+              />
             </PanelShell>
           )}
 
           {summary.data?.history && summary.data.history.length > 1 && (
             <div className="flex items-center justify-between bg-muted/30 px-4 py-2 rounded-lg border border-border/50">
-              <span className="text-sm font-medium text-muted-foreground">Intelligence Version</span>
+              <span className="text-sm font-medium text-muted-foreground">
+                Intelligence Version
+              </span>
               <div className="flex items-center gap-3">
-                <Button 
-                  variant="outline" 
-                  size="icon" 
-                  className="h-7 w-7" 
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-7 w-7"
                   disabled={activeIteration <= 1}
-                  onClick={() => setActiveIteration(i => Math.max(1, i - 1))}
+                  onClick={() => setActiveIteration((i) => Math.max(1, i - 1))}
                 >
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
                 <span className="text-xs font-semibold tabular-nums">
-                  {activeIteration} of {Math.max(...summary.data.history.map(h => h.iteration))}
+                  {activeIteration} of {Math.max(...summary.data.history.map((h) => h.iteration))}
                 </span>
-                <Button 
-                  variant="outline" 
-                  size="icon" 
-                  className="h-7 w-7" 
-                  disabled={activeIteration >= Math.max(...summary.data.history.map(h => h.iteration))}
-                  onClick={() => setActiveIteration(i => Math.min(Math.max(...summary.data!.history!.map(h => h.iteration)), i + 1))}
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-7 w-7"
+                  disabled={
+                    activeIteration >= Math.max(...summary.data.history.map((h) => h.iteration))
+                  }
+                  onClick={() =>
+                    setActiveIteration((i) =>
+                      Math.min(Math.max(...summary.data!.history!.map((h) => h.iteration)), i + 1),
+                    )
+                  }
                 >
                   <ChevronRight className="h-4 w-4" />
                 </Button>
@@ -732,24 +845,36 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
           )}
 
           <SummaryPanel
-            summary={summary.data?.history?.find(h => h.iteration === activeIteration)?.summary || summary.data?.summary}
+            summary={
+              summary.data?.history?.find((h) => h.iteration === activeIteration)?.summary ||
+              summary.data?.summary
+            }
             loading={summary.loading}
             error={summary.error}
-            emptyMessage={session.data?.status === "failed" ? "Generation failed." : "Not generated yet."}
+            emptyMessage={
+              session.data?.status === "failed" ? "Generation failed." : "Not generated yet."
+            }
           />
-          <MomPanel 
-            mom={summary.data?.history?.find(h => h.iteration === activeIteration)?.mom || summary.data?.mom} 
-            loading={summary.loading} 
-            error={summary.error} 
-            emptyMessage={session.data?.status === "failed" ? "Generation failed." : "Not generated yet."}
+          <MomPanel
+            mom={
+              summary.data?.history?.find((h) => h.iteration === activeIteration)?.mom ||
+              summary.data?.mom
+            }
+            loading={summary.loading}
+            error={summary.error}
+            emptyMessage={
+              session.data?.status === "failed" ? "Generation failed." : "Not generated yet."
+            }
+            transcriptType={session.data?.transcriptType}
           />
-          <ActionItemsPanel 
-            items={actions.data?.filter(a => a.iteration === activeIteration || !a.iteration)} 
-            loading={actions.loading} 
-            error={actions.error} 
-            emptyMessage={session.data?.status === "failed" ? "Generation failed." : "Not generated yet."}
+          <ActionItemsPanel
+            items={actions.data?.filter((a) => a.iteration === activeIteration || !a.iteration)}
+            loading={actions.loading}
+            error={actions.error}
+            emptyMessage={
+              session.data?.status === "failed" ? "Generation failed." : "Not generated yet."
+            }
           />
-
         </aside>
 
         <div className="flex flex-col gap-6">
@@ -775,14 +900,16 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
           {activeTranslation?.status === "failed" && (
             <PanelShell title="Translation Failed" icon={<Languages className="h-4 w-4" />}>
               <div className="text-sm text-destructive">
-                Failed to translate to {supportedLanguages[selectedLanguage]}. {activeTranslation.error_message}
+                Failed to translate to {supportedLanguages[selectedLanguage]}.{" "}
+                {activeTranslation.error_message}
               </div>
             </PanelShell>
           )}
           {activeTranslation?.status === "invalidated" && (
             <PanelShell title="Translation Invalidated" icon={<Languages className="h-4 w-4" />}>
               <div className="text-sm text-amber-600 bg-amber-50 p-3 rounded-md border border-amber-200">
-                ⚠ Translation is outdated because the transcript changed. {activeTranslation.error_message}
+                ⚠ Translation is outdated because the transcript changed.{" "}
+                {activeTranslation.error_message}
               </div>
             </PanelShell>
           )}
@@ -798,7 +925,11 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
                   </div>
                 )}
                 <div className="flex gap-2 mb-3">
-                  <Button variant="outline" size="sm" onClick={() => handleExportTranslated("docx")}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleExportTranslated("docx")}
+                  >
                     <Download className="h-3 w-3 mr-1" /> Export DOCX
                   </Button>
                   <Button variant="outline" size="sm" onClick={() => handleExportTranslated("txt")}>
@@ -808,7 +939,9 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
 
                 {activeTranslation.translated_summary && (
                   <div>
-                    <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-1.5">Translated Summary</h4>
+                    <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-1.5">
+                      Translated Summary
+                    </h4>
                     <div className="whitespace-pre-wrap text-sm leading-relaxed bg-muted/30 rounded-md p-3">
                       {activeTranslation.translated_summary}
                     </div>
@@ -817,7 +950,9 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
 
                 {activeTranslation.translated_mom && (
                   <div>
-                    <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-1.5">Translated Meeting Minutes</h4>
+                    <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-1.5">
+                      Translated Meeting Minutes
+                    </h4>
                     <div className="whitespace-pre-wrap text-sm leading-relaxed bg-muted/30 rounded-md p-3">
                       {activeTranslation.translated_mom}
                     </div>
@@ -826,7 +961,9 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
 
                 {activeTranslation.translated_transcript && (
                   <div>
-                    <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-1.5">Translated Transcript</h4>
+                    <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-1.5">
+                      Translated Transcript
+                    </h4>
                     <div className="whitespace-pre-wrap text-sm leading-relaxed bg-muted/30 rounded-md p-3 max-h-[400px] overflow-y-auto">
                       {activeTranslation.translated_transcript}
                     </div>

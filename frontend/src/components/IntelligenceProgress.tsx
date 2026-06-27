@@ -38,9 +38,9 @@ export function IntelligenceProgress({ mode = "intelligence", processingStage }:
         "Generating Summary...",
         "Generating Meeting Minutes...",
         "Generating Action Items...",
-        "Saving Outputs..."
+        "Saving Outputs...",
       ];
-      
+
       const currentIndex = knownStages.indexOf(processingStage);
       if (currentIndex >= 0) {
         for (let i = 0; i <= currentIndex; i++) {
@@ -55,7 +55,7 @@ export function IntelligenceProgress({ mode = "intelligence", processingStage }:
           STAGES.push({ label, delayMs: 0 });
         }
       } else {
-         STAGES = [{ label: processingStage, delayMs: 0 }];
+        STAGES = [{ label: processingStage, delayMs: 0 }];
       }
     } else {
       STAGES = [
@@ -65,11 +65,14 @@ export function IntelligenceProgress({ mode = "intelligence", processingStage }:
     }
   }
 
-  const title = 
-    mode === "transcript" ? "Transcribing Audio" : 
-    mode === "diarization" ? "Identifying Speakers" :
-    mode === "finalizing" ? "Finalizing Recording" :
-    "Processing Intelligence";
+  const title =
+    mode === "transcript"
+      ? "Transcribing Audio"
+      : mode === "diarization"
+        ? "Identifying Speakers"
+        : mode === "finalizing"
+          ? "Finalizing Recording"
+          : "Processing Intelligence";
 
   const isDynamicIntelligence = mode === "intelligence" && processingStage;
   const initialStage = isDynamicIntelligence ? STAGES.length - 1 : 0;

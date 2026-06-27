@@ -39,9 +39,8 @@ def transcribe_and_persist_segment(
                 np.frombuffer(audio_bytes, dtype=np.int16).astype(np.float32) / 32768.0
             )
 
-            t0 = time.time()
             logger.debug(
-                f"[TranscriptEngine] Whisper inference starting for {sid} chunk #{current_chunk_index} at {t0:.3f}"
+                f"[TranscriptEngine] Whisper inference starting for {sid} chunk #{current_chunk_index}"
             )
             # pyrefly: ignore [missing-import]
             import eventlet.tpool
@@ -51,16 +50,15 @@ def transcribe_and_persist_segment(
             # Provide fast_mode=False for persisted chunks and DO NOT lock language
             # so Whisper can dynamically detect code-switching per segment.
             result = eventlet.tpool.execute(
-                transcriber.transcribe, audio_np, None, False
+                transcriber.transcribe, audio_np, getattr(session, 'detected_language', None), False
             )
-            t1 = time.time()
 
             # Keep the initially detected language locked in for future fast-mode live captions
             # but allow the final chunk to be whatever Whisper detected.
             if result.language and not session.detected_language:
                 session.detected_language = result.language
-            logger.debug(
-                f"[TranscriptEngine] Whisper inference finished for {sid} chunk #{current_chunk_index} at {t1:.3f} (Duration: {t1 - t0:.3f}s)"
+            logger.info(
+                f"[TranscriptEngine] Whisper inference finished for {sid} chunk #{current_chunk_index}"
             )
 
             text = result.text.strip() if result.text else ""

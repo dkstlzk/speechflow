@@ -22,7 +22,10 @@ function SpeakerBadge({
   const [editValue, setEditValue] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const currentName = seg.displayName || speakerMapping[seg.speaker] || (seg.speaker === "UNKNOWN" ? "Speaker" : seg.speaker);
+  const currentName =
+    seg.displayName ||
+    speakerMapping[seg.speaker] ||
+    (seg.speaker === "UNKNOWN" ? "Speaker" : seg.speaker);
 
   useEffect(() => {
     if (isEditing && inputRef.current) {
@@ -91,10 +94,19 @@ interface Props {
   onRenameSpeaker?: (speaker: string, newName: string) => void;
   searchQuery?: string;
   onSeek?: (time: number) => void;
-  activeTranslation?: import('@/services/api').TranslationResponse | null;
+  activeTranslation?: import("@/services/api").TranslationResponse | null;
 }
 
-export function TranscriptViewer({ segments, loading, error, session, onRenameSpeaker, searchQuery, onSeek, activeTranslation }: Props) {
+export function TranscriptViewer({
+  segments,
+  loading,
+  error,
+  session,
+  onRenameSpeaker,
+  searchQuery,
+  onSeek,
+  activeTranslation,
+}: Props) {
   const hasSegments = !!segments && segments.length > 0;
 
   const highlightText = (text: string, query?: string): React.ReactNode => {
@@ -105,12 +117,15 @@ export function TranscriptViewer({ segments, loading, error, session, onRenameSp
       <>
         {parts.map((part, i) =>
           part.toLowerCase() === query.toLowerCase() ? (
-            <mark key={i} className="bg-yellow-200/80 text-foreground rounded-sm px-0.5 font-medium dark:bg-yellow-500/40">
+            <mark
+              key={i}
+              className="bg-yellow-200/80 text-foreground rounded-sm px-0.5 font-medium dark:bg-yellow-500/40"
+            >
               {part}
             </mark>
           ) : (
             part
-          )
+          ),
         )}
       </>
     );
@@ -164,52 +179,54 @@ export function TranscriptViewer({ segments, loading, error, session, onRenameSp
           {segments?.map((seg, i) => {
             let translatedText = null;
             if (activeTranslation?.translated_chunks && seg.id) {
-              const tc = activeTranslation.translated_chunks.find(c => c.chunk_id === seg.id);
+              const tc = activeTranslation.translated_chunks.find((c) => c.chunk_id === seg.id);
               if (tc) translatedText = tc.text;
             }
-            
+
             return (
-            <li key={i} className="group">
-              <div className="mb-1.5 flex flex-wrap items-center gap-2">
-                <SpeakerBadge
-                  seg={seg}
-                  speakerMapping={speakerMapping}
-                  onRenameSpeaker={onRenameSpeaker}
-                />
-                {seg.language && (
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60 bg-muted px-1.5 py-0.5 rounded-sm">
-                    {seg.language}
-                  </span>
-                )}
-                <button
-                  onClick={() => {
-                    if (onSeek && seg.startSec !== undefined) {
-                      onSeek(seg.startSec);
-                    }
-                  }}
-                  disabled={!onSeek || seg.startSec === undefined}
-                  aria-label={`Jump to ${formatTranscriptTime(seg.startSec)}`}
-                  className={`text-[11px] font-mono text-muted-foreground/70 transition-colors ${onSeek && seg.startSec !== undefined ? "cursor-pointer hover:text-primary" : ""}`}
-                >
-                  #{i + 1} • {formatTranscriptTime(seg.startSec)} →{" "}
-                  {formatTranscriptTime(seg.endSec)}
-                </button>
-              </div>
-              <div className={`${translatedText ? "grid grid-cols-2 gap-4" : ""}`}>
-                <p
-                  className={`text-[14.5px] leading-7 ${seg.is_partial ? "italic text-muted-foreground" : "text-foreground/90"
+              <li key={i} className="group">
+                <div className="mb-1.5 flex flex-wrap items-center gap-2">
+                  <SpeakerBadge
+                    seg={seg}
+                    speakerMapping={speakerMapping}
+                    onRenameSpeaker={onRenameSpeaker}
+                  />
+                  {seg.language && (
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60 bg-muted px-1.5 py-0.5 rounded-sm">
+                      {seg.language}
+                    </span>
+                  )}
+                  <button
+                    onClick={() => {
+                      if (onSeek && seg.startSec !== undefined) {
+                        onSeek(seg.startSec);
+                      }
+                    }}
+                    disabled={!onSeek || seg.startSec === undefined}
+                    aria-label={`Jump to ${formatTranscriptTime(seg.startSec)}`}
+                    className={`text-[11px] font-mono text-muted-foreground/70 transition-colors ${onSeek && seg.startSec !== undefined ? "cursor-pointer hover:text-primary" : ""}`}
+                  >
+                    #{i + 1} • {formatTranscriptTime(seg.startSec)} →{" "}
+                    {formatTranscriptTime(seg.endSec)}
+                  </button>
+                </div>
+                <div className={`${translatedText ? "grid grid-cols-2 gap-4" : ""}`}>
+                  <p
+                    className={`text-[14.5px] leading-7 ${
+                      seg.is_partial ? "italic text-muted-foreground" : "text-foreground/90"
                     }`}
-                >
-                  {highlightText(seg.text, searchQuery)}
-                </p>
-                {translatedText && (
-                  <p className="text-[14.5px] leading-7 text-primary/90 border-l border-primary/20 pl-4">
-                    {highlightText(translatedText, searchQuery)}
+                  >
+                    {highlightText(seg.text, searchQuery)}
                   </p>
-                )}
-              </div>
-            </li>
-          )})}
+                  {translatedText && (
+                    <p className="text-[14.5px] leading-7 text-primary/90 border-l border-primary/20 pl-4">
+                      {highlightText(translatedText, searchQuery)}
+                    </p>
+                  )}
+                </div>
+              </li>
+            );
+          })}
         </ul>
       </div>
     </PanelShell>

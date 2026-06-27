@@ -84,7 +84,17 @@ export function SessionCard({ session, onDelete, searchQuery }: SessionCardProps
             )}
             {session.detected_language && (
               <span className="rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 px-2 py-0.5 text-[11px] font-medium">
-                🌐 {({en:"English",hi:"Hindi",ta:"Tamil",te:"Telugu",mr:"Marathi",es:"Spanish"} as Record<string,string>)[session.detected_language] || session.detected_language.toUpperCase()}
+                🌐{" "}
+                {(
+                  {
+                    en: "English",
+                    hi: "Hindi",
+                    ta: "Tamil",
+                    te: "Telugu",
+                    mr: "Marathi",
+                    es: "Spanish",
+                  } as Record<string, string>
+                )[session.detected_language] || session.detected_language.toUpperCase()}
               </span>
             )}
           </div>

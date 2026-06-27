@@ -64,23 +64,43 @@ socket.on("connect_error", (err) => {
 });
 
 socket.on("stream_ack", (data) => {
-  emitStatus("stream_started", "Backend acknowledged stream start", data?.session_id ? String(data.session_id) : undefined);
+  emitStatus(
+    "stream_started",
+    "Backend acknowledged stream start",
+    data?.session_id ? String(data.session_id) : undefined,
+  );
 });
 
 socket.on("stream_complete", (data) => {
-  emitStatus("stream_complete", "Backend finalized stream", data?.session_id ? String(data.session_id) : undefined);
+  emitStatus(
+    "stream_complete",
+    "Backend finalized stream",
+    data?.session_id ? String(data.session_id) : undefined,
+  );
 });
 
 socket.on("stream_finalized", (data) => {
-  emitStatus("stream_finalized", "All segments persisted — session ready", data?.session_id ? String(data.session_id) : undefined);
+  emitStatus(
+    "stream_finalized",
+    "All segments persisted — session ready",
+    data?.session_id ? String(data.session_id) : undefined,
+  );
 });
 
 socket.on("stream_paused", (data) => {
-  emitStatus("stream_paused", "Recording paused", data?.session_id ? String(data.session_id) : undefined);
+  emitStatus(
+    "stream_paused",
+    "Recording paused",
+    data?.session_id ? String(data.session_id) : undefined,
+  );
 });
 
 socket.on("stream_resumed", (data) => {
-  emitStatus("stream_resumed", "Recording resumed", data?.session_id ? String(data.session_id) : undefined);
+  emitStatus(
+    "stream_resumed",
+    "Recording resumed",
+    data?.session_id ? String(data.session_id) : undefined,
+  );
 });
 
 socket.on("force_disconnect", () => {

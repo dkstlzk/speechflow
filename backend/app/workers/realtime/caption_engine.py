@@ -41,15 +41,14 @@ def emit_caption_update(socketio: SocketIO, sid: str, session) -> None:
 
     def _do_caption_inference(audio_np, session_id, now):
         try:
-            t0 = time.time()
             # tpool.execute runs the blocking C++ inference in a true OS thread,
             # preventing it from freezing the Eventlet websocket loop.
-            # Pass the session's detected language instead of None, 
+            # We enforce fast_mode=True to skip languge detection and get sub-second latency.
+            # We pass the previously detected language to maintain consistency, 
             # because fast_mode skips detection and defaults to English.
             result = eventlet.tpool.execute(
                 transcriber.transcribe, audio_np, getattr(session, 'detected_language', None), True
             )
-            t1 = time.time()
             text = result.text.strip() if result.text else ""
 
             if text:

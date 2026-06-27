@@ -50,7 +50,7 @@ function buildSpeakerMap(segments: TranscriptSegment[]): Record<string, string> 
 function escapeMarkdown(text: string): string {
   if (!text) return text;
   // Escape markdown control characters to prevent layout breakage
-  return text.replace(/([\\`*_{}[\]()#+|<>~])/g, '\\$1');
+  return text.replace(/([\\`*_{}[\]()#+|<>~])/g, "\\$1");
 }
 
 function buildMarkdown(data: SessionData): string {
@@ -173,21 +173,15 @@ export async function exportAsDocx(data: SessionData) {
       heading: HeadingLevel.HEADING_1,
     }),
     new Paragraph({
-      children: [
-        new TextRun({ text: "Date: ", bold: true }),
-        new TextRun(date),
-      ],
+      children: [new TextRun({ text: "Date: ", bold: true }), new TextRun(date)],
     }),
   ];
 
   if (session.host_name) {
     children.push(
       new Paragraph({
-        children: [
-          new TextRun({ text: "Host: ", bold: true }),
-          new TextRun(session.host_name),
-        ],
-      })
+        children: [new TextRun({ text: "Host: ", bold: true }), new TextRun(session.host_name)],
+      }),
     );
   }
 
@@ -198,16 +192,13 @@ export async function exportAsDocx(data: SessionData) {
           new TextRun({ text: "Participants: ", bold: true }),
           new TextRun(session.participants),
         ],
-      })
+      }),
     );
   }
 
   children.push(
     new Paragraph({
-      children: [
-        new TextRun({ text: "ID: ", bold: true }),
-        new TextRun(session.id),
-      ],
+      children: [new TextRun({ text: "ID: ", bold: true }), new TextRun(session.id)],
       spacing: { after: 400 },
     }),
   );
@@ -215,14 +206,14 @@ export async function exportAsDocx(data: SessionData) {
   if (summary) {
     children.push(
       new Paragraph({ text: "Intelligence Summary", heading: HeadingLevel.HEADING_2 }),
-      new Paragraph({ text: summary, spacing: { after: 400 } })
+      new Paragraph({ text: summary, spacing: { after: 400 } }),
     );
   }
 
   if (mom) {
     children.push(
       new Paragraph({ text: "Meeting Minutes", heading: HeadingLevel.HEADING_2 }),
-      new Paragraph({ text: mom, spacing: { after: 400 } })
+      new Paragraph({ text: mom, spacing: { after: 400 } }),
     );
   }
 
@@ -247,7 +238,7 @@ export async function exportAsDocx(data: SessionData) {
           new TextRun({ text: time, color: "666666" }),
         ],
       }),
-      new Paragraph({ text: t.text, spacing: { after: 200 } })
+      new Paragraph({ text: t.text, spacing: { after: 200 } }),
     );
   });
 
@@ -265,7 +256,6 @@ export async function exportAsDocx(data: SessionData) {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
-
 
 // ─── Translated Export Functions ─────────────────────────────────────
 
@@ -288,27 +278,18 @@ export async function exportTranslatedAsDocx(data: TranslatedExportData) {
       heading: HeadingLevel.HEADING_1,
     }),
     new Paragraph({
-      children: [
-        new TextRun({ text: "Date: ", bold: true }),
-        new TextRun(date),
-      ],
+      children: [new TextRun({ text: "Date: ", bold: true }), new TextRun(date)],
     }),
     new Paragraph({
-      children: [
-        new TextRun({ text: "Language: ", bold: true }),
-        new TextRun(targetLanguage),
-      ],
+      children: [new TextRun({ text: "Language: ", bold: true }), new TextRun(targetLanguage)],
     }),
   ];
 
   if (session.host_name) {
     children.push(
       new Paragraph({
-        children: [
-          new TextRun({ text: "Host: ", bold: true }),
-          new TextRun(session.host_name),
-        ],
-      })
+        children: [new TextRun({ text: "Host: ", bold: true }), new TextRun(session.host_name)],
+      }),
     );
   }
 
@@ -319,16 +300,13 @@ export async function exportTranslatedAsDocx(data: TranslatedExportData) {
           new TextRun({ text: "Participants: ", bold: true }),
           new TextRun(session.participants),
         ],
-      })
+      }),
     );
   }
 
   children.push(
     new Paragraph({
-      children: [
-        new TextRun({ text: "ID: ", bold: true }),
-        new TextRun(session.id),
-      ],
+      children: [new TextRun({ text: "ID: ", bold: true }), new TextRun(session.id)],
       spacing: { after: 400 },
     }),
   );
@@ -336,9 +314,9 @@ export async function exportTranslatedAsDocx(data: TranslatedExportData) {
   if (translatedSummary) {
     children.push(
       new Paragraph({ text: "Translated Summary", heading: HeadingLevel.HEADING_2 }),
-      ...translatedSummary.split("\n").map(
-        (line) => new Paragraph({ text: line, spacing: { after: 100 } }),
-      ),
+      ...translatedSummary
+        .split("\n")
+        .map((line) => new Paragraph({ text: line, spacing: { after: 100 } })),
       new Paragraph({ text: "", spacing: { after: 400 } }),
     );
   }
@@ -346,18 +324,18 @@ export async function exportTranslatedAsDocx(data: TranslatedExportData) {
   if (translatedMom) {
     children.push(
       new Paragraph({ text: "Translated Meeting Minutes", heading: HeadingLevel.HEADING_2 }),
-      ...translatedMom.split("\n").map(
-        (line) => new Paragraph({ text: line, spacing: { after: 100 } }),
-      ),
+      ...translatedMom
+        .split("\n")
+        .map((line) => new Paragraph({ text: line, spacing: { after: 100 } })),
       new Paragraph({ text: "", spacing: { after: 400 } }),
     );
   }
 
   children.push(
     new Paragraph({ text: "Translated Transcript", heading: HeadingLevel.HEADING_2 }),
-    ...translatedTranscript.split("\n").map(
-      (line) => new Paragraph({ text: line, spacing: { after: 100 } }),
-    ),
+    ...translatedTranscript
+      .split("\n")
+      .map((line) => new Paragraph({ text: line, spacing: { after: 100 } })),
   );
 
   const doc = new Document({
@@ -405,4 +383,3 @@ export function exportTranslatedAsTxt(data: TranslatedExportData) {
     "text/plain;charset=utf-8;",
   );
 }
-
