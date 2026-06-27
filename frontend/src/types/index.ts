@@ -30,22 +30,24 @@ export interface Session {
   has_audio?: boolean;
   audio_url?: string;
   diarization_mode?: string;
-  diarized_at?: string;
+  diarized_at: string | null;
+  detected_language: string | null;
+  detected_languages: { code: string; percentage: number }[] | null;
   processing_stage?: string;
-  detected_language?: string;
 }
 
 export interface TranscriptSegment {
   speaker: string;
   displayName?: string;
   text: string;
+  id?: number;
 
   chunk_index?: number;
 
   startSec?: number;
-  endSec?: number;
-
+  endSec: number;
   is_partial?: boolean;
+  language?: string | null;
   sessionId?: string;
 }
 
@@ -59,6 +61,12 @@ export interface SummaryResponse {
   sessionId: string;
   summary: string;
   mom: string | null;
+  history?: {
+    iteration: number;
+    summary: string;
+    mom: string | null;
+    created_at: string | null;
+  }[];
 }
 
 export interface ActionItem {
@@ -66,6 +74,7 @@ export interface ActionItem {
   text: string;
   owner?: string;
   dueDate?: string;
+  iteration?: number;
 }
 
 export interface ApiResponse<T> {

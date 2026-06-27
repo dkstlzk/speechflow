@@ -91,9 +91,10 @@ interface Props {
   onRenameSpeaker?: (speaker: string, newName: string) => void;
   searchQuery?: string;
   onSeek?: (time: number) => void;
+  activeTranslation?: import('@/services/api').TranslationResponse | null;
 }
 
-export function TranscriptViewer({ segments, loading, error, session, onRenameSpeaker, searchQuery, onSeek }: Props) {
+export function TranscriptViewer({ segments, loading, error, session, onRenameSpeaker, searchQuery, onSeek, activeTranslation }: Props) {
   const hasSegments = !!segments && segments.length > 0;
 
   const highlightText = (text: string, query?: string): React.ReactNode => {
@@ -160,7 +161,14 @@ export function TranscriptViewer({ segments, loading, error, session, onRenameSp
     >
       <div className="max-h-[calc(100vh-12rem)] overflow-y-auto pr-1">
         <ul className="space-y-5">
-          {segments?.map((seg, i) => (
+          {segments?.map((seg, i) => {
+            let translatedText = null;
+            if (activeTranslation?.translated_chunks && seg.id) {
+              const tc = activeTranslation.translated_chunks.find(c => c.chunk_id === seg.id);
+              if (tc) translatedText = tc.text;
+            }
+            
+            return (
             <li key={i} className="group">
               <div className="mb-1.5 flex flex-wrap items-center gap-2">
                 <SpeakerBadge
@@ -168,6 +176,11 @@ export function TranscriptViewer({ segments, loading, error, session, onRenameSp
                   speakerMapping={speakerMapping}
                   onRenameSpeaker={onRenameSpeaker}
                 />
+                {seg.language && (
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60 bg-muted px-1.5 py-0.5 rounded-sm">
+                    {seg.language}
+                  </span>
+                )}
                 <button
                   onClick={() => {
                     if (onSeek && seg.startSec !== undefined) {
@@ -182,14 +195,21 @@ export function TranscriptViewer({ segments, loading, error, session, onRenameSp
                   {formatTranscriptTime(seg.endSec)}
                 </button>
               </div>
-              <p
-                className={`text-[14.5px] leading-7 ${seg.is_partial ? "italic text-muted-foreground" : "text-foreground/90"
-                  }`}
-              >
-                {highlightText(seg.text, searchQuery)}
-              </p>
+              <div className={`${translatedText ? "grid grid-cols-2 gap-4" : ""}`}>
+                <p
+                  className={`text-[14.5px] leading-7 ${seg.is_partial ? "italic text-muted-foreground" : "text-foreground/90"
+                    }`}
+                >
+                  {highlightText(seg.text, searchQuery)}
+                </p>
+                {translatedText && (
+                  <p className="text-[14.5px] leading-7 text-primary/90 border-l border-primary/20 pl-4">
+                    {highlightText(translatedText, searchQuery)}
+                  </p>
+                )}
+              </div>
             </li>
-          ))}
+          )})}
         </ul>
       </div>
     </PanelShell>

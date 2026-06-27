@@ -18,7 +18,10 @@ def create_transcript_chunk(db: Session, payload: Dict) -> TranscriptChunk:
 
 def bulk_insert_chunks(db: Session, chunks: List[Dict]) -> None:
     """Bulk insert transcript chunks."""
-    db.bulk_insert_mappings(TranscriptChunk, chunks)
+    if chunks:
+        from sqlalchemy import insert
+
+        db.execute(insert(TranscriptChunk), chunks)
     db.commit()
 
 
@@ -30,21 +33,39 @@ def replace_session_chunks(db: Session, session_id: int, chunks: List[Dict]) -> 
         .delete(synchronize_session=False)
     )
     if chunks:
-        db.bulk_insert_mappings(TranscriptChunk, chunks)
+        from sqlalchemy import insert
+
+        db.execute(insert(TranscriptChunk), chunks)
+
+        # Cleanup any orphaned speakers for this session that no longer have chunks
+        # (e.g., if a speaker was renamed during a previous diarization run)
+        from ...models.speaker import Speaker
+
+        db.query(Speaker).filter(
+            Speaker.session_id == session_id,
+            ~Speaker.id.in_(
+                db.query(TranscriptChunk.speaker_id).filter(
+                    TranscriptChunk.session_id == session_id,
+                    TranscriptChunk.speaker_id.isnot(None),
+                )
+            ),
+        ).delete(synchronize_session=False)
+
+    # Invalidate existing translations since the chunks have changed
+    from ...models.translation import SessionTranslation, TranslatedChunk
+
+    translations = db.query(SessionTranslation).filter(SessionTranslation.session_id == session_id).all()
+    for t in translations:
+        t.status = "invalidated"
+        t.translated_summary = None
+        t.translated_mom = None
+        t.error_message = "This translation is outdated because the transcript changed."
         
-    # Cleanup any orphaned speakers for this session that no longer have chunks
-    # (e.g., if a speaker was renamed during a previous diarization run)
-    from ...models.speaker import Speaker
-    db.query(Speaker).filter(
-        Speaker.session_id == session_id,
-        ~Speaker.id.in_(
-            db.query(TranscriptChunk.speaker_id).filter(
-                TranscriptChunk.session_id == session_id,
-                TranscriptChunk.speaker_id.isnot(None)
-            )
-        )
-    ).delete(synchronize_session=False)
-    
+        # Delete old translated chunks since they no longer align with the new transcript
+        db.query(TranslatedChunk).filter(
+            TranslatedChunk.translation_id == t.id
+        ).delete(synchronize_session=False)
+
     db.commit()
 
 
@@ -62,6 +83,7 @@ def list_transcript_chunks(db: Session, session_id: int) -> List[TranscriptChunk
         )
         .all()
     )
+
 
 def update_chunk_speakers(db: Session, session_id: int, updates: List[Dict]) -> None:
     """Update speaker_id and speaker_source for existing chunks."""

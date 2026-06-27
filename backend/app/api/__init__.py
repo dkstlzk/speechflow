@@ -1,10 +1,11 @@
-from flask import Flask, request, session, jsonify, current_app
+from flask import Flask, current_app, jsonify, request, session
 
-from .realtime import realtime_bp
 from .actions import actions_bp
+from .auth import auth_bp
+from .realtime import realtime_bp
 from .sessions import sessions_bp
 from .upload import upload_bp
-from .auth import auth_bp
+
 
 def register_blueprints(app: Flask) -> None:
     @app.before_request
@@ -12,11 +13,11 @@ def register_blueprints(app: Flask) -> None:
         # Exempt CORS preflight requests
         if request.method == "OPTIONS":
             return
-            
+
         # Exempt specific paths
         if request.path.startswith("/api/auth/") or request.path == "/health":
             return
-            
+
         # Protect all other /api/ routes
         if request.path.startswith("/api/"):
             if current_app.config.get("TESTING"):

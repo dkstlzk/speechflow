@@ -1,8 +1,8 @@
 """Ollama client utilities for local LLM generation."""
 
-from dataclasses import dataclass
 import os
-from typing import Dict, Optional
+from dataclasses import dataclass
+from typing import Optional
 
 import requests
 
@@ -70,7 +70,13 @@ class OllamaClient:
         self.timeout_seconds = config.timeout_seconds
         self._session = session or requests.Session()
 
-    def generate(self, prompt: str, model: str = "qwen2.5:3b", response_format: Optional[str] = None, temperature: float = 0.1) -> str:
+    def generate(
+        self,
+        prompt: str,
+        model: str = "qwen2.5:3b",
+        response_format: Optional[str] = None,
+        temperature: float = 0.1,
+    ) -> str:
         if not prompt or not prompt.strip():
             raise OllamaClientError("Prompt must not be empty")
 
@@ -78,14 +84,13 @@ class OllamaClient:
             "model": model,
             "prompt": prompt,
             "stream": False,
-            "options": {
-                "temperature": temperature
-            }
+            "options": {"temperature": temperature},
         }
         if response_format:
             payload["format"] = response_format
 
         import time
+
         logger.info(
             "Sending Ollama request",
             extra={
@@ -104,7 +109,10 @@ class OllamaClient:
                 timeout=self.timeout_seconds,
             )
             duration = time.time() - start_time
-            logger.info("Ollama request completed", extra={"duration": duration, "type": "success"})
+            logger.info(
+                "Ollama request completed",
+                extra={"duration": duration, "type": "success"},
+            )
         except requests.Timeout as exc:
             duration = time.time() - start_time
             logger.warning(
@@ -116,7 +124,9 @@ class OllamaClient:
                     "duration": duration,
                 },
             )
-            raise OllamaClientError(f"Ollama request timed out after {duration:.2f}s") from exc
+            raise OllamaClientError(
+                f"Ollama request timed out after {duration:.2f}s"
+            ) from exc
         except requests.RequestException as exc:
             duration = time.time() - start_time
             logger.exception(
@@ -135,8 +145,7 @@ class OllamaClient:
                 },
             )
             raise OllamaClientError(
-                f"Ollama returned status {response.status_code}: "
-                f"{response.text[:200]}"
+                f"Ollama returned status {response.status_code}: {response.text[:200]}"
             )
 
         try:
@@ -168,5 +177,3 @@ class OllamaClient:
             raise OllamaClientError("Ollama response missing text")
 
         return str(generated).strip()
-
-

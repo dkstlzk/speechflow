@@ -1,15 +1,17 @@
 import time
+
 import numpy as np
 from flask_socketio import SocketIO
+
 from ...config.logging import get_logger
-from ...services.transcription.streaming import session_manager, SpeechSegment
 from ...services.persistence.transcripts import save_transcript_chunks
-from .worker_state import transcriber
+from ...services.transcription.streaming import SpeechSegment, session_manager
 
 logger = get_logger(__name__)
 
 CONTEXT_OVERLAP_SECONDS = 0.5
 TRIM_KEEP_SECONDS = 3.0
+
 
 def transcribe_and_persist_segment(
     socketio: SocketIO,
@@ -34,25 +36,33 @@ def transcribe_and_persist_segment(
     def _do_transcribe():
         try:
             audio_np = (
-                np.frombuffer(audio_bytes, dtype=np.int16).astype(np.float32)
-                / 32768.0
+                np.frombuffer(audio_bytes, dtype=np.int16).astype(np.float32) / 32768.0
             )
 
             t0 = time.time()
-            logger.debug(f"[TranscriptEngine] Whisper inference starting for {sid} chunk #{current_chunk_index} at {t0:.3f}")
+            logger.debug(
+                f"[TranscriptEngine] Whisper inference starting for {sid} chunk #{current_chunk_index} at {t0:.3f}"
+            )
             # pyrefly: ignore [missing-import]
             import eventlet.tpool
+
             from .worker_state import transcriber
-            # Provide fast_mode=False for persisted chunks to always use strict language filtering
-            lang = session.detected_language
-            result = eventlet.tpool.execute(transcriber.transcribe, audio_np, lang, False)
+
+            # Provide fast_mode=False for persisted chunks and DO NOT lock language
+            # so Whisper can dynamically detect code-switching per segment.
+            result = eventlet.tpool.execute(
+                transcriber.transcribe, audio_np, None, False
+            )
             t1 = time.time()
-            
-            # Keep the detected language locked in for future fast-mode live captions
-            if result.language:
+
+            # Keep the initially detected language locked in for future fast-mode live captions
+            # but allow the final chunk to be whatever Whisper detected.
+            if result.language and not session.detected_language:
                 session.detected_language = result.language
-            logger.debug(f"[TranscriptEngine] Whisper inference finished for {sid} chunk #{current_chunk_index} at {t1:.3f} (Duration: {t1-t0:.3f}s)")
-            
+            logger.debug(
+                f"[TranscriptEngine] Whisper inference finished for {sid} chunk #{current_chunk_index} at {t1:.3f} (Duration: {t1 - t0:.3f}s)"
+            )
+
             text = result.text.strip() if result.text else ""
 
             if not text.strip():
@@ -61,10 +71,13 @@ def transcribe_and_persist_segment(
                     f"chunk #{current_chunk_index} — skipping"
                 )
                 with session.lock:
-                    session_manager.advance_segment(sid, segment.end_time, segment.end_offset)
+                    session_manager.advance_segment(
+                        sid, segment.end_time, segment.end_offset
+                    )
                 return
 
             from sqlalchemy.exc import IntegrityError
+
             try:
                 save_transcript_chunks(
                     int(session.session_id),
@@ -77,6 +90,7 @@ def transcribe_and_persist_segment(
                             "text": text,
                             "chunk_index": current_chunk_index,
                             "is_partial": False,
+                            "language": result.language,
                         }
                     ],
                 )
@@ -113,15 +127,16 @@ def transcribe_and_persist_segment(
             )
 
             with session.lock:
-                session_manager.advance_segment(sid, segment.end_time, segment.end_offset)
+                session_manager.advance_segment(
+                    sid, segment.end_time, segment.end_offset
+                )
                 session_manager.trim_buffer_after_persist(
                     sid, keep_seconds=TRIM_KEEP_SECONDS
                 )
 
         except Exception:
             logger.exception(
-                f"[TranscriptEngine] Error for {sid} "
-                f"chunk #{current_chunk_index}"
+                f"[TranscriptEngine] Error for {sid} chunk #{current_chunk_index}"
             )
         finally:
             with session.lock:
@@ -129,4 +144,5 @@ def transcribe_and_persist_segment(
 
     # pyrefly: ignore [missing-import]
     import eventlet
+
     eventlet.spawn(_do_transcribe)

@@ -1,6 +1,6 @@
 import os
-from pathlib import Path
 from dataclasses import dataclass
+from pathlib import Path
 
 from dotenv import load_dotenv
 
@@ -8,6 +8,7 @@ ENV_PATH = Path(__file__).resolve().parents[3] / ".env"
 load_dotenv(ENV_PATH)
 
 from .constants import DEFAULT_ALLOWED_EXTENSIONS, DEFAULT_MAX_UPLOAD_MB
+
 
 @dataclass(frozen=True)
 class Settings:
@@ -41,14 +42,25 @@ class Settings:
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
     DEBUG: bool = os.getenv("FLASK_DEBUG", "0") == "1"
     ADMIN_PASSWORD: str = os.getenv("ADMIN_PASSWORD")
-    QUICK_DIARIZATION_THRESHOLD: float = float(os.getenv("QUICK_DIARIZATION_THRESHOLD", "0.3"))
+    QUICK_DIARIZATION_THRESHOLD: float = float(
+        os.getenv("QUICK_DIARIZATION_THRESHOLD", "0.3")
+    )
+    TRANSLATION_BATCH_SIZE: int = int(os.getenv("TRANSLATION_BATCH_SIZE", "15"))
+    MAX_BACKGROUND_WORKERS: int = int(os.getenv("MAX_BACKGROUND_WORKERS", "4"))
 
     def __post_init__(self):
+        if not self.DEBUG and self.SECRET_KEY == "dev":
+            raise RuntimeError(
+                "SECRET_KEY must not be 'dev' in production (FLASK_DEBUG=0)."
+            )
         if not self.SECRET_KEY:
             raise RuntimeError("SECRET_KEY environment variable must be set")
         if not self.DATABASE_URL:
             raise RuntimeError("DATABASE_URL environment variable is required")
         if not self.ADMIN_PASSWORD:
-            raise RuntimeError("ADMIN_PASSWORD environment variable is required (set it in .env to enable the auth wall)")
+            raise RuntimeError(
+                "ADMIN_PASSWORD environment variable is required (set it in .env to enable the auth wall)"
+            )
+
 
 settings = Settings()

@@ -1,50 +1,69 @@
 from ..config.logging import get_logger
+from ..config.settings import settings
 from ..db.session import SessionLocal
 from ..models.translation import SessionTranslation
-from ..services.session.session_service import get_session_transcript
 from ..services.persistence.summaries import get_summary
 from ..services.translation import TranslationService
 
 logger = get_logger("translation_worker")
 
+
 def process_translation(session_id: int, target_language: str) -> None:
-    """Background worker to translate a session's transcript and summary."""
+    """Background worker to translate a session's transcript and summary.
+
+    This function performs an end-to-end translation of a completed session:
+    1. Translates all individual transcript chunks in batches to prevent LLM hallucination.
+    2. Translates the generated Summary and Minutes of Meeting (MOM).
+    3. Persists the translated artifacts to the database.
+
+    Args:
+        session_id: The ID of the session to translate.
+        target_language: The target language key (e.g., 'hi', 'es').
+    """
+    import time
+
+    start_time = time.monotonic()
+
     db = SessionLocal()
     try:
         # Check if the translation row exists
-        translation_row = db.query(SessionTranslation).filter(
-            SessionTranslation.session_id == session_id,
-            SessionTranslation.target_language == target_language
-        ).first()
+        translation_row = (
+            db.query(SessionTranslation)
+            .filter(
+                SessionTranslation.session_id == session_id,
+                SessionTranslation.target_language == target_language,
+            )
+            .first()
+        )
 
         if not translation_row:
-            logger.error(f"No SessionTranslation row found for session {session_id} and language {target_language}")
+            logger.error(
+                f"No SessionTranslation row found for session {session_id} and language {target_language}"
+            )
             return
-        
-        # Get transcript
-        payload = get_session_transcript(session_id)
-        if payload is None or not payload.get("transcript"):
+
+        # Get chunks
+        from ..models.transcript_chunk import TranscriptChunk
+        from ..models.translation import TranslatedChunk
+
+        chunks_query = (
+            db.query(TranscriptChunk)
+            .filter(TranscriptChunk.session_id == session_id)
+            .order_by(TranscriptChunk.chunk_index)
+            .all()
+        )
+
+        if not chunks_query:
             translation_row.status = "failed"
-            translation_row.error_message = "No transcript to translate"
+            translation_row.error_message = "No transcript chunks to translate"
             db.commit()
             return
 
-        entries = payload.get("transcript", [])
-        
-        # Build transcript text for translation
-        lines = []
-        for entry in entries:
-            text = (entry.get("text") or "").strip()
-            if not text:
-                continue
-            speaker = entry.get("display_name") or entry.get("speaker") or "Speaker"
-            if speaker in ("UNKNOWN", ""):
-                speaker = "Speaker"
-            lines.append(f"{speaker}: {text}")
+        chunk_dicts = [
+            {"id": c.id, "text": c.text} for c in chunks_query if c.text.strip()
+        ]
 
-        combined_text = "\n".join(lines)
-
-        if not combined_text.strip():
+        if not chunk_dicts:
             translation_row.status = "failed"
             translation_row.error_message = "Transcript has no translatable text"
             db.commit()
@@ -57,14 +76,94 @@ def process_translation(session_id: int, target_language: str) -> None:
 
         service = TranslationService()
 
-        # Translate transcript
-        logger.info(f"Translating transcript for session {session_id} to {target_language}")
-        translated_transcript = service.translate_text(combined_text, target_language)
+        # Translate chunks
+        logger.info(
+            f"Translating transcript chunks for session {session_id} to {target_language}"
+        )
+        try:
+            # We translate them in batches to prevent LLM output truncation and JSON malformation
+            BATCH_SIZE = settings.TRANSLATION_BATCH_SIZE
+            translated_dicts = []
+            failed_batches = 0
+            total_batches = (len(chunk_dicts) + BATCH_SIZE - 1) // BATCH_SIZE
+            for i in range(0, len(chunk_dicts), BATCH_SIZE):
+                batch = chunk_dicts[i : i + BATCH_SIZE]
+                logger.info(
+                    f"Translating batch {i // BATCH_SIZE + 1} of {total_batches}"
+                )
+                batch_res = service.translate_chunks(batch, target_language)
+                if batch_res:
+                    translated_dicts.extend(batch_res)
+                else:
+                    failed_batches += 1
+
+            # Delete existing translation chunks to avoid duplicates
+            db.query(TranslatedChunk).filter(
+                TranslatedChunk.translation_id == translation_row.id
+            ).delete(synchronize_session=False)
+
+            # Save translated chunks in bulk
+            new_chunks = []
+            for t_dict in translated_dicts:
+                if not isinstance(t_dict, dict):
+                    continue
+                c_id = t_dict.get("id")
+                t_text = t_dict.get("text")
+                if t_text is not None:
+                    t_text = str(t_text).strip()
+                else:
+                    t_text = ""
+                if c_id and t_text:
+                    new_chunks.append(
+                        TranslatedChunk(
+                            translation_id=translation_row.id,
+                            chunk_id=c_id,
+                            translated_text=t_text,
+                        )
+                    )
+            db.add_all(new_chunks)
+            db.flush()
+
+            # Build flattened translated transcript for legacy clients/exports
+            # We fetch speaker names from the original chunks
+            id_to_speaker = {}
+            for c in chunks_query:
+                speaker = (
+                    (c.speaker.display_name or c.speaker.speaker_label)
+                    if c.speaker
+                    else "Speaker"
+                )
+                if speaker in ("UNKNOWN", ""):
+                    speaker = "Speaker"
+                id_to_speaker[c.id] = speaker
+
+            translated_lines = []
+            for t_dict in translated_dicts:
+                if not isinstance(t_dict, dict):
+                    continue
+                c_id = t_dict.get("id")
+                t_text = t_dict.get("text")
+                if t_text is not None:
+                    t_text = str(t_text).strip()
+                else:
+                    t_text = ""
+                if c_id and t_text:
+                    translated_lines.append(
+                        f"{id_to_speaker.get(c_id, 'Speaker')}: {t_text}"
+                    )
+
+            translated_transcript = "\n".join(translated_lines)
+
+        except Exception as e:
+            logger.error(f"Chunk translation failed: {e}")
+            raise
 
         # Translate summary
         if summary_data and summary_data.get("summary"):
             try:
-                logger.info(f"Translating summary for session {session_id} to {target_language}")
+                logger.info(
+                    f"Translating summary for session {session_id} to {target_language}"
+                )
                 summary_text = service.translate_text(
                     summary_data["summary"], target_language, is_summary=True
                 )
@@ -74,7 +173,9 @@ def process_translation(session_id: int, target_language: str) -> None:
         # Translate MoM
         if summary_data and summary_data.get("mom"):
             try:
-                logger.info(f"Translating MoM for session {session_id} to {target_language}")
+                logger.info(
+                    f"Translating MoM for session {session_id} to {target_language}"
+                )
                 mom_text = service.translate_text(
                     summary_data["mom"], target_language, is_summary=True
                 )
@@ -86,17 +187,44 @@ def process_translation(session_id: int, target_language: str) -> None:
         translation_row.translated_summary = summary_text
         translation_row.translated_mom = mom_text
         translation_row.status = "completed"
+        if failed_batches > 0:
+            warning = f"Warning: {failed_batches}/{total_batches} translation batches failed. Some transcript chunks remain untranslated."
+            translation_row.error_message = (
+                (translation_row.error_message or "") + "\n" + warning
+            ).strip()
         db.commit()
-        logger.info(f"Translation completed successfully for session {session_id} ({target_language})")
+        elapsed = time.monotonic() - start_time
+        logger.info(
+            f"[TranslationWorker] Session={session_id} Stage=Translation "
+            f"Elapsed={elapsed:.1f} Chunks={len(new_chunks)} Batches={total_batches} FailedBatches={failed_batches} Language={target_language} Status=Completed"
+        )
 
     except Exception as e:
-        logger.exception(f"Translation failed for session {session_id} ({target_language})")
-        if 'translation_row' in locals() and translation_row:
-            translation_row.status = "failed"
-            translation_row.error_message = str(e)
+        logger.exception(
+            f"Translation failed for session {session_id} ({target_language})"
+        )
+        if "translation_row" in locals() and translation_row:
             try:
+                translation_row.status = "failed"
+                translation_row.error_message = str(e)
                 db.commit()
-            except:
+            except Exception:
                 db.rollback()
+                # Open a new session to ensure the failure state is persisted
+                try:
+                    with SessionLocal() as new_db:
+                        new_row = (
+                            new_db.query(SessionTranslation)
+                            .filter(SessionTranslation.id == translation_row.id)
+                            .first()
+                        )
+                        if new_row:
+                            new_row.status = "failed"
+                            new_row.error_message = str(e)
+                            new_db.commit()
+                except Exception as inner_err:
+                    logger.error(
+                        f"Failed to persist translation failure state: {inner_err}"
+                    )
     finally:
         db.close()

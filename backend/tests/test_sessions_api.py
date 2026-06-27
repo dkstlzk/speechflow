@@ -16,6 +16,7 @@ def test_process_session_success(client, monkeypatch):
         def with_for_update(self): return self
         def filter(self, *args): return self
         def first(self): return DummySession()
+        def update(self, *args, **kwargs): return 1
     
     class DummyDB:
         def query(self, *args): return DummyQuery()

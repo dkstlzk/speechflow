@@ -1,7 +1,9 @@
 import time
+
 from flask_socketio import SocketIO
+
 from ...config.logging import get_logger
-from ...services.transcription.streaming import session_manager, SpeechSegment
+from ...services.transcription.streaming import SpeechSegment, session_manager
 from .caption_engine import emit_caption_update
 from .segmentation_engine import check_segment_boundary
 from .transcript_engine import transcribe_and_persist_segment
@@ -9,6 +11,7 @@ from .transcript_engine import transcribe_and_persist_segment
 logger = get_logger(__name__)
 
 WORKER_SLEEP_SECONDS = 0.2
+
 
 def handle_session_end(socketio: SocketIO, sid: str, session) -> None:
     # Synchronous teardown only. Final chunks are already submitted by the worker loop.
@@ -50,17 +53,23 @@ def realtime_worker_loop(socketio: SocketIO):
             try:
                 now = time.time()
                 timeout = 3600 if session.is_paused else 60
-                if now - getattr(session, 'last_activity_time', now) > timeout:
+                if now - getattr(session, "last_activity_time", now) > timeout:
                     if not session.is_ending:
-                        logger.warning(f"[Watchdog] Session {session.session_id} idle timeout. Finalizing.")
+                        logger.warning(
+                            f"[Watchdog] Session {session.session_id} idle timeout. Finalizing."
+                        )
                         session.is_ending = True
 
-                if session.is_paused and not session.pause_pending and not session.is_ending:
+                if (
+                    session.is_paused
+                    and not session.pause_pending
+                    and not session.is_ending
+                ):
                     continue
 
                 if session.pause_pending:
                     if session.is_transcribing:
-                        continue # wait until current transcription finishes
+                        continue  # wait until current transcription finishes
 
                     segment = None
                     with session.lock:
@@ -91,14 +100,16 @@ def realtime_worker_loop(socketio: SocketIO):
 
                 if session.is_ending:
                     if session.is_transcribing:
-                        continue # wait for it to finish
-                        
-                    if getattr(session, 'final_chunk_submitted', False) is False:
+                        continue  # wait for it to finish
+
+                    if getattr(session, "final_chunk_submitted", False) is False:
                         session.final_chunk_submitted = True
                         segment = None
                         with session.lock:
                             current_buf_len = len(session.audio_buffer)
-                            segment_bytes = current_buf_len - session.segment_start_offset
+                            segment_bytes = (
+                                current_buf_len - session.segment_start_offset
+                            )
                             bytes_per_sec = session.sample_rate * 2
 
                             if segment_bytes > bytes_per_sec * 0.3:
@@ -107,15 +118,18 @@ def realtime_worker_loop(socketio: SocketIO):
                                     start_offset=session.segment_start_offset,
                                     end_offset=current_buf_len,
                                     start_time=session.segment_start_time,
-                                    end_time=session.segment_start_time + segment_duration,
+                                    end_time=session.segment_start_time
+                                    + segment_duration,
                                 )
-                                
+
                         if segment:
                             with session.lock:
                                 session.is_transcribing = True
-                            transcribe_and_persist_segment(socketio, sid, session, segment)
-                            continue # let it run in background
-                            
+                            transcribe_and_persist_segment(
+                                socketio, sid, session, segment
+                            )
+                            continue  # let it run in background
+
                     handle_session_end(socketio, sid, session)
                     continue
 
@@ -135,6 +149,9 @@ def realtime_worker_loop(socketio: SocketIO):
                             socketio, sid, session, closed_segment
                         )
             except Exception as e:
-                logger.error(f"[RealtimeWorker] Error processing session {session.session_id}: {e}", exc_info=True)
+                logger.error(
+                    f"[RealtimeWorker] Error processing session {session.session_id}: {e}",
+                    exc_info=True,
+                )
 
         time.sleep(WORKER_SLEEP_SECONDS)

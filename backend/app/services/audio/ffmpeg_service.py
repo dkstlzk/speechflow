@@ -21,9 +21,7 @@ class AudioPreprocessorService:
 
     def preprocess(self, input_path: str) -> str:
         """Convert input audio into 16kHz mono WAV and return output path."""
-        output_path = create_temp_path(
-            self.temp_dir, f"{Path(input_path).stem}.wav"
-        )
+        output_path = create_temp_path(self.temp_dir, f"{Path(input_path).stem}.wav")
 
         try:
             logger.info(
@@ -33,9 +31,7 @@ class AudioPreprocessorService:
             return preprocess_to_wav(input_path, str(output_path))
         except Exception as exc:
             cleanup_file(str(output_path))
-            logger.exception(
-                "FFmpeg preprocessing failed", extra={"input": input_path}
-            )
+            logger.exception("FFmpeg preprocessing failed", extra={"input": input_path})
             raise exc
 
     def cleanup(self, path: Optional[str]) -> None:

@@ -4,7 +4,7 @@ Defines interfaces for file-based and streaming transcription.
 """
 
 from dataclasses import dataclass
-from typing import Dict, Iterable, List, Optional, Union
+from typing import Dict, List, Optional, Union
 
 import numpy as np
 from faster_whisper import WhisperModel
@@ -38,8 +38,9 @@ class WhisperTranscriptionService:
         self.device = device or settings.WHISPER_DEVICE
         self.compute_type = compute_type or settings.WHISPER_COMPUTE_TYPE
         self._model = model
-        
+
         import threading
+
         self._lock = threading.Lock()
 
     def _get_model(self) -> WhisperModel:
@@ -55,30 +56,40 @@ class WhisperTranscriptionService:
                         },
                     )
                     self._model = WhisperModel(
-                        self.model_name, device=self.device, compute_type=self.compute_type, cpu_threads=2
+                        self.model_name,
+                        device=self.device,
+                        compute_type=self.compute_type,
+                        cpu_threads=2,
                     )
         return self._model
 
-    def transcribe(self, audio: Union[str, np.ndarray], language: Optional[str] = None, fast_mode: bool = False) -> TranscriptionResult:
+    def transcribe(
+        self,
+        audio: Union[str, np.ndarray],
+        language: Optional[str] = None,
+        fast_mode: bool = False,
+    ) -> TranscriptionResult:
         model = self._get_model()
-        
+
         ALLOWED_LANGUAGES = {"en", "hi", "mr", "gu", "ta", "te", "or", "nl", "ru", "es"}
-        
+
         best_lang = language
         best_prob = 0.0
-        
+
         if not best_lang and not fast_mode:
             # Perform custom language detection to restrict the pool of allowed languages
             try:
                 detected_lang, detected_prob, all_probs = model.detect_language(
                     audio=audio, vad_filter=True
                 )
-                
+
                 # Filter the probability list to only our allowed languages
                 filtered_probs = [
-                    (lang, prob) for lang, prob in all_probs if lang in ALLOWED_LANGUAGES
+                    (lang, prob)
+                    for lang, prob in all_probs
+                    if lang in ALLOWED_LANGUAGES
                 ]
-                
+
                 # Pick the allowed language with the highest probability, fallback to English
                 if filtered_probs:
                     filtered_probs.sort(key=lambda x: x[1], reverse=True)
@@ -87,9 +98,11 @@ class WhisperTranscriptionService:
                 else:
                     best_lang = "en"
                     best_prob = 0.0
-                    
-                logger.debug(f"[WhisperService] Language restricted detection: Raw={detected_lang}({detected_prob:.2f}), Best Allowed={best_lang}({best_prob:.2f})")
-                
+
+                logger.debug(
+                    f"[WhisperService] Language restricted detection: Raw={detected_lang}({detected_prob:.2f}), Best Allowed={best_lang}({best_prob:.2f})"
+                )
+
             except Exception as e:
                 logger.warning(f"[WhisperService] Failed language detection pass: {e}")
                 best_lang = "en"
@@ -104,7 +117,7 @@ class WhisperTranscriptionService:
             audio,
             language=best_lang,
             condition_on_previous_text=False,
-            vad_filter=True,
+            vad_filter=not fast_mode,
             beam_size=1,
             hallucination_silence_threshold=1,
             without_timestamps=fast_mode,

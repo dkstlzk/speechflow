@@ -138,7 +138,9 @@ export async function getSessions(
     has_audio: s.has_audio,
     audio_url: s.audio_url ? `${API_BASE}${s.audio_url}` : undefined,
     durationSec: s.duration_seconds ?? undefined,
-    detected_language: s.detected_language ?? undefined,
+    diarized_at: (s as any).diarized_at ?? null,
+    detected_language: s.detected_language ?? null,
+    detected_languages: (s as any).detected_languages ?? null,
   }));
   return { data: sessions, ok: true };
 }
@@ -171,7 +173,10 @@ export async function getSession(id: string, signal?: AbortSignal): Promise<ApiR
       has_audio: raw.data.has_audio,
       audio_url: raw.data.audio_url ? `${API_BASE}${raw.data.audio_url}` : undefined,
       durationSec: raw.data.duration_seconds ?? undefined,
-      detected_language: raw.data.detected_language ?? undefined,
+      diarized_at: (raw.data as any).diarized_at ?? null,
+      detected_language: raw.data.detected_language ?? null,
+      detected_languages: (raw.data as any).detected_languages ?? null,
+      processing_stage: (raw.data as any).processing_stage ?? undefined,
     },
     ok: true,
   };
@@ -230,7 +235,12 @@ export async function getSummary(
     session_id: number;
     summary: string;
     mom: string | null;
-    created_at: string | null;
+    history?: {
+      iteration: number;
+      summary: string;
+      mom: string | null;
+      created_at: string | null;
+    }[];
     exists?: boolean;
   };
   const raw = await apiFetch<BS>(`${API_BASE}/api/sessions/${id}/summary`, { signal });
@@ -242,6 +252,7 @@ export async function getSummary(
       sessionId: String(raw.data.session_id),
       summary: raw.data.summary,
       mom: raw.data.mom,
+      history: raw.data.history ?? [],
     },
     ok: true,
   };
@@ -256,6 +267,7 @@ export async function getActions(
     id: number;
     text: string;
     status: string;
+    iteration?: number;
     created_at: string | null;
   };
   type BP = { session_id: number; action_items: BI[] };
@@ -263,6 +275,7 @@ export async function getActions(
   const items: ActionItem[] = (raw.data.action_items ?? []).map((it) => ({
     id: String(it.id),
     text: it.text,
+    iteration: it.iteration ?? 1,
   }));
   return { data: items, ok: true };
 }
@@ -271,16 +284,12 @@ export async function getActions(
 export async function processSession(
   id: string,
 ): Promise<ApiResponse<{ sessionId: string; status: "completed" }>> {
-  const raw = await apiFetch<{
-    session_id: number;
-    transcript_type: string;
-    summary: string;
-  }>(`${API_BASE}/api/sessions/${id}/process`, {
+  await apiFetch<{ message: string }>(`${API_BASE}/api/sessions/${id}/process`, {
     method: "POST",
     timeoutMs: 300000,
   });
   return {
-    data: { sessionId: String(raw.data.session_id), status: "completed" },
+    data: { sessionId: id, status: "completed" },
     ok: true,
   };
 }
@@ -435,10 +444,11 @@ export interface TranslationResponse {
   translated_transcript: string | null;
   translated_summary: string | null;
   translated_mom: string | null;
-  status: "translating" | "completed" | "failed";
+  status: "translating" | "completed" | "failed" | "invalidated";
   error_message: string | null;
   created_at: string;
   updated_at: string;
+  translated_chunks?: { chunk_id: number; text: string }[];
 }
 
 export async function translateSession(

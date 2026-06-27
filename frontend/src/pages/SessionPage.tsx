@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Sparkles, RefreshCw, Music, Download, Pencil, Check, X, Languages, ChevronDown } from "lucide-react";
+import { Sparkles, RefreshCw, Music, Download, Pencil, Check, X, Languages, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { AppLayout } from "@/layouts/AppLayout";
 import { TranscriptViewer } from "@/components/TranscriptViewer";
 import { SummaryPanel } from "@/components/SummaryPanel";
@@ -70,6 +70,7 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
   const [transcript, setTranscript] = useState<State<TranscriptResponse>>(initial());
   const [summary, setSummary] = useState<State<SummaryResponse>>(initial());
   const [actions, setActions] = useState<State<ActionItem[]>>(initial());
+  const [activeIteration, setActiveIteration] = useState<number>(1);
   const [processing, setProcessing] = useState(false);
   const [diarizing, setDiarizing] = useState(false);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -87,8 +88,8 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
     getSupportedLanguages()
       .then((r) => {
         setSupportedLanguages(r.data);
-        // Default to hindi if available
-        if (r.data.hindi) setSelectedLanguage("hindi");
+        // Default to hi (Hindi) if available
+        if (r.data.hi) setSelectedLanguage("hi");
         else {
           const first = Object.keys(r.data)[0];
           if (first) setSelectedLanguage(first);
@@ -183,7 +184,13 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
   const fetchSummary = useCallback((signal?: AbortSignal) => {
     setSummary(prev => ({ ...prev, loading: true, error: null }));
     return getSummary(id, signal)
-      .then((r) => setSummary({ data: r.data, loading: false, error: null }))
+      .then((r) => {
+        setSummary({ data: r.data, loading: false, error: null });
+        if (r.data?.history && r.data.history.length > 0) {
+          const maxIter = Math.max(...r.data.history.map(h => h.iteration));
+          setActiveIteration(maxIter);
+        }
+      })
       .catch((e: unknown) => {
         if (e instanceof Error && (e.name === "AbortError" || e.message.includes("aborted")))
           return;
@@ -243,7 +250,7 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
 
   useEffect(() => {
     const status = session.data?.status;
-    const isProcessingSession = status === "processing" || status === "diarizing" || status === "finalizing";
+    const isProcessingSession = ["pending", "uploaded", "preprocessing", "transcribing", "diarizing", "processing", "finalizing"].includes(status || "");
     const hasActiveTranslation = translations.some(t => t.status === "translating");
 
     if (!isProcessingSession && !hasActiveTranslation) {
@@ -351,12 +358,26 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
 
   async function handleExport(format: string) {
     if (!session.data || !transcript.data?.segments) return;
+    
+    let curSummary = summary.data?.summary;
+    let curMom = summary.data?.mom;
+    
+    if (summary.data?.history && summary.data.history.length > 0) {
+      const hist = summary.data.history.find(h => h.iteration === activeIteration);
+      if (hist) {
+        curSummary = hist.summary;
+        curMom = hist.mom;
+      }
+    }
+    
+    const curActions = actions.data?.filter(a => a.iteration === activeIteration) || actions.data;
+
     const data = {
       session: session.data!,
       transcript: transcript.data.segments,
-      summary: summary.data?.summary,
-      mom: summary.data?.mom,
-      actions: actions.data || [],
+      summary: curSummary,
+      mom: curMom,
+      actions: curActions || [],
     };
     switch (format) {
       case "txt":
@@ -374,7 +395,9 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
         }
         break;
       case "pdf":
-        printAsPdf();
+        setTimeout(() => {
+          printAsPdf();
+        }, 100);
         break;
     }
   }
@@ -447,9 +470,13 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
                 {session.data.transcriptType.replace("_", " ")}
               </span>
             )}
-            {session.data?.detected_language && (
+            {session.data?.detected_languages && session.data.detected_languages.length > 0 && session.data.transcriptType !== ("upload" as any) ? (
               <span className="rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 px-2 py-0.5 text-[11px] font-medium">
-                🌐 {(() => {
+                🌐 {session.data.detected_languages.map(l => `${l.code.toUpperCase()} ${l.percentage}%`).join(" • ")}
+              </span>
+            ) : session.data?.detected_language ? (
+              <span className="rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 px-2 py-0.5 text-[11px] font-medium">
+                🌐 Primary Language: {(() => {
                   const langMap: Record<string, string> = {
                     en: "English", hi: "Hindi", ta: "Tamil", te: "Telugu",
                     mr: "Marathi", or: "Odia", es: "Spanish", nl: "Dutch",
@@ -459,7 +486,7 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
                   return langMap[session.data.detected_language] || session.data.detected_language.toUpperCase();
                 })()}
               </span>
-            )}
+            ) : null}
           </div>
           <div className="flex items-center gap-2 group min-h-[40px]">
             {isEditingTitle ? (
@@ -674,20 +701,50 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
               <audio ref={audioRef} controls src={`${session.data.audio_url}?t=${session.data.createdAt || Date.now()}`} className="w-full" />
             </PanelShell>
           )}
+
+          {summary.data?.history && summary.data.history.length > 1 && (
+            <div className="flex items-center justify-between bg-muted/30 px-4 py-2 rounded-lg border border-border/50">
+              <span className="text-sm font-medium text-muted-foreground">Intelligence Version</span>
+              <div className="flex items-center gap-3">
+                <Button 
+                  variant="outline" 
+                  size="icon" 
+                  className="h-7 w-7" 
+                  disabled={activeIteration <= 1}
+                  onClick={() => setActiveIteration(i => Math.max(1, i - 1))}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <span className="text-xs font-semibold tabular-nums">
+                  {activeIteration} of {Math.max(...summary.data.history.map(h => h.iteration))}
+                </span>
+                <Button 
+                  variant="outline" 
+                  size="icon" 
+                  className="h-7 w-7" 
+                  disabled={activeIteration >= Math.max(...summary.data.history.map(h => h.iteration))}
+                  onClick={() => setActiveIteration(i => Math.min(Math.max(...summary.data!.history!.map(h => h.iteration)), i + 1))}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
+
           <SummaryPanel
-            summary={summary.data?.summary}
+            summary={summary.data?.history?.find(h => h.iteration === activeIteration)?.summary || summary.data?.summary}
             loading={summary.loading}
             error={summary.error}
             emptyMessage={session.data?.status === "failed" ? "Generation failed." : "Not generated yet."}
           />
           <MomPanel 
-            mom={summary.data?.mom} 
+            mom={summary.data?.history?.find(h => h.iteration === activeIteration)?.mom || summary.data?.mom} 
             loading={summary.loading} 
             error={summary.error} 
             emptyMessage={session.data?.status === "failed" ? "Generation failed." : "Not generated yet."}
           />
           <ActionItemsPanel 
-            items={actions.data} 
+            items={actions.data?.filter(a => a.iteration === activeIteration || !a.iteration)} 
             loading={actions.loading} 
             error={actions.error} 
             emptyMessage={session.data?.status === "failed" ? "Generation failed." : "Not generated yet."}
@@ -722,12 +779,24 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
               </div>
             </PanelShell>
           )}
+          {activeTranslation?.status === "invalidated" && (
+            <PanelShell title="Translation Invalidated" icon={<Languages className="h-4 w-4" />}>
+              <div className="text-sm text-amber-600 bg-amber-50 p-3 rounded-md border border-amber-200">
+                ⚠ Translation is outdated because the transcript changed. {activeTranslation.error_message}
+              </div>
+            </PanelShell>
+          )}
           {activeTranslation?.status === "completed" && (
             <PanelShell
               title={`Translation (${supportedLanguages[activeTranslation.target_language] || activeTranslation.target_language})`}
               icon={<Languages className="h-4 w-4" />}
             >
               <div className="space-y-4">
+                {activeTranslation.error_message && (
+                  <div className="text-sm text-amber-700 bg-amber-50 p-3 rounded-md border border-amber-200 mb-3 whitespace-pre-wrap">
+                    ⚠ {activeTranslation.error_message}
+                  </div>
+                )}
                 <div className="flex gap-2 mb-3">
                   <Button variant="outline" size="sm" onClick={() => handleExportTranslated("docx")}>
                     <Download className="h-3 w-3 mr-1" /> Export DOCX

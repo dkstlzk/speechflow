@@ -1,7 +1,9 @@
 import time
 from typing import Optional
-import torch
+
 import numpy as np
+import torch
+
 from ...config.logging import get_logger
 from ...services.transcription.streaming import SpeechSegment
 from .worker_state import vad_model
@@ -11,6 +13,7 @@ logger = get_logger(__name__)
 SILENCE_THRESHOLD_SECONDS = 1.5
 MAX_SEGMENT_SECONDS = 10.0
 VAD_SPEECH_THRESHOLD = 0.35
+
 
 def _check_vad_speaking(audio_np: np.ndarray, sample_rate: int) -> bool:
     if vad_model is None:
@@ -40,6 +43,7 @@ def _check_vad_speaking(audio_np: np.ndarray, sample_rate: int) -> bool:
         logger.warning(f"[VAD Warning] {e}")
         return True
 
+
 def check_segment_boundary(sid: str, session) -> Optional[SpeechSegment]:
     current_buf_len = len(session.audio_buffer)
     segment_bytes = current_buf_len - session.segment_start_offset
@@ -51,10 +55,9 @@ def check_segment_boundary(sid: str, session) -> Optional[SpeechSegment]:
     segment_duration = segment_bytes / bytes_per_sec
     now = time.time()
 
-    segment_audio = session.audio_buffer[session.segment_start_offset:]
+    segment_audio = session.audio_buffer[session.segment_start_offset :]
     audio_np = (
-        np.frombuffer(bytes(segment_audio), dtype=np.int16).astype(np.float32)
-        / 32768.0
+        np.frombuffer(bytes(segment_audio), dtype=np.int16).astype(np.float32) / 32768.0
     )
 
     is_speaking = _check_vad_speaking(audio_np, session.sample_rate)
@@ -68,7 +71,9 @@ def check_segment_boundary(sid: str, session) -> Optional[SpeechSegment]:
     reason = None
     if session.is_ending:
         reason = "END"
-    elif silence_duration >= SILENCE_THRESHOLD_SECONDS and getattr(session, "has_speech", False):
+    elif silence_duration >= SILENCE_THRESHOLD_SECONDS and getattr(
+        session, "has_speech", False
+    ):
         reason = "SILENCE"
     elif segment_duration >= MAX_SEGMENT_SECONDS:
         reason = "MAX_LENGTH"

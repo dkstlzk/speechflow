@@ -5,9 +5,7 @@ from sqlalchemy.orm import Session
 from ...models.speaker import Speaker
 
 
-def get_or_create_speaker(
-    db: Session, session_id: int, speaker_label: str
-) -> Speaker:
+def get_or_create_speaker(db: Session, session_id: int, speaker_label: str) -> Speaker:
     normalized_label = (speaker_label or "UNKNOWN").strip() or "UNKNOWN"
     speaker = (
         db.query(Speaker)

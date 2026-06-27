@@ -1,28 +1,21 @@
-from flask import Blueprint, jsonify, send_file
 import os
 
+from flask import Blueprint, jsonify, send_file
+from flask import request as flask_request
+
+from ..config.constants import MAX_FIELD_LENGTH
+from ..config.logging import get_logger
 from ..db.session import SessionLocal
 from ..schemas.response import ApiResponse
-from ..services.session.session_service import get_session_transcript
-from ..services.summarization.transcript_processor import (
-    TranscriptProcessor,
-    TranscriptNotFoundError,
-    EmptyTranscriptError,
-    TranscriptProcessorError,
-)
-from ..services.summarization.ollama import OllamaClientError
-from ..services.persistence.summaries import save_summary, get_summary
-from ..services.persistence.actions import save_action_items
 from ..services.persistence.session_repository import (
+    delete_session,
     get_session_by_id,
     list_recent_sessions,
-    delete_session,
-    update_transcript_type,
 )
 from ..services.persistence.speaker_repository import update_speaker_display_name
+from ..services.persistence.summaries import get_summary
+from ..services.session.session_service import get_session_transcript
 from ..workers.worker_state import get_processing_stage
-from flask import request as flask_request
-from ..config.logging import get_logger
 
 logger = get_logger("sessions_api")
 
@@ -42,26 +35,29 @@ def _serialize_session(row) -> dict:
         "title": row.title,
         "host_name": getattr(row, "host_name", None),
         "participants": getattr(row, "participants", None),
-        "created_at": row.created_at.isoformat()
-            if row.created_at
-            else None,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
         "has_audio": bool(getattr(row, "audio_path", None)),
-        "audio_url": f"/api/sessions/{row.id}/audio" if getattr(row, "audio_path", None) else None,
+        "audio_url": f"/api/sessions/{row.id}/audio"
+        if getattr(row, "audio_path", None)
+        else None,
         "diarization_mode": getattr(row, "diarization_mode", None),
-        "diarized_at": row.diarized_at.isoformat() if getattr(row, "diarized_at", None) else None,
+        "diarized_at": row.diarized_at.isoformat()
+        if getattr(row, "diarized_at", None)
+        else None,
         "detected_language": getattr(row, "detected_language", None),
+        "detected_languages": getattr(row, "detected_languages", None),
     }
-    
+
     if status == "processing":
         data["processing_stage"] = get_processing_stage(row.id) or "Processing..."
-            
-    return data
 
+    return data
 
 
 @sessions_bp.get("/")
 def list_sessions():
     from flask import request
+
     query = request.args.get("q")
     db = SessionLocal()
     try:
@@ -110,12 +106,13 @@ def get_session_audio(session_id: str):
             return jsonify(ApiResponse.fail("audio not found").to_dict()), 404
 
         from ..config.settings import settings
+
         filename = os.path.basename(session.audio_path)
         safe_path = os.path.join(settings.EXPORT_DIR, "audio", filename)
 
         if not os.path.exists(safe_path):
             return jsonify(ApiResponse.fail("audio not found").to_dict()), 404
-        
+
         return send_file(safe_path, mimetype="audio/wav")
     except Exception:
         logger.exception("Failed to load audio")
@@ -129,9 +126,7 @@ def delete_session_endpoint(session_id: str):
     try:
         session_id_int = int(session_id)
     except ValueError:
-        return jsonify(
-            ApiResponse.fail("invalid session id").to_dict()
-        ), 400
+        return jsonify(ApiResponse.fail("invalid session id").to_dict()), 400
 
     db = SessionLocal()
 
@@ -139,26 +134,16 @@ def delete_session_endpoint(session_id: str):
         deleted = delete_session(db, session_id_int)
 
         if not deleted:
-            return jsonify(
-                ApiResponse.fail("session not found").to_dict()
-            ), 404
+            return jsonify(ApiResponse.fail("session not found").to_dict()), 404
 
     except Exception:
         logger.exception("Failed to delete session")
-        return jsonify(
-            ApiResponse.fail(
-                "Failed to delete session"
-            ).to_dict()
-        ), 500
+        return jsonify(ApiResponse.fail("Failed to delete session").to_dict()), 500
 
     finally:
         db.close()
 
-    return jsonify(
-        ApiResponse.ok(
-            {"session_id": session_id_int}
-        ).to_dict()
-    ), 200
+    return jsonify(ApiResponse.ok({"session_id": session_id_int}).to_dict()), 200
 
 
 @sessions_bp.patch("/<session_id>/title")
@@ -174,6 +159,13 @@ def update_session_title_endpoint(session_id: str):
     if not title:
         return jsonify(ApiResponse.fail("title is required").to_dict()), 400
 
+    if len(title) > MAX_FIELD_LENGTH:
+        return jsonify(
+            ApiResponse.fail(
+                f"Title cannot exceed {MAX_FIELD_LENGTH} characters"
+            ).to_dict()
+        ), 400
+
     db = SessionLocal()
     try:
         session = get_session_by_id(db, session_id_int)
@@ -186,11 +178,15 @@ def update_session_title_endpoint(session_id: str):
         db.refresh(session)
 
         return jsonify(
-            ApiResponse.ok({"session_id": session_id_int, "title": session.title}).to_dict()
+            ApiResponse.ok(
+                {"session_id": session_id_int, "title": session.title}
+            ).to_dict()
         ), 200
     except Exception:
         logger.exception("Failed to update session title")
-        return jsonify(ApiResponse.fail("Failed to update session title").to_dict()), 500
+        return jsonify(
+            ApiResponse.fail("Failed to update session title").to_dict()
+        ), 500
     finally:
         db.close()
 
@@ -204,6 +200,13 @@ def update_speaker_endpoint(session_id: str, speaker_label: str):
 
     body = flask_request.get_json(silent=True) or {}
     display_name = body.get("display_name", "").strip()
+
+    if len(display_name) > MAX_FIELD_LENGTH:
+        return jsonify(
+            ApiResponse.fail(
+                f"Speaker name cannot exceed {MAX_FIELD_LENGTH} characters"
+            ).to_dict()
+        ), 400
 
     db = SessionLocal()
     try:
@@ -252,43 +255,71 @@ def process_session(session_id: str):
         return jsonify(ApiResponse.fail("invalid session id").to_dict()), 400
 
     import multiprocessing
-    if len(multiprocessing.active_children()) >= 4:
-        return jsonify(ApiResponse.fail("Server overloaded. Too many active jobs.").to_dict()), 503
 
+    if len(multiprocessing.active_children()) >= 4:
+        return jsonify(
+            ApiResponse.fail("Server overloaded. Too many active jobs.").to_dict()
+        ), 503
+
+    from ..db.session import SessionLocal
     from ..models.enums import SessionStatus
     from ..models.session import Session
-    from ..db.session import SessionLocal
 
     db = SessionLocal()
     try:
-        session = db.query(Session).with_for_update().filter(Session.id == session_id_int).first()
+        session = db.query(Session).filter(Session.id == session_id_int).first()
         if not session:
             return jsonify(ApiResponse.fail("Session not found").to_dict()), 404
         if session.status not in (SessionStatus.COMPLETED, SessionStatus.FAILED):
-            return jsonify(ApiResponse.fail("Session must be COMPLETED or FAILED to process").to_dict()), 400
-        
-        session.status = SessionStatus.PROCESSING
+            return jsonify(
+                ApiResponse.fail(
+                    "Session must be COMPLETED or FAILED to process"
+                ).to_dict()
+            ), 400
+
+        updated_rows = (
+            db.query(Session)
+            .filter(Session.id == session_id_int, Session.status == session.status)
+            .update({"status": SessionStatus.PROCESSING})
+        )
+
+        if updated_rows == 0:
+            db.rollback()
+            return jsonify(
+                ApiResponse.fail("Session is already being processed").to_dict()
+            ), 409
+
         db.commit()
     finally:
         db.close()
 
     try:
         import multiprocessing
+
         from ..workers.intelligence_worker import run_intelligence_pipeline
-        multiprocessing.get_context("spawn").Process(target=run_intelligence_pipeline, args=(session_id_int,)).start()
+
+        multiprocessing.get_context("spawn").Process(
+            target=run_intelligence_pipeline, args=(session_id_int,)
+        ).start()
         return jsonify(ApiResponse.ok({"message": "Processing started"}).to_dict()), 202
     except Exception:
         logger.exception(f"Failed to spawn process for session {session_id_int}")
         rollback_db = SessionLocal()
         try:
-            rollback_session = rollback_db.query(Session).filter(Session.id == session_id_int).first()
+            rollback_session = (
+                rollback_db.query(Session).filter(Session.id == session_id_int).first()
+            )
             if rollback_session:
                 rollback_session.status = SessionStatus.FAILED
-                rollback_session.processing_error = "Server overloaded. Failed to start process."
+                rollback_session.processing_error = (
+                    "Server overloaded. Failed to start process."
+                )
                 rollback_db.commit()
         finally:
             rollback_db.close()
-        return jsonify(ApiResponse.fail("Server overloaded. Failed to start process.").to_dict()), 500
+        return jsonify(
+            ApiResponse.fail("Server overloaded. Failed to start process.").to_dict()
+        ), 500
 
 
 @sessions_bp.post("/<session_id>/retry")
@@ -298,76 +329,126 @@ def retry_session_endpoint(session_id: str):
     except ValueError:
         return jsonify(ApiResponse.fail("invalid session id").to_dict()), 400
 
+    from ..db.session import SessionLocal
     from ..models.enums import SessionStatus
     from ..models.session import Session
-    from ..db.session import SessionLocal
 
     db = SessionLocal()
     try:
-        session = db.query(Session).with_for_update().filter(Session.id == session_id_int).first()
+        session = db.query(Session).filter(Session.id == session_id_int).first()
         if not session:
             return jsonify(ApiResponse.fail("Session not found").to_dict()), 404
         # Guard against active sessions (PROCESSING, TRANSCRIBING, DIARIZING, RECORDING) being accidentally updated
         if session.status != SessionStatus.FAILED:
-            return jsonify(ApiResponse.fail("Only failed sessions can be retried").to_dict()), 400
-        
+            return jsonify(
+                ApiResponse.fail("Only failed sessions can be retried").to_dict()
+            ), 400
+
         from ..services.session.session_service import get_session_transcript
+
         has_transcript = get_session_transcript(session_id_int) is not None
-        
+
         if not has_transcript:
-            return jsonify(ApiResponse.fail("Cannot retry session: audio transcription failed. Please re-upload the file.").to_dict()), 400
-            
-        session.status = SessionStatus.PROCESSING
-        session.processing_error = None
+            return jsonify(
+                ApiResponse.fail(
+                    "Cannot retry session: audio transcription failed. Please re-upload the file."
+                ).to_dict()
+            ), 400
+
+        updated_rows = (
+            db.query(Session)
+            .filter(
+                Session.id == session_id_int, Session.status == SessionStatus.FAILED
+            )
+            .update({"status": SessionStatus.PROCESSING, "processing_error": None})
+        )
+
+        if updated_rows == 0:
+            db.rollback()
+            return jsonify(
+                ApiResponse.fail("Session is already being processed").to_dict()
+            ), 409
+
         db.commit()
-        
+
     finally:
         db.close()
 
     try:
         import multiprocessing
+
         from ..workers.intelligence_worker import run_intelligence_pipeline
-        multiprocessing.get_context("spawn").Process(target=run_intelligence_pipeline, args=(session_id_int,)).start()
-            
+
+        multiprocessing.get_context("spawn").Process(
+            target=run_intelligence_pipeline, args=(session_id_int,)
+        ).start()
+
         return jsonify(ApiResponse.ok({"message": "Retry started"}).to_dict()), 202
     except Exception as e:
         logger.exception(f"Failed to spawn retry process for session {session_id_int}")
         rollback_db = SessionLocal()
         try:
-            rollback_session = rollback_db.query(Session).filter(Session.id == session_id_int).first()
+            rollback_session = (
+                rollback_db.query(Session).filter(Session.id == session_id_int).first()
+            )
             if rollback_session:
                 rollback_session.status = SessionStatus.FAILED
                 rollback_session.processing_error = f"Failed to start process: {str(e)}"
                 rollback_db.commit()
         finally:
             rollback_db.close()
-        return jsonify(ApiResponse.fail("Server overloaded. Failed to start process.").to_dict()), 500
-
-
+        return jsonify(
+            ApiResponse.fail("Server overloaded. Failed to start process.").to_dict()
+        ), 500
 
 
 @sessions_bp.post("/<session_id>/quick-diarization")
 def trigger_quick_diarization(session_id: str):
     from ..workers.diarization_worker import process_quick_diarization
+
     try:
         session_id_int = int(session_id)
     except ValueError:
         return jsonify(ApiResponse.fail("invalid session id").to_dict()), 400
 
+    import multiprocessing
+
+    from ..config.settings import settings
+
+    if len(multiprocessing.active_children()) >= settings.MAX_BACKGROUND_WORKERS:
+        return jsonify(
+            ApiResponse.fail("Server overloaded. Too many active jobs.").to_dict()
+        ), 503
+
+    from ..db.session import SessionLocal
     from ..models.enums import SessionStatus
     from ..models.session import Session
-    from ..db.session import SessionLocal
 
     db = SessionLocal()
     try:
-        # D-2: Row-level lock prevents TOCTOU race on concurrent requests
-        session = db.query(Session).with_for_update().filter(Session.id == session_id_int).first()
+        # Optimistic update prevents TOCTOU race on concurrent requests
+        session = db.query(Session).filter(Session.id == session_id_int).first()
         if not session:
             return jsonify(ApiResponse.fail("Session not found").to_dict()), 404
         if session.status not in (SessionStatus.COMPLETED, SessionStatus.FAILED):
-            return jsonify(ApiResponse.fail("Session must be COMPLETED or FAILED to run diarization").to_dict()), 400
-        
-        session.status = SessionStatus.DIARIZING
+            return jsonify(
+                ApiResponse.fail(
+                    "Session must be COMPLETED or FAILED to run diarization"
+                ).to_dict()
+            ), 400
+
+        updated_rows = (
+            db.query(Session)
+            .filter(Session.id == session_id_int, Session.status == session.status)
+            .update({"status": SessionStatus.DIARIZING})
+        )
+
+        if updated_rows == 0:
+            db.rollback()
+            return jsonify(
+                ApiResponse.fail("Session is already being processed").to_dict()
+            ), 409
+
         db.commit()
     finally:
         db.close()
@@ -376,48 +457,80 @@ def trigger_quick_diarization(session_id: str):
     # Acceptable for MVP, but should be migrated to Celery/Redis in production.
     try:
         import multiprocessing
-        multiprocessing.get_context("spawn").Process(target=process_quick_diarization, args=(session_id_int,)).start()
-        return jsonify(ApiResponse.ok({"message": "Quick diarization started"}).to_dict()), 202
+
+        multiprocessing.get_context("spawn").Process(
+            target=process_quick_diarization, args=(session_id_int,)
+        ).start()
+        return jsonify(
+            ApiResponse.ok({"message": "Quick diarization started"}).to_dict()
+        ), 202
     except Exception:
-        logger.exception(f"Failed to spawn quick diarization process for session {session_id_int}")
+        logger.exception(
+            f"Failed to spawn quick diarization process for session {session_id_int}"
+        )
         rollback_db = SessionLocal()
         try:
-            rollback_session = rollback_db.query(Session).filter(Session.id == session_id_int).first()
+            rollback_session = (
+                rollback_db.query(Session).filter(Session.id == session_id_int).first()
+            )
             if rollback_session:
                 rollback_session.status = SessionStatus.FAILED
-                rollback_session.processing_error = "Server overloaded. Failed to start quick diarization."
+                rollback_session.processing_error = (
+                    "Server overloaded. Failed to start quick diarization."
+                )
                 rollback_db.commit()
         finally:
             rollback_db.close()
-        return jsonify(ApiResponse.fail("Server overloaded. Failed to start process.").to_dict()), 500
+        return jsonify(
+            ApiResponse.fail("Server overloaded. Failed to start process.").to_dict()
+        ), 500
 
 
 @sessions_bp.post("/<session_id>/accurate-diarization")
 def trigger_accurate_diarization(session_id: str):
     from ..workers.diarization_worker import process_accurate_diarization
+
     try:
         session_id_int = int(session_id)
     except ValueError:
         return jsonify(ApiResponse.fail("invalid session id").to_dict()), 400
 
     import multiprocessing
-    if len(multiprocessing.active_children()) >= 4:
-        return jsonify(ApiResponse.fail("Server overloaded. Too many active jobs.").to_dict()), 503
 
+    if len(multiprocessing.active_children()) >= 4:
+        return jsonify(
+            ApiResponse.fail("Server overloaded. Too many active jobs.").to_dict()
+        ), 503
+
+    from ..db.session import SessionLocal
     from ..models.enums import SessionStatus
     from ..models.session import Session
-    from ..db.session import SessionLocal
 
     db = SessionLocal()
     try:
-        # D-2: Row-level lock prevents TOCTOU race on concurrent requests
-        session = db.query(Session).with_for_update().filter(Session.id == session_id_int).first()
+        # Optimistic update prevents TOCTOU race on concurrent requests
+        session = db.query(Session).filter(Session.id == session_id_int).first()
         if not session:
             return jsonify(ApiResponse.fail("Session not found").to_dict()), 404
         if session.status not in (SessionStatus.COMPLETED, SessionStatus.FAILED):
-            return jsonify(ApiResponse.fail("Session must be COMPLETED or FAILED to run diarization").to_dict()), 400
-        
-        session.status = SessionStatus.DIARIZING
+            return jsonify(
+                ApiResponse.fail(
+                    "Session must be COMPLETED or FAILED to run diarization"
+                ).to_dict()
+            ), 400
+
+        updated_rows = (
+            db.query(Session)
+            .filter(Session.id == session_id_int, Session.status == session.status)
+            .update({"status": SessionStatus.DIARIZING})
+        )
+
+        if updated_rows == 0:
+            db.rollback()
+            return jsonify(
+                ApiResponse.fail("Session is already being processed").to_dict()
+            ), 409
+
         db.commit()
     finally:
         db.close()
@@ -426,20 +539,32 @@ def trigger_accurate_diarization(session_id: str):
     # Acceptable for MVP, but should be migrated to Celery/Redis in production.
 
     try:
-        multiprocessing.get_context("spawn").Process(target=process_accurate_diarization, args=(session_id_int,)).start()
-        return jsonify(ApiResponse.ok({"message": "Accurate diarization started"}).to_dict()), 202
+        multiprocessing.get_context("spawn").Process(
+            target=process_accurate_diarization, args=(session_id_int,)
+        ).start()
+        return jsonify(
+            ApiResponse.ok({"message": "Accurate diarization started"}).to_dict()
+        ), 202
     except Exception:
-        logger.exception(f"Failed to spawn accurate diarization process for session {session_id_int}")
+        logger.exception(
+            f"Failed to spawn accurate diarization process for session {session_id_int}"
+        )
         rollback_db = SessionLocal()
         try:
-            rollback_session = rollback_db.query(Session).filter(Session.id == session_id_int).first()
+            rollback_session = (
+                rollback_db.query(Session).filter(Session.id == session_id_int).first()
+            )
             if rollback_session:
                 rollback_session.status = SessionStatus.FAILED
-                rollback_session.processing_error = "Server overloaded. Failed to start accurate diarization."
+                rollback_session.processing_error = (
+                    "Server overloaded. Failed to start accurate diarization."
+                )
                 rollback_db.commit()
         finally:
             rollback_db.close()
-        return jsonify(ApiResponse.fail("Server overloaded. Failed to start process.").to_dict()), 500
+        return jsonify(
+            ApiResponse.fail("Server overloaded. Failed to start process.").to_dict()
+        ), 500
 
 
 @sessions_bp.get("/<session_id>/summary")
@@ -459,6 +584,7 @@ def get_session_summary(session_id: str):
 @sessions_bp.get("/languages")
 def list_supported_languages():
     from ..services.translation import TranslationService
+
     languages = TranslationService.get_supported_languages()
     return jsonify(ApiResponse.ok(languages).to_dict()), 200
 
@@ -471,8 +597,6 @@ def translate_session(session_id: str):
         return jsonify(ApiResponse.fail("invalid session id").to_dict()), 400
 
     import multiprocessing
-    if len(multiprocessing.active_children()) >= 4:
-        return jsonify(ApiResponse.fail("Server overloaded. Too many active jobs.").to_dict()), 503
 
     body = flask_request.get_json(silent=True) or {}
     target_language = body.get("target_language", "").strip().lower()
@@ -480,7 +604,8 @@ def translate_session(session_id: str):
     if not target_language:
         return jsonify(ApiResponse.fail("target_language is required").to_dict()), 400
 
-    from ..services.translation import TranslationService, SUPPORTED_LANGUAGES
+    from ..services.translation import SUPPORTED_LANGUAGES
+
     if target_language not in SUPPORTED_LANGUAGES:
         return jsonify(
             ApiResponse.fail(
@@ -490,22 +615,31 @@ def translate_session(session_id: str):
         ), 400
 
     # DB interaction
+    import multiprocessing
+
     from ..db.session import SessionLocal
     from ..models.translation import SessionTranslation
-    import multiprocessing
     from ..workers.translation_worker import process_translation
 
     db = SessionLocal()
     try:
         # Check if already translating or completed
-        translation = db.query(SessionTranslation).filter(
-            SessionTranslation.session_id == session_id_int,
-            SessionTranslation.target_language == target_language
-        ).first()
+        translation = (
+            db.query(SessionTranslation)
+            .filter(
+                SessionTranslation.session_id == session_id_int,
+                SessionTranslation.target_language == target_language,
+            )
+            .first()
+        )
 
         if translation:
             if translation.status == "translating":
-                return jsonify(ApiResponse.ok({"message": "Translation already in progress"}).to_dict()), 202
+                return jsonify(
+                    ApiResponse.ok(
+                        {"message": "Translation already in progress"}
+                    ).to_dict()
+                ), 202
             # If completed or failed, we'll reset it to translating and re-run
             translation.status = "translating"
             translation.error_message = None
@@ -513,41 +647,55 @@ def translate_session(session_id: str):
             translation = SessionTranslation(
                 session_id=session_id_int,
                 target_language=target_language,
-                status="translating"
+                status="translating",
             )
             db.add(translation)
-        
+
         db.commit()
 
         # Spawn background process
         try:
             multiprocessing.get_context("spawn").Process(
-                target=process_translation, 
-                args=(session_id_int, target_language)
+                target=process_translation, args=(session_id_int, target_language)
             ).start()
         except Exception as e:
-            logger.exception(f"Failed to start translation for session {session_id_int}")
+            logger.exception(
+                f"Failed to start translation for session {session_id_int}"
+            )
             rollback_db = SessionLocal()
             try:
-                rollback_translation = rollback_db.query(SessionTranslation).filter(
-                    SessionTranslation.session_id == session_id_int,
-                    SessionTranslation.target_language == target_language
-                ).first()
+                rollback_translation = (
+                    rollback_db.query(SessionTranslation)
+                    .filter(
+                        SessionTranslation.session_id == session_id_int,
+                        SessionTranslation.target_language == target_language,
+                    )
+                    .first()
+                )
                 if rollback_translation:
                     rollback_translation.status = "failed"
-                    rollback_translation.error_message = "Server overloaded. Failed to start translation."
+                    rollback_translation.error_message = (
+                        "Server overloaded. Failed to start translation."
+                    )
                     rollback_db.commit()
             finally:
                 rollback_db.close()
-            return jsonify(ApiResponse.fail(f"Failed to start translation: {str(e)}").to_dict()), 500
+            return jsonify(
+                ApiResponse.fail(f"Failed to start translation: {str(e)}").to_dict()
+            ), 500
 
     except Exception as e:
-        logger.exception(f"Database error while starting translation for session {session_id_int}")
-        return jsonify(ApiResponse.fail(f"Failed to setup translation: {str(e)}").to_dict()), 500
+        logger.exception(
+            f"Database error while starting translation for session {session_id_int}"
+        )
+        return jsonify(
+            ApiResponse.fail(f"Failed to setup translation: {str(e)}").to_dict()
+        ), 500
     finally:
         db.close()
 
     return jsonify(ApiResponse.ok({"message": "Translation started"}).to_dict()), 202
+
 
 @sessions_bp.get("/<session_id>/translations")
 def get_session_translations(session_id: str):
@@ -561,30 +709,39 @@ def get_session_translations(session_id: str):
 
     db = SessionLocal()
     try:
-        translations = db.query(SessionTranslation).filter(
-            SessionTranslation.session_id == session_id_int
-        ).all()
+        translations = (
+            db.query(SessionTranslation)
+            .filter(SessionTranslation.session_id == session_id_int)
+            .all()
+        )
 
         data = []
         for t in translations:
-            data.append({
-                "id": t.id,
-                "session_id": t.session_id,
-                "target_language": t.target_language,
-                "translated_transcript": t.translated_transcript,
-                "translated_summary": t.translated_summary,
-                "translated_mom": t.translated_mom,
-                "status": t.status,
-                "error_message": t.error_message,
-                "created_at": t.created_at.isoformat() if t.created_at else None,
-                "updated_at": t.updated_at.isoformat() if t.updated_at else None,
-            })
-            
-    except Exception as e:
+            data.append(
+                {
+                    "id": t.id,
+                    "session_id": t.session_id,
+                    "target_language": t.target_language,
+                    "translated_transcript": t.translated_transcript,
+                    "translated_summary": t.translated_summary,
+                    "translated_mom": t.translated_mom,
+                    "status": t.status,
+                    "error_message": t.error_message,
+                    "created_at": t.created_at.isoformat() if t.created_at else None,
+                    "updated_at": t.updated_at.isoformat() if t.updated_at else None,
+                    "translated_chunks": [
+                        {"chunk_id": c.chunk_id, "text": c.translated_text}
+                        for c in t.chunks
+                    ]
+                    if getattr(t, "chunks", None)
+                    else [],
+                }
+            )
+
+    except Exception:
         logger.exception(f"Failed to get translations for session {session_id_int}")
         return jsonify(ApiResponse.fail("Failed to get translations").to_dict()), 500
     finally:
         db.close()
 
     return jsonify(ApiResponse.ok(data).to_dict()), 200
-

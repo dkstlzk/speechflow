@@ -70,21 +70,19 @@ def test_transcript_processor_generation_calls_ollama(monkeypatch):
         lambda _session_id: _sample_payload(),
     )
 
-    client = QueueOllamaClient(['{"summary": "summary", "meeting_minutes": "mom", "action_items": "actions"}'])
+    client = QueueOllamaClient(['{"overview": "summary", "meeting_outcome": {"objective": "mom"}, "action_items": []}'])
     processor = TranscriptProcessor(ollama_client=client)
 
     data, timings = processor.generate_intelligence(1, processor.assemble_chunks(1))
     
-    assert data.get("summary") == "summary"
-    assert data.get("meeting_minutes") == "mom"
-    assert data.get("action_items") == "actions"
+    assert data.get("overview") == "summary"
 
     assert len(client.calls) == 1
     expected_transcript = (
         "Participant A: Hello everyone.\nParticipant B: Let's begin.\nParticipant C: We should also review the recent progress on the API integration so that everyone is up to date."
     )
 
-    assert "executive summary, meeting takeaways, and action items" in client.calls[0]["prompt"]
+    assert "intelligence report for this" in client.calls[0]["prompt"]
     assert expected_transcript in client.calls[0]["prompt"]
     assert client.calls[0]["format"] == "json"
 
@@ -136,18 +134,18 @@ def test_transcript_processor_large_transcript_merging(monkeypatch):
         lambda _session_id: payload,
     )
 
-    client = QueueOllamaClient(['{"summary": "p1"}', '{"summary": "p2"}', '{"summary": "merged_summary"}'])
+    client = QueueOllamaClient(['{"overview": "p1"}', '{"overview": "p2"}', '{"overview": "merged_summary"}'])
     processor = TranscriptProcessor(ollama_client=client)
 
     data, timings = processor.generate_intelligence(3, processor.assemble_chunks(3))
 
-    assert data.get("summary") == "merged_summary"
+    assert data.get("overview") == "merged_summary"
     assert len(client.calls) == 3
     assert "A" * 6000 in client.calls[0]["prompt"]
     assert "B" * 6000 in client.calls[1]["prompt"]
-    assert "--- PART 1 ---\n{\"summary\": \"p1\"}" in client.calls[2]["prompt"]
-    assert "--- PART 2 ---\n{\"summary\": \"p2\"}" in client.calls[2]["prompt"]
-    assert "Partial JSON Outputs:" in client.calls[2]["prompt"]
+    assert "--- PART 1 ---\n{\"overview\": \"p1\"}" in client.calls[2]["prompt"]
+    assert "--- PART 2 ---\n{\"overview\": \"p2\"}" in client.calls[2]["prompt"]
+    assert "Here are the partial JSON reports:" in client.calls[2]["prompt"]
 
 
 def test_classify_transcript_returns_type(monkeypatch):
@@ -168,14 +166,12 @@ def test_process_session_meeting(monkeypatch):
         lambda _session_id: _sample_payload(),
     )
     # classify -> meeting, generate_intelligence -> JSON string
-    client = QueueOllamaClient(["meeting", '{"summary": "the summary", "meeting_minutes": "the mom", "action_items": "the actions"}'])
+    client = QueueOllamaClient(["meeting", '{"overview": "the summary", "topics": [{"title": "t1", "overview": "the mom"}], "action_items": []}'])
     processor = TranscriptProcessor(ollama_client=client)
     result = processor.process_session(1)
     assert result["transcript_type"] == "meeting"
-    assert result["summary"] == "the summary"
-    assert result["mom"] == "the mom"
-    assert result["action_items"] == "the actions"
-
+    assert result["intelligence_data"].get("overview") == "the summary"
+    assert result["intelligence_data"].get("topics")[0].get("title") == "t1"
 
 def test_process_session_lecture_skips_mom_but_keeps_actions(monkeypatch):
     monkeypatch.setattr(
@@ -183,13 +179,12 @@ def test_process_session_lecture_skips_mom_but_keeps_actions(monkeypatch):
         lambda _session_id: _sample_payload(),
     )
     # classify -> lecture, generate_intelligence -> JSON string
-    client = QueueOllamaClient(["lecture", '{"summary": "lecture summary", "meeting_minutes": "ignore", "action_items": "read a book"}'])
+    client = QueueOllamaClient(["lecture", '{"overview": "lecture summary", "topics": [], "action_items": [{"task": "read a book"}]}'])
     processor = TranscriptProcessor(ollama_client=client)
     result = processor.process_session(1)
     assert result["transcript_type"] == "lecture"
-    assert result["summary"] == "lecture summary"
-    assert result["mom"] is None
-    assert result["action_items"] == "read a book"
+    assert result["intelligence_data"].get("overview") == "lecture summary"
+    assert result["intelligence_data"].get("action_items")[0].get("task") == "read a book"
 
 def test_process_session_json_fallback_failure(monkeypatch):
     monkeypatch.setattr(
@@ -202,6 +197,4 @@ def test_process_session_json_fallback_failure(monkeypatch):
     result = processor.process_session(1)
     
     assert result["transcript_type"] == "meeting"
-    assert result["summary"] == "{bad json"
-    assert result["mom"] is None
-    assert result["action_items"] is None
+    assert result["intelligence_data"] == {}

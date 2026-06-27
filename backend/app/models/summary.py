@@ -1,5 +1,5 @@
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, Text
-from sqlalchemy.orm import relationship, backref
+from sqlalchemy.orm import backref, relationship
 from sqlalchemy.sql import func
 
 from ..db.base import Base
@@ -13,11 +13,17 @@ class SessionSummary(Base):
         Integer,
         ForeignKey("sessions.id", ondelete="CASCADE"),
         nullable=False,
-        unique=True,
+        unique=False,
         index=True,
     )
+    iteration = Column(Integer, default=1, nullable=False, server_default="1")
     summary = Column(Text)
     mom = Column(Text)
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
 
-    session = relationship("Session", backref=backref("summaries", cascade="all, delete-orphan", passive_deletes=True))
+    session = relationship(
+        "Session",
+        backref=backref(
+            "summaries", cascade="all, delete-orphan", passive_deletes=True
+        ),
+    )

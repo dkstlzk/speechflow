@@ -1,7 +1,5 @@
 """Lightweight prompt-based transcript type classifier."""
 
-from typing import Optional
-
 from ...config.logging import get_logger
 from .ollama import OllamaClient, OllamaClientError
 
@@ -53,10 +51,17 @@ Transcript excerpt:
 {excerpt}
 """
 
-VALID_TYPES = frozenset([
-    "meeting", "lecture", "interview", "presentation",
-    "voice_note", "conversation", "unknown",
-])
+VALID_TYPES = frozenset(
+    [
+        "meeting",
+        "lecture",
+        "interview",
+        "presentation",
+        "voice_note",
+        "conversation",
+        "unknown",
+    ]
+)
 
 
 def classify_transcript(
@@ -78,7 +83,9 @@ def classify_transcript(
     try:
         raw = client.generate(prompt, model=model)
     except OllamaClientError:
-        logger.warning("Transcript classification failed due to Ollama error, defaulting to unknown")
+        logger.warning(
+            "Transcript classification failed due to Ollama error, defaulting to unknown"
+        )
         return "unknown"
 
     parsed = raw.strip().lower().split("\n")[0].strip().rstrip(".")

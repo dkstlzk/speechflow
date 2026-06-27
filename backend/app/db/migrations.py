@@ -14,7 +14,9 @@ from ..models.enums import SessionStatus
 logger = get_logger("migrations")
 
 # Values that may be missing from the session_status enum in older DBs
-_REQUIRED_ENUM_VALUES = list(set([s.name for s in SessionStatus] + [s.value for s in SessionStatus]))
+_REQUIRED_ENUM_VALUES = list(
+    set([s.name for s in SessionStatus] + [s.value for s in SessionStatus])
+)
 
 
 def ensure_enum_values(engine: Engine) -> None:
@@ -50,9 +52,7 @@ def ensure_columns(engine: Engine) -> None:
         columns = {col["name"] for col in inspector.get_columns("sessions")}
         if "title" not in columns:
             with engine.connect() as conn:
-                conn.execute(
-                    text("ALTER TABLE sessions ADD COLUMN title VARCHAR(255)")
-                )
+                conn.execute(text("ALTER TABLE sessions ADD COLUMN title VARCHAR(255)"))
                 conn.commit()
                 logger.info("Added 'title' column to sessions table")
 
@@ -83,7 +83,9 @@ def ensure_columns(engine: Engine) -> None:
         if "detected_language" not in columns:
             with engine.connect() as conn:
                 conn.execute(
-                    text("ALTER TABLE sessions ADD COLUMN detected_language VARCHAR(10)")
+                    text(
+                        "ALTER TABLE sessions ADD COLUMN detected_language VARCHAR(10)"
+                    )
                 )
                 conn.commit()
                 logger.info("Added 'detected_language' column to sessions table")
@@ -98,9 +100,7 @@ def ensure_columns(engine: Engine) -> None:
 
         if "participants" not in columns:
             with engine.connect() as conn:
-                conn.execute(
-                    text("ALTER TABLE sessions ADD COLUMN participants TEXT")
-                )
+                conn.execute(text("ALTER TABLE sessions ADD COLUMN participants TEXT"))
                 conn.commit()
                 logger.info("Added 'participants' column to sessions table")
 
@@ -109,7 +109,9 @@ def ensure_columns(engine: Engine) -> None:
         if "speaker_source" not in chunk_cols:
             with engine.connect() as conn:
                 conn.execute(
-                    text("ALTER TABLE transcript_chunks ADD COLUMN speaker_source VARCHAR(20)")
+                    text(
+                        "ALTER TABLE transcript_chunks ADD COLUMN speaker_source VARCHAR(20)"
+                    )
                 )
                 conn.commit()
                 logger.info("Added 'speaker_source' column to transcript_chunks table")
@@ -130,8 +132,10 @@ def ensure_foreign_key_cascades(engine: Engine) -> None:
 
     with engine.connect() as conn:
         result = conn.execute(
-            text("SELECT conname, confdeltype FROM pg_constraint WHERE conname = ANY(:names)"),
-            {"names": list(expected_rules.keys())}
+            text(
+                "SELECT conname, confdeltype FROM pg_constraint WHERE conname = ANY(:names)"
+            ),
+            {"names": list(expected_rules.keys())},
         )
         existing_rules = {row[0]: row[1] for row in result}
 
@@ -139,36 +143,46 @@ def ensure_foreign_key_cascades(engine: Engine) -> None:
 
         # transcript_chunks
         if existing_rules.get("transcript_chunks_session_id_fkey") != "c":
-            queries.extend([
-                "ALTER TABLE transcript_chunks DROP CONSTRAINT IF EXISTS transcript_chunks_session_id_fkey;",
-                "ALTER TABLE transcript_chunks ADD CONSTRAINT transcript_chunks_session_id_fkey FOREIGN KEY (session_id) REFERENCES sessions (id) ON DELETE CASCADE;"
-            ])
+            queries.extend(
+                [
+                    "ALTER TABLE transcript_chunks DROP CONSTRAINT IF EXISTS transcript_chunks_session_id_fkey;",
+                    "ALTER TABLE transcript_chunks ADD CONSTRAINT transcript_chunks_session_id_fkey FOREIGN KEY (session_id) REFERENCES sessions (id) ON DELETE CASCADE;",
+                ]
+            )
         if existing_rules.get("transcript_chunks_speaker_id_fkey") != "n":
-            queries.extend([
-                "ALTER TABLE transcript_chunks DROP CONSTRAINT IF EXISTS transcript_chunks_speaker_id_fkey;",
-                "ALTER TABLE transcript_chunks ADD CONSTRAINT transcript_chunks_speaker_id_fkey FOREIGN KEY (speaker_id) REFERENCES speakers (id) ON DELETE SET NULL;"
-            ])
+            queries.extend(
+                [
+                    "ALTER TABLE transcript_chunks DROP CONSTRAINT IF EXISTS transcript_chunks_speaker_id_fkey;",
+                    "ALTER TABLE transcript_chunks ADD CONSTRAINT transcript_chunks_speaker_id_fkey FOREIGN KEY (speaker_id) REFERENCES speakers (id) ON DELETE SET NULL;",
+                ]
+            )
 
         # action_items
         if existing_rules.get("action_items_session_id_fkey") != "c":
-            queries.extend([
-                "ALTER TABLE action_items DROP CONSTRAINT IF EXISTS action_items_session_id_fkey;",
-                "ALTER TABLE action_items ADD CONSTRAINT action_items_session_id_fkey FOREIGN KEY (session_id) REFERENCES sessions (id) ON DELETE CASCADE;"
-            ])
+            queries.extend(
+                [
+                    "ALTER TABLE action_items DROP CONSTRAINT IF EXISTS action_items_session_id_fkey;",
+                    "ALTER TABLE action_items ADD CONSTRAINT action_items_session_id_fkey FOREIGN KEY (session_id) REFERENCES sessions (id) ON DELETE CASCADE;",
+                ]
+            )
 
         # session_summaries
         if existing_rules.get("session_summaries_session_id_fkey") != "c":
-            queries.extend([
-                "ALTER TABLE session_summaries DROP CONSTRAINT IF EXISTS session_summaries_session_id_fkey;",
-                "ALTER TABLE session_summaries ADD CONSTRAINT session_summaries_session_id_fkey FOREIGN KEY (session_id) REFERENCES sessions (id) ON DELETE CASCADE;"
-            ])
+            queries.extend(
+                [
+                    "ALTER TABLE session_summaries DROP CONSTRAINT IF EXISTS session_summaries_session_id_fkey;",
+                    "ALTER TABLE session_summaries ADD CONSTRAINT session_summaries_session_id_fkey FOREIGN KEY (session_id) REFERENCES sessions (id) ON DELETE CASCADE;",
+                ]
+            )
 
         # speakers
         if existing_rules.get("speakers_session_id_fkey") != "c":
-            queries.extend([
-                "ALTER TABLE speakers DROP CONSTRAINT IF EXISTS speakers_session_id_fkey;",
-                "ALTER TABLE speakers ADD CONSTRAINT speakers_session_id_fkey FOREIGN KEY (session_id) REFERENCES sessions (id) ON DELETE CASCADE;"
-            ])
+            queries.extend(
+                [
+                    "ALTER TABLE speakers DROP CONSTRAINT IF EXISTS speakers_session_id_fkey;",
+                    "ALTER TABLE speakers ADD CONSTRAINT speakers_session_id_fkey FOREIGN KEY (session_id) REFERENCES sessions (id) ON DELETE CASCADE;",
+                ]
+            )
 
         if queries:
             for q in queries:
@@ -184,14 +198,20 @@ def ensure_unique_constraints(engine: Engine) -> None:
 
     with engine.connect() as conn:
         result = conn.execute(
-            text("SELECT conname FROM pg_constraint WHERE conname = 'uix_session_chunk'")
+            text(
+                "SELECT conname FROM pg_constraint WHERE conname = 'uix_session_chunk'"
+            )
         )
         if result.fetchone() is None:
             conn.execute(
-                text("ALTER TABLE transcript_chunks ADD CONSTRAINT uix_session_chunk UNIQUE (session_id, chunk_index)")
+                text(
+                    "ALTER TABLE transcript_chunks ADD CONSTRAINT uix_session_chunk UNIQUE (session_id, chunk_index)"
+                )
             )
             conn.commit()
-            logger.info("Added unique constraint uix_session_chunk to transcript_chunks")
+            logger.info(
+                "Added unique constraint uix_session_chunk to transcript_chunks"
+            )
 
 
 def ensure_fts_indexes(engine: Engine) -> None:
@@ -206,12 +226,16 @@ def ensure_fts_indexes(engine: Engine) -> None:
             chunk_cols = {c["name"] for c in inspector.get_columns("transcript_chunks")}
             if "search_vector" not in chunk_cols:
                 conn.execute(
-                    text("ALTER TABLE transcript_chunks ADD COLUMN search_vector tsvector GENERATED ALWAYS AS (to_tsvector('english', text)) STORED")
+                    text(
+                        "ALTER TABLE transcript_chunks ADD COLUMN search_vector tsvector GENERATED ALWAYS AS (to_tsvector('english', text)) STORED"
+                    )
                 )
                 logger.info("Added FTS column to transcript_chunks")
-            
+
             conn.execute(
-                text("CREATE INDEX IF NOT EXISTS transcript_chunks_search_idx ON transcript_chunks USING GIN(search_vector)")
+                text(
+                    "CREATE INDEX IF NOT EXISTS transcript_chunks_search_idx ON transcript_chunks USING GIN(search_vector)"
+                )
             )
 
         # Sessions FTS
@@ -219,14 +243,18 @@ def ensure_fts_indexes(engine: Engine) -> None:
             session_cols = {c["name"] for c in inspector.get_columns("sessions")}
             if "search_vector" not in session_cols:
                 conn.execute(
-                    text("ALTER TABLE sessions ADD COLUMN search_vector tsvector GENERATED ALWAYS AS (to_tsvector('english', coalesce(title, '') || ' ' || coalesce(original_filename, ''))) STORED")
+                    text(
+                        "ALTER TABLE sessions ADD COLUMN search_vector tsvector GENERATED ALWAYS AS (to_tsvector('english', coalesce(title, '') || ' ' || coalesce(original_filename, ''))) STORED"
+                    )
                 )
                 logger.info("Added FTS column to sessions")
-            
+
             conn.execute(
-                text("CREATE INDEX IF NOT EXISTS sessions_search_idx ON sessions USING GIN(search_vector)")
+                text(
+                    "CREATE INDEX IF NOT EXISTS sessions_search_idx ON sessions USING GIN(search_vector)"
+                )
             )
-        
+
         conn.commit()
 
 
@@ -235,7 +263,8 @@ def ensure_translation_table(engine: Engine) -> None:
     inspector = inspect(engine)
     if not inspector.has_table("session_translations"):
         with engine.connect() as conn:
-            conn.execute(text("""
+            conn.execute(
+                text("""
                 CREATE TABLE session_translations (
                     id SERIAL PRIMARY KEY,
                     session_id INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
@@ -249,7 +278,8 @@ def ensure_translation_table(engine: Engine) -> None:
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     CONSTRAINT uix_session_translation_language UNIQUE (session_id, target_language)
                 )
-            """))
+            """)
+            )
             conn.commit()
             logger.info("Created session_translations table")
 

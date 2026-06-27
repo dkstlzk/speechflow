@@ -1,4 +1,5 @@
 import { Sparkles } from "lucide-react";
+import ReactMarkdown from "react-markdown";
 import { PanelShell } from "./PanelShell";
 
 interface Props {
@@ -18,7 +19,9 @@ export function SummaryPanel({ summary, loading, error, emptyMessage }: Props) {
       empty={!loading && !error && !summary}
       emptyMessage={emptyMessage || "Not generated yet."}
     >
-      <p className="whitespace-pre-line text-[14px] leading-7 text-foreground/90">{summary}</p>
+      <div className="prose prose-sm dark:prose-invert max-w-none text-foreground/90 prose-p:leading-relaxed prose-pre:bg-muted prose-pre:text-foreground prose-a:text-primary">
+        <ReactMarkdown>{summary || ""}</ReactMarkdown>
+      </div>
     </PanelShell>
   );
 }

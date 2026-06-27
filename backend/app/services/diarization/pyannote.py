@@ -1,5 +1,5 @@
-import time
 import threading
+import time
 from typing import Dict, List, Optional
 
 from pyannote.audio import Pipeline
@@ -13,19 +13,26 @@ _PIPELINE_MODEL: Optional[str] = None
 _PIPELINE_LOCK = threading.Lock()
 _PIPELINE_FAILED = False
 
+
 def _get_pipeline() -> Pipeline:
     global _PIPELINE, _PIPELINE_MODEL, _PIPELINE_FAILED
     if _PIPELINE_FAILED:
-        raise RuntimeError("Diarization unavailable due to previous initialization failure")
-        
+        raise RuntimeError(
+            "Diarization unavailable due to previous initialization failure"
+        )
+
     if _PIPELINE is None:
         with _PIPELINE_LOCK:
             if _PIPELINE_FAILED:
-                raise RuntimeError("Diarization unavailable due to previous initialization failure")
+                raise RuntimeError(
+                    "Diarization unavailable due to previous initialization failure"
+                )
             if _PIPELINE is None:
                 try:
                     if not settings.HF_TOKEN:
-                        raise RuntimeError("HF_TOKEN is required for pyannote diarization")
+                        raise RuntimeError(
+                            "HF_TOKEN is required for pyannote diarization"
+                        )
 
                     _PIPELINE_MODEL = settings.DIARIZATION_MODEL
                     _PIPELINE = Pipeline.from_pretrained(
@@ -38,9 +45,21 @@ def _get_pipeline() -> Pipeline:
                         logger.info("pyannote pipeline device defaulted")
                 except Exception as e:
                     error_str = str(e)
-                    if "HF_TOKEN" in error_str or "401" in error_str or "403" in error_str or "404" in error_str:
+                    if settings.HF_TOKEN and settings.HF_TOKEN in error_str:
+                        error_str = error_str.replace(
+                            settings.HF_TOKEN, "[REDACTED_HF_TOKEN]"
+                        )
+
+                    if (
+                        "HF_TOKEN" in error_str
+                        or "401" in error_str
+                        or "403" in error_str
+                        or "404" in error_str
+                    ):
                         _PIPELINE_FAILED = True
-                    raise RuntimeError("Diarization initialization failed") from e
+                    raise RuntimeError(
+                        f"Diarization initialization failed: {error_str}"
+                    ) from e
     return _PIPELINE
 
 
@@ -65,9 +84,7 @@ def diarize_audio(audio_path: str) -> List[Dict]:
             }
         )
 
-    segments.sort(
-        key=lambda item: (item["start"], item["end"], item["speaker"])
-    )
+    segments.sort(key=lambda item: (item["start"], item["end"], item["speaker"]))
 
     duration_seconds = time.perf_counter() - start_time
     model_name = _PIPELINE_MODEL or settings.DIARIZATION_MODEL

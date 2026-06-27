@@ -1,6 +1,7 @@
 import time
+
 from flask import request, session
-from flask_socketio import SocketIO, emit, disconnect, join_room
+from flask_socketio import SocketIO, emit, join_room
 
 from ..config.logging import get_logger
 from ..services.transcription.streaming import session_manager
@@ -13,9 +14,11 @@ def register_events(socketio: SocketIO) -> None:
     @socketio.on("connect")
     def handle_connect():
         if not session.get("authenticated"):
-            logger.warning(f"[Socket.IO] Unauthorized connection attempt: {request.sid}")
-            return False # Reject connection
-            
+            logger.warning(
+                f"[Socket.IO] Unauthorized connection attempt: {request.sid}"
+            )
+            return False  # Reject connection
+
         join_room("admin")
         logger.info(f"[Socket.IO] Connected: {request.sid} (joined admin room)")
         emit("server_status", {"status": "connected"})
@@ -48,12 +51,29 @@ def register_events(socketio: SocketIO) -> None:
             if payload
             else "unknown_session"
         )
+        
+        # Validate session in DB
+        from ..db.session import SessionLocal
+        from ..models.enums import SessionStatus
+        from ..models.session import Session
+        
+        db = SessionLocal()
+        try:
+            try:
+                sid_int = int(session_id)
+            except ValueError:
+                logger.error(f"[Socket.IO] Invalid session_id format: {session_id}")
+                return
+            
+            db_session = db.query(Session).filter(Session.id == sid_int).first()
+            if not db_session or db_session.status != SessionStatus.RECORDING:
+                logger.error(f"[Socket.IO] Cannot start stream for session {session_id} - not found or not RECORDING")
+                return
+        finally:
+            db.close()
+
         # Extract dynamic sample rate, fallback to 16000
-        sample_rate = (
-            payload.get("sample_rate", 16000)
-            if payload
-            else 16000
-        )
+        sample_rate = payload.get("sample_rate", 16000) if payload else 16000
 
         # Create a dedicated memory buffer for this connection
         session_manager.create_session(request.sid, session_id, sample_rate)
@@ -69,7 +89,9 @@ def register_events(socketio: SocketIO) -> None:
 
     @socketio.on("audio_chunk")
     def handle_audio_chunk(payload):
-        logger.debug(f"[Socket.IO] audio_chunk received for {request.sid} at {time.time():.3f}")
+        logger.debug(
+            f"[Socket.IO] audio_chunk received for {request.sid} at {time.time():.3f}"
+        )
         # Append incoming raw bytes directly to this user's stateful audio buffer
         session_manager.append_audio(request.sid, payload)
 
@@ -89,7 +111,9 @@ def register_events(socketio: SocketIO) -> None:
         if session and not session.is_paused:
             handle_pause(socketio, request.sid, session)
         if session:
-            emit("stream_paused", {"status": "paused", "session_id": session.session_id})
+            emit(
+                "stream_paused", {"status": "paused", "session_id": session.session_id}
+            )
 
     @socketio.on("stream_resume")
     def handle_stream_resume(_payload):
@@ -97,4 +121,7 @@ def register_events(socketio: SocketIO) -> None:
         if session and session.is_paused:
             handle_resume(request.sid, session)
         if session:
-            emit("stream_resumed", {"status": "recording", "session_id": session.session_id})
+            emit(
+                "stream_resumed",
+                {"status": "recording", "session_id": session.session_id},
+            )

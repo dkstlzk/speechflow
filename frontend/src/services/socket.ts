@@ -14,7 +14,9 @@ const API_URL = import.meta.env.VITE_API_URL ?? "";
 
 export const socket: Socket = io(API_URL, {
   autoConnect: false,
-  reconnection: false,
+  reconnection: true,
+  reconnectionAttempts: Infinity,
+  reconnectionDelay: 1000,
   transports: ["websocket"],
   withCredentials: true,
 });
@@ -40,8 +42,17 @@ function emitStatus(type: string, message: string, sessionId?: string) {
 
 // ── Connection Events ──────────────────────────────────────────────
 
+let activeSessionId: string | null = null;
+let activeSampleRate: number | undefined = undefined;
+
 socket.on("connect", () => {
   emitStatus("connected", "Socket connected");
+  if (activeSessionId) {
+    socket.emit("stream_start", {
+      session_id: activeSessionId,
+      sample_rate: activeSampleRate,
+    });
+  }
 });
 
 socket.on("disconnect", () => {
@@ -154,6 +165,8 @@ export function isConnected(): boolean {
 // ── Recording Control ──────────────────────────────────────────────
 
 export function startRecording(sessionId: string, sampleRate?: number): void {
+  activeSessionId = sessionId;
+  activeSampleRate = sampleRate;
   if (!socket.connected) return;
 
   emitStatus("session_started", `Session ${sessionId} started`);
@@ -165,6 +178,8 @@ export function startRecording(sessionId: string, sampleRate?: number): void {
 }
 
 export function stopRecording(): void {
+  activeSessionId = null;
+  activeSampleRate = undefined;
   if (!socket.connected) return;
 
   socket.emit("stream_end", {});

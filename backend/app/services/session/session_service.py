@@ -4,9 +4,10 @@ from typing import Optional
 from ...config.logging import get_logger
 from ...db.session import SessionLocal
 from ...models.enums import SessionStatus
-from ...services.persistence.session_repository import create_session
-from ...services.persistence.session_repository import get_session_by_id
-from ...services.persistence.session_repository import update_session_status as update_record
+from ...services.persistence.session_repository import create_session, get_session_by_id
+from ...services.persistence.session_repository import (
+    update_session_status as update_record,
+)
 from ...services.persistence.transcript_repository import list_transcript_chunks
 
 logger = get_logger("session")
@@ -82,6 +83,7 @@ def get_session_transcript(session_id: int) -> Optional[dict]:
             ),
         )
         from ...services.persistence.speaker_repository import get_or_create_speaker
+
         unknown_speaker = get_or_create_speaker(db, session_id, "UNKNOWN")
         unknown_display_name = unknown_speaker.display_name
 
@@ -96,12 +98,16 @@ def get_session_transcript(session_id: int) -> Optional[dict]:
                 "startSec": float(chunk.start_time),
                 "endSec": float(chunk.end_time),
                 "chunk_index": chunk.chunk_index,
+                "id": chunk.id,
                 "text": chunk.text,
+                "language": chunk.language,
             }
             for chunk in chunks
         ]
 
-        status = session.status.value if hasattr(session.status, "value") else session.status
+        status = (
+            session.status.value if hasattr(session.status, "value") else session.status
+        )
         return {
             "session_id": str(session.id),
             "status": status,

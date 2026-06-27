@@ -10,46 +10,60 @@ logger = get_logger("persistence")
 
 
 def save_summary(session_id: int, summary: str, mom: Optional[str] = None) -> None:
-    """Upsert a summary row for the given session."""
+    """Insert a new summary row for the given session with incremented iteration."""
     db = SessionLocal()
+    from sqlalchemy import func
+
     try:
-        existing = (
-            db.query(SessionSummary)
+        max_iter = (
+            db.query(func.max(SessionSummary.iteration))
             .filter(SessionSummary.session_id == session_id)
-            .first()
+            .scalar()
+            or 0
         )
-        if existing:
-            existing.summary = summary
-            existing.mom = mom
-        else:
-            row = SessionSummary(
-                session_id=session_id,
-                summary=summary,
-                mom=mom,
-            )
-            db.add(row)
+        row = SessionSummary(
+            session_id=session_id,
+            summary=summary,
+            mom=mom,
+            iteration=max_iter + 1,
+        )
+        db.add(row)
         db.commit()
-        logger.info("Summary saved", extra={"session_id": session_id})
+        logger.info(
+            "Summary saved", extra={"session_id": session_id, "iteration": max_iter + 1}
+        )
     finally:
         db.close()
 
 
 def get_summary(session_id: int) -> Optional[Dict]:
-    """Load summary and MoM for a session. Returns None if not found."""
+    """Load summary and MoM history for a session. Returns a dict containing history."""
     db = SessionLocal()
     try:
-        row = (
+        rows = (
             db.query(SessionSummary)
             .filter(SessionSummary.session_id == session_id)
-            .first()
+            .order_by(SessionSummary.iteration.asc())
+            .all()
         )
-        if row is None:
+        if not rows:
             return None
+
+        history = [
+            {
+                "iteration": row.iteration,
+                "summary": row.summary,
+                "mom": row.mom,
+                "created_at": row.created_at.isoformat() if row.created_at else None,
+            }
+            for row in rows
+        ]
+
         return {
-            "session_id": row.session_id,
-            "summary": row.summary,
-            "mom": row.mom,
-            "created_at": row.created_at.isoformat() if row.created_at else None,
+            "session_id": session_id,
+            "history": history,
+            "summary": rows[-1].summary,  # Legacy fallback to newest
+            "mom": rows[-1].mom,  # Legacy fallback to newest
         }
     finally:
         db.close()

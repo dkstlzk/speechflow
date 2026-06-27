@@ -5,16 +5,15 @@ from typing import List, Optional
 
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import func
-from ...models.action_item import ActionItem
-from ...models.summary import SessionSummary
-from ...models.transcript_chunk import TranscriptChunk
-from ...models.enums import SessionStatus
-from ...models.speaker import Speaker
-from ...models.session import Session as SessionModel
 
 from ...config.logging import get_logger
+from ...models.enums import SessionStatus
+from ...models.session import Session as SessionModel
+from ...models.transcript_chunk import TranscriptChunk
 
 logger = get_logger(__name__)
+
+
 def create_session(
     db: Session,
     session_type: str,
@@ -47,13 +46,36 @@ def update_session_status(
     if session is None:
         raise ValueError(f"Session not found: {session_id}")
 
-    session.status = status
-    session.processing_error = error
-    if status in (SessionStatus.COMPLETED, SessionStatus.FAILED):
-        session.completed_at = func.now()
-    db.add(session)
-    db.commit()
-    db.refresh(session)
+    try:
+        session.status = status
+        session.processing_error = error
+        if status in (SessionStatus.COMPLETED, SessionStatus.FAILED):
+            session.completed_at = func.now()
+        db.add(session)
+        db.commit()
+        db.refresh(session)
+    except Exception as e:
+        db.rollback()
+        import logging
+
+        logging.getLogger("session_repository").error(
+            f"Failed to update session status for {session_id} to {status}: {e}"
+        )
+        if status == SessionStatus.FAILED:
+            try:
+                from ...db.session import SessionLocal
+
+                with SessionLocal() as new_db:
+                    new_session = new_db.get(SessionModel, session_id)
+                    if new_session:
+                        new_session.status = SessionStatus.FAILED
+                        new_session.processing_error = error or str(e)
+                        new_session.completed_at = func.now()
+                        new_db.commit()
+            except Exception as inner_e:
+                logging.getLogger("session_repository").error(
+                    f"Secondary failure attempting to persist FAILED status: {inner_e}"
+                )
     return session
 
 
@@ -62,10 +84,11 @@ def get_session_by_id(db: Session, session_id: int) -> Optional[SessionModel]:
     return db.get(SessionModel, session_id)
 
 
-def list_recent_sessions(db: Session, limit: int = 50, query: Optional[str] = None) -> List[SessionModel]:
+def list_recent_sessions(
+    db: Session, limit: int = 50, query: Optional[str] = None
+) -> List[SessionModel]:
     """Return the most recent sessions ordered by created_at desc, optionally filtered by a search query."""
     from sqlalchemy import or_
-    from ...models.transcript_chunk import TranscriptChunk
 
     q = db.query(SessionModel)
     if query:
@@ -73,17 +96,23 @@ def list_recent_sessions(db: Session, limit: int = 50, query: Optional[str] = No
         if db.bind.dialect.name == "postgresql":
             try:
                 from sqlalchemy import func, literal_column
-                search_query = func.plainto_tsquery('english', query)
+
+                search_query = func.plainto_tsquery("english", query)
                 q_fts = q.filter(
                     or_(
                         literal_column("sessions.search_vector").op("@@")(search_query),
-                        literal_column("transcript_chunks.search_vector").op("@@")(search_query),
+                        literal_column("transcript_chunks.search_vector").op("@@")(
+                            search_query
+                        ),
                     )
                 ).distinct()
                 return q_fts.order_by(SessionModel.created_at.desc()).limit(limit).all()
             except Exception as e:
                 import logging
-                logging.getLogger("session_repository").warning(f"FTS search failed: {e}. Falling back to ILIKE.")
+
+                logging.getLogger("session_repository").warning(
+                    f"FTS search failed: {e}. Falling back to ILIKE."
+                )
                 db.rollback()
                 # Fall through to ILIKE
 
@@ -109,14 +138,16 @@ def delete_session(db: Session, session_id: int) -> bool:
 
     # Children are automatically deleted via SQLAlchemy cascade
 
-    audio_path = getattr(session, 'audio_path', None)
+    audio_path = getattr(session, "audio_path", None)
 
     db.delete(session)
     db.commit()
 
     if audio_path:
         import os
+
         from ...config.settings import settings
+
         filename = os.path.basename(audio_path)
         safe_path = os.path.join(settings.EXPORT_DIR, "audio", filename)
         if os.path.exists(safe_path):
@@ -128,6 +159,7 @@ def delete_session(db: Session, session_id: int) -> bool:
 
     return True
 
+
 def update_transcript_type(
     db: Session,
     session_id: int,
@@ -136,9 +168,7 @@ def update_transcript_type(
     session = db.get(SessionModel, session_id)
 
     if session is None:
-        raise ValueError(
-            f"Session not found: {session_id}"
-        )
+        raise ValueError(f"Session not found: {session_id}")
 
     session.transcript_type = transcript_type
 
@@ -148,14 +178,19 @@ def update_transcript_type(
 
     return session
 
-def recover_stale_sessions(db: Session, max_hours: int = 2, include_recording: bool = True) -> int:
+
+def recover_stale_sessions(
+    db: Session, max_hours: int = 2, include_recording: bool = True
+) -> int:
     """
     Find processing sessions that are stuck and mark them as failed.
     Cleans up orphaned audio files for RECORDING sessions.
     Returns the number of recovered sessions.
     """
     import os
+
     from ...config.settings import settings
+
     cutoff_time = datetime.now() - timedelta(hours=max_hours)
 
     stale_states = [
@@ -166,9 +201,12 @@ def recover_stale_sessions(db: Session, max_hours: int = 2, include_recording: b
         SessionStatus.FINALIZING,
     ]
 
-    from sqlalchemy import or_, and_
+    from sqlalchemy import and_, or_
+
     conditions = [
-        and_(SessionModel.status.in_(stale_states), SessionModel.updated_at < cutoff_time)
+        and_(
+            SessionModel.status.in_(stale_states), SessionModel.updated_at < cutoff_time
+        )
     ]
 
     if include_recording:
@@ -177,18 +215,61 @@ def recover_stale_sessions(db: Session, max_hours: int = 2, include_recording: b
     stuck_sessions = db.query(SessionModel).filter(or_(*conditions)).all()
 
     for session in stuck_sessions:
-        logger.warning(f"[Recovery] Session {session.id} stuck in {session.status.value}. Marking as FAILED.")
+        logger.warning(
+            f"[Recovery] Session {session.id} stuck in {session.status.value}. Marking as FAILED."
+        )
 
         # Cleanup orphaned files for realtime sessions that crashed
-        if session.status == SessionStatus.RECORDING or session.status == SessionStatus.FINALIZING:
+        if (
+            session.status == SessionStatus.RECORDING
+            or session.status == SessionStatus.FINALIZING
+        ):
             audio_dir = os.path.abspath(os.path.join(settings.EXPORT_DIR, "audio"))
             raw_path = os.path.join(audio_dir, f"session_{session.id}.raw")
             wav_path = os.path.join(audio_dir, f"session_{session.id}.wav")
             import time
             import wave
-            
+
             # Try to recover if the WAV file exists and is valid
             recovered = False
+            if not os.path.exists(wav_path) and os.path.exists(raw_path):
+                # Try to convert raw to wav before checking wav_size
+                try:
+                    import wave
+
+                    try:
+                        from ..transcription.streaming import session_manager
+
+                        mem_session = session_manager.get_session(str(session.id))
+                        sample_rate = mem_session.sample_rate if mem_session else 16000
+                    except Exception:
+                        sample_rate = 16000
+
+                    with wave.open(wav_path, "wb") as f_wav:
+                        f_wav.setnchannels(1)
+                        f_wav.setsampwidth(2)
+                        f_wav.setframerate(sample_rate)
+
+                        with open(raw_path, "rb") as f_raw:
+                            while True:
+                                chunk = f_raw.read(1024 * 1024)
+                                if not chunk:
+                                    break
+                                f_wav.writeframes(chunk)
+
+                    # Force OS buffer flush to disk
+                    with open(wav_path, "ab") as f:
+                        f.flush()
+                        os.fsync(f.fileno())
+
+                    logger.info(
+                        f"[Recovery] Successfully converted stranded raw file to wav: {wav_path}"
+                    )
+                except Exception as e:
+                    logger.error(
+                        f"[Recovery] Failed to convert stranded raw file to wav: {e}"
+                    )
+
             if os.path.exists(wav_path) and os.path.getsize(wav_path) > 44:
                 session.audio_path = os.path.basename(wav_path)
                 session.status = SessionStatus.COMPLETED
@@ -201,14 +282,16 @@ def recover_stale_sessions(db: Session, max_hours: int = 2, include_recording: b
                 except Exception:
                     pass
                 recovered = True
-                logger.info(f"[Recovery] Successfully recovered abandoned WAV for session {session.id}")
+                logger.info(
+                    f"[Recovery] Successfully recovered abandoned WAV for session {session.id}"
+                )
                 # Clean up the raw file since we recovered the WAV
                 if os.path.exists(raw_path):
                     try:
                         os.remove(raw_path)
                     except Exception:
                         pass
-                        
+
             # If not recovered, archive them
             if not recovered:
                 for path in [raw_path, wav_path]:
@@ -216,10 +299,14 @@ def recover_stale_sessions(db: Session, max_hours: int = 2, include_recording: b
                         try:
                             orphan_path = path + f".orphan.{int(time.time())}"
                             os.rename(path, orphan_path)
-                            logger.info(f"[Recovery] Archived stranded file to: {orphan_path}")
+                            logger.info(
+                                f"[Recovery] Archived stranded file to: {orphan_path}"
+                            )
                         except Exception as e:
-                            logger.error(f"[Recovery] Failed to archive stranded file: {e}")
-    
+                            logger.error(
+                                f"[Recovery] Failed to archive stranded file: {e}"
+                            )
+
                 session.status = SessionStatus.FAILED
                 session.processing_error = "Session failed due to unexpected worker interruption (stale state recovery)."
 
@@ -229,14 +316,21 @@ def recover_stale_sessions(db: Session, max_hours: int = 2, include_recording: b
     # Recover stale translations
     try:
         from ...models.translation import SessionTranslation
-        stale_translations = db.query(SessionTranslation).filter(
-            SessionTranslation.status == "translating",
-            SessionTranslation.updated_at < cutoff_time
-        ).all()
+
+        stale_translations = (
+            db.query(SessionTranslation)
+            .filter(
+                SessionTranslation.status == "translating",
+                SessionTranslation.updated_at < cutoff_time,
+            )
+            .all()
+        )
         for t in stale_translations:
             t.status = "failed"
             t.error_message = "Translation failed due to unexpected worker interruption (stale state recovery)."
-            logger.warning(f"[Recovery] Translation {t.id} stuck in translating. Marking as FAILED.")
+            logger.warning(
+                f"[Recovery] Translation {t.id} stuck in translating. Marking as FAILED."
+            )
         if stale_translations:
             db.commit()
     except Exception as e:
@@ -246,16 +340,22 @@ def recover_stale_sessions(db: Session, max_hours: int = 2, include_recording: b
     audio_dir = os.path.abspath(os.path.join(settings.EXPORT_DIR, "audio"))
     if os.path.exists(audio_dir):
         import time
+
         now = time.time()
         seven_days = 7 * 24 * 3600
         for fname in os.listdir(audio_dir):
             if ".orphan." in fname:
                 fpath = os.path.join(audio_dir, fname)
                 try:
-                    if os.path.isfile(fpath) and now - os.path.getmtime(fpath) > seven_days:
+                    if (
+                        os.path.isfile(fpath)
+                        and now - os.path.getmtime(fpath) > seven_days
+                    ):
                         os.remove(fpath)
                         logger.info(f"[Recovery] Deleted old orphan file: {fname}")
                 except Exception as e:
-                    logger.error(f"[Recovery] Failed to delete old orphan file {fname}: {e}")
+                    logger.error(
+                        f"[Recovery] Failed to delete old orphan file {fname}: {e}"
+                    )
 
     return len(stuck_sessions)

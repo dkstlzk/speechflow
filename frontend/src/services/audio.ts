@@ -100,6 +100,13 @@ export async function startAudioCapture(
       micSourceNode.connect(workletNode);
     }
 
+    // Connect worklet to destination via a muted gain node to prevent browser GC
+    const gainNode = audioContext.createGain();
+    gainNode.gain.value = 0;
+    gainNode.channelCount = 1;
+    workletNode.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+
     if (audioContext.state === "suspended") {
       await audioContext.resume();
     }

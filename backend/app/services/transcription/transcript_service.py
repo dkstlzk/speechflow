@@ -6,7 +6,9 @@ Handles alignment, chunk ordering, and transcript reconstruction.
 from typing import Dict, List, Optional, Tuple
 
 
-def _overlap_seconds(start_a: float, end_a: float, start_b: float, end_b: float) -> float:
+def _overlap_seconds(
+    start_a: float, end_a: float, start_b: float, end_b: float
+) -> float:
     return max(0.0, min(end_a, end_b) - max(start_a, start_b))
 
 
@@ -54,7 +56,9 @@ def _normalize_speaker_segments(
         if end <= start:
             continue
 
-        speaker = str(segment.get("speaker") or default_speaker).strip() or default_speaker
+        speaker = (
+            str(segment.get("speaker") or default_speaker).strip() or default_speaker
+        )
         normalized.append(
             {
                 "speaker": speaker,
@@ -84,7 +88,9 @@ def _find_best_overlap_speaker(
         if overlap <= 0.0:
             continue
         speaker_label = speaker["speaker"]
-        overlap_by_speaker[speaker_label] = overlap_by_speaker.get(speaker_label, 0.0) + overlap
+        overlap_by_speaker[speaker_label] = (
+            overlap_by_speaker.get(speaker_label, 0.0) + overlap
+        )
 
     if not overlap_by_speaker:
         return None, 0.0
@@ -142,7 +148,8 @@ def align_transcript_with_speakers(
             overlap_ratio = best_overlap / duration
 
             has_strong_overlap = bool(best_speaker) and (
-                best_overlap >= min_overlap_seconds and overlap_ratio >= min_overlap_ratio
+                best_overlap >= min_overlap_seconds
+                and overlap_ratio >= min_overlap_ratio
             )
             if has_strong_overlap:
                 chosen = best_speaker

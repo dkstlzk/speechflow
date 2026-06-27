@@ -1,13 +1,15 @@
+import threading
 import time
 from dataclasses import dataclass, field
-from typing import Dict, Optional, BinaryIO
-import threading
+from typing import BinaryIO, Dict, Optional
+
 from ...config.logging import get_logger
+from ...db.session import SessionLocal
 from ...models.enums import SessionStatus
 from ...models.session import Session as SessionModel
-from ...db.session import SessionLocal
 
 logger = get_logger(__name__)
+
 
 @dataclass
 class StreamingSession:
@@ -57,7 +59,7 @@ class StreamingSession:
     raw_audio_path: Optional[str] = None
     raw_file_handle: Optional[BinaryIO] = None
 
-    lock: threading.Lock = field(default_factory=threading.Lock)
+    lock: threading.RLock = field(default_factory=threading.RLock)
     finalized_event: threading.Event = field(default_factory=threading.Event)
 
     # Concurrency flags
@@ -72,9 +74,9 @@ class SpeechSegment:
     """A closed speech segment ready for final transcription."""
 
     start_offset: int  # byte offset in audio_buffer
-    end_offset: int    # byte offset in audio_buffer
+    end_offset: int  # byte offset in audio_buffer
     start_time: float  # recording-relative seconds
-    end_time: float    # recording-relative seconds
+    end_time: float  # recording-relative seconds
 
 
 class StreamingSessionManager:
@@ -82,20 +84,36 @@ class StreamingSessionManager:
 
     def __init__(self) -> None:
         self.active_sessions: Dict[str, StreamingSession] = {}
+        self.manager_lock = threading.Lock()
 
     # ── Session Lifecycle ──────────────────────────────────────────────
 
     def create_session(
         self, sid: str, session_id: str, sample_rate: int = 16000
     ) -> StreamingSession:
-        session = StreamingSession(
-            sid=sid, session_id=session_id, sample_rate=sample_rate
-        )
-        self.active_sessions[sid] = session
+        with self.manager_lock:
+            for old_sid, existing_session in list(self.active_sessions.items()):
+                if existing_session.session_id == session_id:
+                    logger.info(f"[SessionManager] Resuming Session | Old SID: {old_sid} | New SID: {sid} | DB ID: {session_id}")
+                    with existing_session.lock:
+                        existing_session.is_ending = False
+                        existing_session.sid = sid
+                        existing_session.sample_rate = sample_rate
+                    self.active_sessions[sid] = existing_session
+                    if old_sid != sid:
+                        del self.active_sessions[old_sid]
+                    return existing_session
+
+            session = StreamingSession(
+                sid=sid, session_id=session_id, sample_rate=sample_rate
+            )
+            self.active_sessions[sid] = session
 
         # Open raw file for canonical audio saving
-        from ...config.settings import settings
         import os
+
+        from ...config.settings import settings
+
         realtime_dir = os.path.abspath(os.path.join(settings.EXPORT_DIR, "audio"))
         os.makedirs(realtime_dir, exist_ok=True)
         session.raw_audio_path = os.path.join(realtime_dir, f"session_{session_id}.raw")
@@ -111,7 +129,9 @@ class StreamingSessionManager:
     def destroy_session(self, sid: str) -> None:
         session = self.active_sessions.get(sid)
         if not session:
-            logger.warning(f"[SessionManager] destroy_session called but sid={sid} not found")
+            logger.warning(
+                f"[SessionManager] destroy_session called but sid={sid} not found"
+            )
             return
 
         try:
@@ -124,11 +144,13 @@ class StreamingSessionManager:
                 recovery_db = None
                 persisted_successfully = False
                 try:
-                    import wave
                     import os
-                    
+                    import wave
+
                     if not os.path.exists(session.raw_audio_path):
-                        logger.warning(f"[Playback] Raw audio missing (likely 0 bytes received) for session {session.session_id}. Marking FAILED.")
+                        logger.warning(
+                            f"[Playback] Raw audio missing (likely 0 bytes received) for session {session.session_id}. Marking FAILED."
+                        )
                         raise RuntimeError("Raw audio file missing")
 
                     logger.info("[Playback] Converting raw to wav")
@@ -141,11 +163,11 @@ class StreamingSessionManager:
 
                         with open(session.raw_audio_path, "rb") as f_raw:
                             while True:
-                                chunk = f_raw.read(1024 * 1024) # 1MB chunks
+                                chunk = f_raw.read(1024 * 1024)  # 1MB chunks
                                 if not chunk:
                                     break
                                 f_wav.writeframes(chunk)
-                                
+
                     # Force OS buffer flush to disk to prevent data loss on crash
                     with open(wav_path, "ab") as f:
                         f.flush()
@@ -163,14 +185,20 @@ class StreamingSessionManager:
                     if os.path.exists(wav_path) and wav_size > 44:
                         db = SessionLocal()
                         try:
-                            db_session = db.query(SessionModel).filter(SessionModel.id == int(session.session_id)).first()
+                            db_session = (
+                                db.query(SessionModel)
+                                .filter(SessionModel.id == int(session.session_id))
+                                .first()
+                            )
                             if db_session:
                                 db_session.audio_path = os.path.basename(wav_path)
                                 db_session.status = SessionStatus.COMPLETED
                                 db_session.duration_seconds = duration
                                 db.commit()
                                 persisted_successfully = True
-                                logger.info(f"[Playback] audio_path, status, and duration updated for session {session.session_id}")
+                                logger.info(
+                                    f"[Playback] audio_path, status, and duration updated for session {session.session_id}"
+                                )
 
                                 # SAFELY remove raw file only after successful DB commit and sync
                                 if os.path.exists(session.raw_audio_path):
@@ -184,13 +212,22 @@ class StreamingSessionManager:
                     logger.error(f"[Playback] Error saving realtime audio: {e}")
                     import os
                     import time
-                    if session.raw_audio_path and os.path.exists(session.raw_audio_path):
+
+                    if session.raw_audio_path and os.path.exists(
+                        session.raw_audio_path
+                    ):
                         try:
-                            orphan_path = session.raw_audio_path + f".orphan.{int(time.time())}"
+                            orphan_path = (
+                                session.raw_audio_path + f".orphan.{int(time.time())}"
+                            )
                             os.rename(session.raw_audio_path, orphan_path)
-                            logger.info(f"[Playback] Archived corrupted raw stream to {orphan_path}")
+                            logger.info(
+                                f"[Playback] Archived corrupted raw stream to {orphan_path}"
+                            )
                         except Exception as rename_err:
-                            logger.error(f"[Playback] Failed to archive raw stream: {rename_err}")
+                            logger.error(
+                                f"[Playback] Failed to archive raw stream: {rename_err}"
+                            )
                     # Isolated recovery transaction
                     try:
                         if db is not None:
@@ -198,26 +235,30 @@ class StreamingSessionManager:
                                 db.rollback()
                             except Exception:
                                 pass
-                                
+
                         recovery_db = SessionLocal()
-                        
+
                         db_session = (
                             recovery_db.query(SessionModel)
                             .filter(SessionModel.id == int(session.session_id))
                             .first()
                         )
-                        
+
                         if db_session and not persisted_successfully:
                             db_session.status = SessionStatus.FAILED
                             recovery_db.commit()
-                            logger.info(f"[Playback] Marked session {session.session_id} as FAILED after error")
+                            logger.info(
+                                f"[Playback] Marked session {session.session_id} as FAILED after error"
+                            )
                     except Exception as recovery_err:
                         if recovery_db is not None:
                             try:
                                 recovery_db.rollback()
                             except Exception:
                                 pass
-                        logger.error(f"[Playback] Failed to mark session as FAILED: {recovery_err}")
+                        logger.error(
+                            f"[Playback] Failed to mark session as FAILED: {recovery_err}"
+                        )
                     finally:
                         if recovery_db is not None:
                             recovery_db.close()
@@ -232,7 +273,9 @@ class StreamingSessionManager:
             if popped_session:
                 popped_session.finalized_event.set()
             else:
-                logger.warning(f"[SessionManager] Could not set finalized_event, sid={sid} not found in active_sessions during pop")
+                logger.warning(
+                    f"[SessionManager] Could not set finalized_event, sid={sid} not found in active_sessions during pop"
+                )
 
     # ── Audio Ingestion ────────────────────────────────────────────────
 
@@ -279,10 +322,11 @@ class StreamingSessionManager:
         bytes_per_sec = session.sample_rate * 2  # PCM Int16 = 2 bytes/sample
         window_size = int(bytes_per_sec * window_seconds)
 
-        if len(session.audio_buffer) < bytes_per_sec:
-            return None  # Need at least 1 second
+        with session.lock:
+            if len(session.audio_buffer) < (bytes_per_sec * 0.3):
+                return None  # Need at least 0.3 seconds
 
-        return bytes(session.audio_buffer[-window_size:])
+            return bytes(session.audio_buffer[-window_size:])
 
     # ── Segment Audio Extraction ───────────────────────────────────────
 
@@ -305,19 +349,16 @@ class StreamingSessionManager:
         bytes_per_sec = session.sample_rate * 2
         context_bytes = int(bytes_per_sec * context_seconds)
 
-        # Context starts before the segment (clamped to buffer start)
-        context_start = max(0, segment.start_offset - context_bytes)
-        audio_slice = session.audio_buffer[context_start : segment.end_offset]
+        with session.lock:
+            # Context starts before the segment (clamped to buffer start)
+            context_start = max(0, segment.start_offset - context_bytes)
+            audio_slice = session.audio_buffer[context_start : segment.end_offset]
 
         return bytes(audio_slice)
 
-
-
     # ── Buffer Trimming ────────────────────────────────────────────────
 
-    def trim_buffer_after_persist(
-        self, sid: str, keep_seconds: float = 3.0
-    ) -> None:
+    def trim_buffer_after_persist(self, sid: str, keep_seconds: float = 3.0) -> None:
         """Trim old audio after a segment has been persisted.
 
         Keeps `keep_seconds` of overlap audio for context, removes
@@ -332,20 +373,19 @@ class StreamingSessionManager:
         bytes_per_sec = session.sample_rate * 2
         keep_bytes = int(bytes_per_sec * keep_seconds)
 
-        # How much can we trim? Everything before (segment_start_offset - keep_bytes)
-        trim_up_to = max(0, session.segment_start_offset - keep_bytes)
+        with session.lock:
+            # How much can we trim? Everything before (segment_start_offset - keep_bytes)
+            trim_up_to = max(0, session.segment_start_offset - keep_bytes)
 
-        if trim_up_to <= 0:
-            return
+            if trim_up_to <= 0:
+                return
 
-        # Perform the trim
-        session.audio_buffer = session.audio_buffer[trim_up_to:]
+            # Perform the trim
+            session.audio_buffer = session.audio_buffer[trim_up_to:]
 
-        # Adjust all byte offsets
-        session.segment_start_offset -= trim_up_to
-        session.processed_offset = max(
-            0, session.processed_offset - trim_up_to
-        )
+            # Adjust all byte offsets
+            session.segment_start_offset -= trim_up_to
+            session.processed_offset = max(0, session.processed_offset - trim_up_to)
 
     # ── Segment Advancement ────────────────────────────────────────────
 
@@ -355,11 +395,12 @@ class StreamingSessionManager:
         if not session:
             return
 
-        session.segment_start_offset = end_offset
-        session.segment_start_time = end_time
-        session.chunk_index += 1
-        session.last_speech_time = time.time()
-        session.has_speech = False
+        with session.lock:
+            session.segment_start_offset = end_offset
+            session.segment_start_time = end_time
+            session.chunk_index += 1
+            session.last_speech_time = time.time()
+            session.has_speech = False
 
 
 # Global singleton — imported by websocket events and workers

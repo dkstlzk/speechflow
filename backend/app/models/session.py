@@ -1,4 +1,5 @@
-from sqlalchemy import Column, DateTime, Enum as SAEnum, Float, Integer, String, Text, Index
+from sqlalchemy import JSON, Column, DateTime, Float, Index, Integer, String, Text
+from sqlalchemy import Enum as SAEnum
 from sqlalchemy.sql import func
 
 from ..db.base import Base
@@ -8,7 +9,12 @@ from .enums import SessionStatus
 class Session(Base):
     __tablename__ = "sessions"
     __table_args__ = (
-        Index("idx_sessions_created_at", "created_at", postgresql_using="btree", postgresql_ops={"created_at": "DESC"}),
+        Index(
+            "idx_sessions_created_at",
+            "created_at",
+            postgresql_using="btree",
+            postgresql_ops={"created_at": "DESC"},
+        ),
     )
 
     id = Column(Integer, primary_key=True, index=True)
@@ -40,3 +46,4 @@ class Session(Base):
     diarization_mode = Column(String(32), nullable=True)
     diarized_at = Column(DateTime, nullable=True)
     detected_language = Column(String(10), nullable=True)
+    detected_languages = Column(JSON, nullable=True)

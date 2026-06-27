@@ -1,19 +1,23 @@
 import time
-import numpy as np
+
 # pyrefly: ignore [missing-import]
 import eventlet
+
 # pyrefly: ignore [missing-import]
 import eventlet.tpool
+import numpy as np
 from flask_socketio import SocketIO
+
 from ...config.logging import get_logger
 from ...services.transcription.streaming import session_manager
 from .worker_state import transcriber
 
 logger = get_logger(__name__)
 
-# Reduced from 5.0s to 3.0s to decrease Whisper CPU inference time and reduce latency
-CAPTION_WINDOW_SECONDS = 3.0
-CAPTION_INTERVAL_SECONDS = 0.3
+# Window size of 2.0s, update every 1.0s to prevent CPU starvation
+CAPTION_WINDOW_SECONDS = 2.0
+CAPTION_INTERVAL_SECONDS = 1.0
+
 
 def emit_caption_update(socketio: SocketIO, sid: str, session) -> None:
     now = time.time()
@@ -40,10 +44,11 @@ def emit_caption_update(socketio: SocketIO, sid: str, session) -> None:
             t0 = time.time()
             # tpool.execute runs the blocking C++ inference in a true OS thread,
             # preventing it from freezing the Eventlet websocket loop.
-            # Always use fast mode for instant captions.
-            # Default to English until the transcript_engine detects the actual language.
-            lang = session.detected_language or "en"
-            result = eventlet.tpool.execute(transcriber.transcribe, audio_np, lang, True)
+            # Pass the session's detected language instead of None, 
+            # because fast_mode skips detection and defaults to English.
+            result = eventlet.tpool.execute(
+                transcriber.transcribe, audio_np, getattr(session, 'detected_language', None), True
+            )
             t1 = time.time()
             text = result.text.strip() if result.text else ""
 
@@ -61,8 +66,7 @@ def emit_caption_update(socketio: SocketIO, sid: str, session) -> None:
 
     try:
         audio_np = (
-            np.frombuffer(audio_window, dtype=np.int16).astype(np.float32)
-            / 32768.0
+            np.frombuffer(audio_window, dtype=np.int16).astype(np.float32) / 32768.0
         )
         # Spawn a background greenthread so we don't block the caller
         eventlet.spawn(_do_caption_inference, audio_np, session.session_id, now)

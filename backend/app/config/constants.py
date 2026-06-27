@@ -1,6 +1,7 @@
 DEFAULT_ALLOWED_EXTENSIONS = {"wav", "mp3", "mp4", "m4a", "webm"}
 DEFAULT_MAX_UPLOAD_MB = 200
 DEFAULT_LOG_LEVEL = "INFO"
+MAX_FIELD_LENGTH = 255
 
 LOG_FORMAT = "%(asctime)s | %(levelname)s | %(name)s | %(message)s"
 LOG_DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
