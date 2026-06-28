@@ -13,6 +13,16 @@ import signal
 import sys
 import threading
 import time
+import os
+
+# Fix for multiprocessing spawn Errno 5 when stdin is closed/detached
+try:
+    fd = os.open(os.devnull, os.O_RDWR)
+    os.dup2(fd, 0)
+    # Don't close fd, it's fine to leave it open or we can close it if we want, but dup2 copies it.
+    os.close(fd)
+except OSError:
+    pass
 
 # pyrefly: ignore [missing-import]
 from flask import Flask, jsonify

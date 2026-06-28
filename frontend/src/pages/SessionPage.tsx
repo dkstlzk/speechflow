@@ -817,7 +817,7 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
               <audio
                 ref={audioRef}
                 controls
-                src={`${session.data.audio_url}?t=${session.data.createdAt || Date.now()}`}
+                src={session.data.audio_url}
                 className="w-full"
               />
             </PanelShell>

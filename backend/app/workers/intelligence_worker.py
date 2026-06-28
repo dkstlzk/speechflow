@@ -68,11 +68,17 @@ def run_intelligence_pipeline(session_id: int):
             result = processor.process_session(session_id)
         except TranscriptNotFoundError:
             logger.warning(f"Transcript not found for session {session_id}")
-            update_session_status(db, session_id, SessionStatus.COMPLETED)
+            update_session_status(
+                db, session_id, SessionStatus.FAILED,
+                error="No transcript found. Please re-upload the audio file.",
+            )
             return
         except EmptyTranscriptError:
             logger.warning(f"Empty transcript for session {session_id}")
-            update_session_status(db, session_id, SessionStatus.COMPLETED)
+            update_session_status(
+                db, session_id, SessionStatus.FAILED,
+                error="Transcript is empty — no speech was detected in the audio.",
+            )
             return
         except OllamaClientError as e:
             logger.error(f"Ollama unavailable for session {session_id}: {e}")

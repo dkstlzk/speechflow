@@ -387,7 +387,11 @@ def retry_session_endpoint(session_id: str):
 
         from ..services.session.session_service import get_session_transcript
 
-        has_transcript = get_session_transcript(session_id_int) is not None
+        transcript_data = get_session_transcript(session_id_int)
+        has_transcript = (
+            transcript_data is not None
+            and len(transcript_data.get("transcript", [])) > 0
+        )
 
         if not has_transcript:
             return jsonify(

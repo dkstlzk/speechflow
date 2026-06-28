@@ -79,8 +79,13 @@ class WhisperTranscriptionService:
         if not best_lang and not fast_mode:
             # Perform custom language detection to restrict the pool of allowed languages
             try:
+                audio_array = audio
+                if isinstance(audio, str):
+                    from faster_whisper.audio import decode_audio
+                    audio_array = decode_audio(audio)
+
                 detected_lang, detected_prob, all_probs = model.detect_language(
-                    audio=audio, vad_filter=True
+                    audio=audio_array, vad_filter=True
                 )
 
                 # Filter the probability list to only our allowed languages
@@ -117,9 +122,8 @@ class WhisperTranscriptionService:
             audio,
             language=best_lang,
             condition_on_previous_text=False,
-            vad_filter=not fast_mode,
+            vad_filter=(not fast_mode and isinstance(audio, str)),
             beam_size=1,
-            hallucination_silence_threshold=1,
             without_timestamps=fast_mode,
         )
 
