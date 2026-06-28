@@ -238,10 +238,7 @@ def recover_stale_sessions(
                     import wave
 
                     try:
-                        from ..transcription.streaming import session_manager
-
-                        mem_session = session_manager.get_session(str(session.id))
-                        sample_rate = mem_session.sample_rate if mem_session else 16000
+                        sample_rate = session.sample_rate or 16000
                     except Exception:
                         sample_rate = 16000
 

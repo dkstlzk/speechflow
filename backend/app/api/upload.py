@@ -22,9 +22,9 @@ logger = get_logger("upload")
 @upload_bp.post("/")
 @limiter.limit("20 per minute")
 def upload_audio():
-    import multiprocessing
+    from ..workers.job_manager import get_active_job_count
 
-    if len(multiprocessing.active_children()) >= settings.MAX_BACKGROUND_WORKERS:
+    if get_active_job_count() >= settings.MAX_BACKGROUND_WORKERS:
         return jsonify(
             ApiResponse.fail("Server overloaded. Too many active jobs.").to_dict()
         ), 503

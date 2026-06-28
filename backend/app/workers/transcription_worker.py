@@ -23,6 +23,7 @@ from ..services.persistence.transcript_repository import replace_session_chunks
 from ..services.transcription import WhisperTranscriptionService
 from ..services.transcription.transcript_service import align_transcript_with_speakers
 from ..utils.file_manager import cleanup_file
+from .job_manager import unregister_job
 
 logger = get_logger("workers.transcription")
 
@@ -181,6 +182,8 @@ def process_upload_session(
         update_session_status(db, session_id, SessionStatus.FAILED, error=str(exc))
         logger.exception("Upload processing failed", extra={"session_id": session_id})
     finally:
+        unregister_job(session_id, "upload")
+        
         cleanup_file(file_path)
         if wav_path:
             cleanup_file(wav_path)

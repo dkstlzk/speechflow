@@ -51,7 +51,13 @@ def replace_session_chunks(db: Session, session_id: int, chunks: List[Dict]) -> 
             ),
         ).delete(synchronize_session=False)
 
-    # Invalidate existing translations since the chunks have changed
+    invalidate_translations(db, session_id)
+
+    db.commit()
+
+
+def invalidate_translations(db: Session, session_id: int) -> None:
+    """Invalidate all translations for a session since the transcript changed."""
     from ...models.translation import SessionTranslation, TranslatedChunk
 
     translations = db.query(SessionTranslation).filter(SessionTranslation.session_id == session_id).all()

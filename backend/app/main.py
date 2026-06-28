@@ -1,11 +1,9 @@
-# pyrefly: ignore [missing-import]
 import warnings
 
-warnings.filterwarnings("ignore", category=DeprecationWarning, module="eventlet")
-warnings.filterwarnings("ignore", message=".*Eventlet is deprecated.*")
-
-# pyrefly: ignore [missing-import]
-import eventlet
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore")
+    # pyrefly: ignore [missing-import]
+    import eventlet
 
 eventlet.monkey_patch()
 

@@ -21,6 +21,17 @@ def register_job(session_id: int, job_type: str, pid: int):
     with _jobs_lock:
         ACTIVE_JOBS[(session_id, job_type)] = pid
 
+def get_active_job_type(session_id: int):
+    with _jobs_lock:
+        for j_type in ("upload", "accurate_diarization", "quick_diarization", "intelligence"):
+            if (session_id, j_type) in ACTIVE_JOBS:
+                return j_type
+    return None
+
+def get_active_job_count() -> int:
+    with _jobs_lock:
+        return len(ACTIVE_JOBS)
+
 def unregister_job(session_id: int, job_type: str):
     with _jobs_lock:
         pid = ACTIVE_JOBS.pop((session_id, job_type), None)
@@ -64,8 +75,15 @@ def rollback_db_state(session_id: int, job_type: str):
             ).first()
             if translation and translation.status == "translating":
                 logger.info(f"[JobManager] Rolling back translation {lang} to failed/canceled")
-                # We can either delete it or mark it as invalidated
-                db.delete(translation)
+                translation.status = "failed"
+                translation.error_message = "Translation canceled by user"
+                db.commit()
+        elif job_type == "upload":
+            session = db.query(Session).filter(Session.id == session_id).first()
+            if session:
+                logger.info(f"[JobManager] Rolling back upload session {session_id} status to FAILED")
+                session.status = SessionStatus.FAILED
+                session.processing_error = "Upload processing canceled by user"
                 db.commit()
         else:
             # It's a session-level job (intelligence, diarization)

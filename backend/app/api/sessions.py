@@ -1,4 +1,5 @@
 import os
+import multiprocessing
 
 # pyrefly: ignore [missing-import]
 from flask import Blueprint, jsonify, send_file
@@ -21,6 +22,7 @@ from ..services.persistence.speaker_repository import update_speaker_display_nam
 from ..services.persistence.summaries import get_summary
 from ..services.session.session_service import get_session_transcript
 from ..workers.worker_state import get_processing_stage
+from ..workers.job_manager import get_active_job_type
 
 logger = get_logger("sessions_api")
 
@@ -51,6 +53,7 @@ def _serialize_session(row) -> dict:
         else None,
         "detected_language": getattr(row, "detected_language", None),
         "detected_languages": getattr(row, "detected_languages", None),
+        "active_job_type": get_active_job_type(row.id),
     }
 
     if status == "processing":
@@ -249,10 +252,8 @@ def update_speaker_endpoint(session_id: str, speaker_label: str):
             db, session_id_int, speaker_label, display_name
         )
 
-        from ..models.translation import SessionTranslation
-        db.query(SessionTranslation).filter(
-            SessionTranslation.session_id == session_id_int
-        ).delete()
+        from ..services.persistence import invalidate_translations
+        invalidate_translations(db, session_id_int)
         db.commit()
 
         return jsonify(
@@ -292,9 +293,9 @@ def process_session(session_id: str):
     except ValueError:
         return jsonify(ApiResponse.fail("invalid session id").to_dict()), 400
 
-    import multiprocessing
+    from ..workers.job_manager import get_active_job_count
 
-    if len(multiprocessing.active_children()) >= settings.MAX_BACKGROUND_WORKERS:
+    if get_active_job_count() >= settings.MAX_BACKGROUND_WORKERS:
         return jsonify(
             ApiResponse.fail("Server overloaded. Too many active jobs.").to_dict()
         ), 503
@@ -460,11 +461,10 @@ def trigger_quick_diarization(session_id: str):
     except ValueError:
         return jsonify(ApiResponse.fail("invalid session id").to_dict()), 400
 
-    import multiprocessing
-
     from ..config.settings import settings
+    from ..workers.job_manager import get_active_job_count
 
-    if len(multiprocessing.active_children()) >= settings.MAX_BACKGROUND_WORKERS:
+    if get_active_job_count() >= settings.MAX_BACKGROUND_WORKERS:
         return jsonify(
             ApiResponse.fail("Server overloaded. Too many active jobs.").to_dict()
         ), 503
@@ -548,9 +548,9 @@ def trigger_accurate_diarization(session_id: str):
     except ValueError:
         return jsonify(ApiResponse.fail("invalid session id").to_dict()), 400
 
-    import multiprocessing
+    from ..workers.job_manager import get_active_job_count
 
-    if len(multiprocessing.active_children()) >= settings.MAX_BACKGROUND_WORKERS:
+    if get_active_job_count() >= settings.MAX_BACKGROUND_WORKERS:
         return jsonify(
             ApiResponse.fail("Server overloaded. Too many active jobs.").to_dict()
         ), 503

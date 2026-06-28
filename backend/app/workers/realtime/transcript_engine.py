@@ -55,7 +55,9 @@ def transcribe_and_persist_segment(
             # Keep the initially detected language locked in for future fast-mode live captions
             # but allow the final chunk to be whatever Whisper detected.
             if result.language and not session.detected_language:
-                session.detected_language = result.language
+                with session.lock:
+                    if not session.detected_language:
+                        session.detected_language = result.language
             logger.info(
                 f"[TranscriptEngine] Whisper inference finished for {sid} chunk #{current_chunk_index}"
             )

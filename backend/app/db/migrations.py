@@ -98,6 +98,14 @@ def ensure_columns(engine: Engine) -> None:
                 conn.commit()
                 logger.info("Added 'host_name' column to sessions table")
 
+        if "sample_rate" not in columns:
+            with engine.connect() as conn:
+                conn.execute(
+                    text("ALTER TABLE sessions ADD COLUMN sample_rate INTEGER")
+                )
+                conn.commit()
+                logger.info("Added 'sample_rate' column to sessions table")
+
         if "participants" not in columns:
             with engine.connect() as conn:
                 conn.execute(text("ALTER TABLE sessions ADD COLUMN participants TEXT"))

@@ -47,3 +47,4 @@ class Session(Base):
     diarized_at = Column(DateTime, nullable=True)
     detected_language = Column(String(10), nullable=True)
     detected_languages = Column(JSON, nullable=True)
+    sample_rate = Column(Integer, nullable=True)

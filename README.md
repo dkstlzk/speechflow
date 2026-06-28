@@ -30,6 +30,10 @@ The project is designed around fully local, CPU-only inference using open-source
 - Transcript ownership isolation
 - Fast "live disposable captions" (0.3s) and persistent committed chunks
 - Atomic row-level database locking (`SELECT FOR UPDATE`)
+- Deterministic API-driven job cancellation via `active_job_type` state tracking
+- Boot-time stale session recovery via database-persisted `sample_rate` constraints
+- Hardened worker lifecycles with deterministic job counting, explicit `RLock` synchronization on WebSocket events, and guaranteed subprocess cleanup
+- Data integrity protection via single-source-of-truth translation invalidation when transcripts change
 
 #### Realtime Streaming Infrastructure
 - Bidirectional Socket.IO transport (Eventlet)
@@ -197,7 +201,7 @@ LOG_LEVEL=INFO
 🚧 Multi-user support
 🚧 User ownership and permissions
 🚧 Deployment hardening
-🚧 Eventlet migration
+🚧 Eventlet migration (deprecation warnings cleanly suppressed for v1.0.0 demo readiness)
 🚧 Storage quotas
 
 ---
@@ -206,11 +210,10 @@ LOG_LEVEL=INFO
 
 - Authentication currently supports a single administrative user.
 - Multi-user ownership and permissions are not implemented.
-- **Deployment Architecture Constraint**: SpeechFlow currently assumes a single-process deployment (`gunicorn -w 1`) using Eventlet, without a Redis message queue backplane. Horizontal scaling requires migrating to a Redis-backed Socket.IO configuration.
+- **Deployment Architecture Constraint**: SpeechFlow heavily relies on a single-process deployment (`gunicorn -w 1`) using Eventlet. Critical MVP states, such as the `ACTIVE_JOBS` cancellation dictionary, are maintained exclusively in-memory. Horizontal scaling will require migrating these structures to a Redis-backed state management layer.
 - Eventlet remains the realtime transport layer and is a future migration candidate.
-- **Production Recommendation**: Background jobs (Diarization, Intelligence, Translation) currently use local `multiprocessing`. If the backend crashes, jobs are lost. For production, replace local multiprocessing workers with **Celery + Redis task queues**.
+- **Production Recommendation**: Background jobs (Diarization, Intelligence, Translation) currently use local `multiprocessing`. If the backend crashes, active jobs are lost. For large-scale production, replace local multiprocessing workers with **Celery + Redis task queues**.
 - No application-level storage quotas are enforced.
-- Delete requests during active diarization may still waste processing resources.
 - Browser audio preprocessing (AGC, noise suppression, echo cancellation, microphone quality, room acoustics) can reduce speaker separability and lower realtime diarization accuracy compared to uploaded audio.
 
 ---

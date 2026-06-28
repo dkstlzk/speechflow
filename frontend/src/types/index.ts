@@ -25,6 +25,7 @@ export interface Session {
   createdAt: string;
   status: ProcessingStatus;
   transcriptType?: TranscriptType;
+  active_job_type?: string | null;
   fileName?: string;
   durationSec?: number;
   title?: string;

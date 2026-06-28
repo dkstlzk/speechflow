@@ -25,9 +25,10 @@ def register_events(socketio: SocketIO) -> None:
 
     @socketio.on("disconnect")
     def handle_disconnect():
-        session = session_manager.active_sessions.get(request.sid)
+        session = session_manager.get_session_by_sid(request.sid)
         if session:
-            session.is_ending = True
+            with session.lock:
+                session.is_ending = True
         logger.info(f"[Socket.IO] Disconnect requested: {request.sid}")
 
     @socketio.on("ping_test")
@@ -69,14 +70,23 @@ def register_events(socketio: SocketIO) -> None:
             if not db_session or db_session.status != SessionStatus.RECORDING:
                 logger.error(f"[Socket.IO] Cannot start stream for session {session_id} - not found or not RECORDING")
                 return
+                
+            # Extract dynamic sample rate, fallback to 16000
+            sample_rate = payload.get("sample_rate", 16000) if payload else 16000
+            
+            try:
+                # Create a dedicated memory buffer for this connection
+                session_manager.create_session(request.sid, session_id, sample_rate)
+                
+                db_session.sample_rate = sample_rate
+                db.commit()
+            except Exception:
+                db.rollback()
+                session_manager.destroy_session(request.sid)
+                raise
+            
         finally:
             db.close()
-
-        # Extract dynamic sample rate, fallback to 16000
-        sample_rate = payload.get("sample_rate", 16000) if payload else 16000
-
-        # Create a dedicated memory buffer for this connection
-        session_manager.create_session(request.sid, session_id, sample_rate)
 
         emit(
             "stream_ack",
@@ -97,7 +107,7 @@ def register_events(socketio: SocketIO) -> None:
             session_manager.append_audio(request.sid, payload)
         except RuntimeError as e:
             logger.error(f"[Socket.IO] Stream aborted for {request.sid}: {e}")
-            session = session_manager.active_sessions.get(request.sid)
+            session = session_manager.get_session_by_sid(request.sid)
             if session:
                 emit(
                     "stream_error",
@@ -112,9 +122,10 @@ def register_events(socketio: SocketIO) -> None:
 
     @socketio.on("stream_end")
     def handle_stream_end(_payload):
-        session = session_manager.active_sessions.get(request.sid)
+        session = session_manager.get_session_by_sid(request.sid)
         if session:
-            session.is_ending = True
+            with session.lock:
+                session.is_ending = True
             emit(
                 "stream_complete",
                 {"status": "finalizing", "session_id": session.session_id},
@@ -122,20 +133,24 @@ def register_events(socketio: SocketIO) -> None:
 
     @socketio.on("stream_pause")
     def handle_stream_pause(_payload):
-        session = session_manager.active_sessions.get(request.sid)
-        if session and not session.is_paused:
-            handle_pause(socketio, request.sid, session)
+        session = session_manager.get_session_by_sid(request.sid)
         if session:
+            with session.lock:
+                if not session.is_paused:
+                    handle_pause(socketio, request.sid, session)
+            
             emit(
                 "stream_paused", {"status": "paused", "session_id": session.session_id}
             )
 
     @socketio.on("stream_resume")
     def handle_stream_resume(_payload):
-        session = session_manager.active_sessions.get(request.sid)
-        if session and session.is_paused:
-            handle_resume(request.sid, session)
+        session = session_manager.get_session_by_sid(request.sid)
         if session:
+            with session.lock:
+                if session.is_paused:
+                    handle_resume(request.sid, session)
+            
             emit(
                 "stream_resumed",
                 {"status": "recording", "session_id": session.session_id},

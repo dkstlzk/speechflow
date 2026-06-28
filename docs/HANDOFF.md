@@ -9,7 +9,7 @@ SpeechFlow has successfully transitioned from an internal technical proof-of-con
 
 Based on the strategic priorities identified in the CEO meetings, the core product foundation has been completed. The platform now delivers on the critical business requirement: **Multilingual Meeting Intelligence.**
 
-This marks the formal conclusion of the primary development sprint for this internship phase. The system is stable, demo-ready, and capable of delivering immediate value.
+The final phases focused heavily on rigorous state-consistency auditing, ensuring rock-solid job lifecycles and highly resilient edge-case handling. This marks the formal conclusion of the primary development sprint for this internship phase. The system is stable, demo-ready, and capable of delivering immediate value.
 
 ---
 
@@ -31,6 +31,14 @@ The following features have been built, stabilized, and deployed to the local MV
 * **Live Transcription:** Real-time, WebSocket-based streaming transcription.
 * **Audio Persistence:** Flawless recording, persistence, and playback of live browser sessions.
 
+### 4. Production Hardening & Reliability
+* **Deterministic Job Cancellation:** Replaced client-side inference with an `active_job_type` API source of truth, enabling robust cancellation across all pipeline phases (Upload, Diarization, Translation) via O(1) server-side tracking.
+* **Concurrency Hardening & Race Condition Eradication:** Hardened WebSocket event handlers with explicit `RLock` synchronization on shared session state, completely eliminating data corruption risks during high-throughput live streaming and rapid client connect/disconnect cycles.
+* **Worker Lifecycle Guarantees:** Implemented atomic job registration, deterministic job counting (eliminating FFmpeg false-positives), process-level timeouts, and guaranteed cleanup loops.
+* **Resilient Recovery:** Boot-time stale session recovery is now driven by database-persisted audio metadata (`sample_rate`) rather than ephemeral in-memory state.
+* **Clean Initialization:** Fully suppressed legacy `eventlet` and `flask-limiter` deprecation warnings to guarantee a pristine boot experience for demos.
+* **Data Integrity:** Centralized translation invalidation acts as a single source of truth, ensuring the frontend gracefully falls back when diarization replaces transcript chunks.
+
 ---
 
 ## 🛑 Scope Boundary & Next Steps
@@ -38,6 +46,7 @@ The following features have been built, stabilized, and deployed to the local MV
 To ensure a high-quality, stable release without introducing excessive technical debt or half-finished features, the following items have been explicitly scoped out of v1 and deferred to future iterations (Phase 2):
 
 * **User Registration & Multi-Tenancy:** While discussed, adding comprehensive user accounts requires significant auth flow, password resets, and database migrations. The current single-admin auth wall keeps the MVP simple and focused on the AI features.
+* **Horizontal Scaling (Redis):** The `job_manager` currently relies on an in-memory `ACTIVE_JOBS` dictionary to act as the single source of truth for runtime state, constraining the deployment to a single process (`gunicorn -w 1`). Scaling to multiple workers requires migrating this state to a Redis backplane.
 * **WhatsApp / Email Integrations:** External API dependencies (Twilio, SMTP setup) were omitted to maintain the 100% local, self-contained architecture of the MVP.
 * **Live Streaming Translation:** Real-time translation requires GPU infrastructure and a complex pipeline rewrite. The current offline translation provides the exact same business value with perfect stability.
 * **Persistent Speaker Profiles:** Voice biometric matching across sessions remains a complex R&D task for the future.

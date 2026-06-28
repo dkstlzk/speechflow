@@ -21,7 +21,7 @@ def preprocess_to_wav(input_path: str, output_path: str) -> str:
         str(output_file),
     ]
 
-    result = subprocess.run(command, capture_output=True, text=True)
+    result = subprocess.run(command, capture_output=True, text=True, timeout=600)
     if result.returncode != 0:
         raise RuntimeError(result.stderr.strip() or "FFmpeg conversion failed")
 

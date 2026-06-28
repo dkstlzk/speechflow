@@ -22,9 +22,12 @@ def process_translation(session_id: int, target_language: str) -> None:
         target_language: The target language key (e.g., 'hi', 'es').
     """
     import time
+    from ..db.session import engine
 
     start_time = time.monotonic()
-
+    
+    # Dispose of any inherited connection pools before opening a new session
+    engine.dispose()
     db = SessionLocal()
     try:
         # Check if the translation row exists

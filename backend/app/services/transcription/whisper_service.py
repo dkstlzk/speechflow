@@ -119,10 +119,13 @@ class WhisperTranscriptionService:
             # Absolute safety fallback to prevent unconstrained language detection
             best_lang = "en"
 
-        # Run transcription with the restricted language forced
+        # Run transcription with the restricted language forced, using the translate task
+        # to ensure the output is normalized into English, preventing downstream LLM hallucinations
+        # caused by mixed-language or phonetically garbled transcripts.
         segments, info = model.transcribe(
             audio,
             language=best_lang,
+            task="translate",
             condition_on_previous_text=False,
             vad_filter=(not fast_mode and isinstance(audio, str)),
             beam_size=1,

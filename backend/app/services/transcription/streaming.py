@@ -129,8 +129,12 @@ class StreamingSessionManager:
         )
         return session
 
+    def get_session_by_sid(self, sid: str) -> Optional[StreamingSession]:
+        with self.manager_lock:
+            return self.active_sessions.get(sid)
+
     def destroy_session(self, sid: str) -> None:
-        session = self.active_sessions.get(sid)
+        session = self.get_session_by_sid(sid)
         if not session:
             logger.warning(
                 f"[SessionManager] destroy_session called but sid={sid} not found"

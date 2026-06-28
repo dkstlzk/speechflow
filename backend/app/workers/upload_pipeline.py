@@ -31,6 +31,10 @@ def start_upload_pipeline(session_id: int, temp_path: str) -> None:
     try:
         p = ctx.Process(target=process_upload_session, args=(session_id, temp_path))
         p.start()
+        
+        from .job_manager import register_job
+        register_job(session_id, "upload", p.pid)
+        
         logger.info(f"[UploadWorker] Spawned process PID={p.pid} session={session_id}")
     except Exception:
         logger.exception(

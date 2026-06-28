@@ -815,7 +815,21 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
           <IntelligenceProgress
             mode={progressMode}
             processingStage={session.data?.processing_stage}
-            onCancel={() => handleCancelJob(progressMode === "diarization" ? "accurate_diarization" : "intelligence")}
+            onCancel={() => {
+              if (session.data?.active_job_type) {
+                handleCancelJob(session.data.active_job_type);
+                return;
+              }
+
+              // Fallback heuristic for the rare tick before active_job_type populates
+              let cancelJobType = "intelligence";
+              if (progressMode === "diarization") {
+                cancelJobType = "accurate_diarization";
+              } else if (progressMode === "transcript") {
+                cancelJobType = "upload";
+              }
+              handleCancelJob(cancelJobType);
+            }}
           />
         </div>
       ) : null}
