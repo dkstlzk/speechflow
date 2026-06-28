@@ -1,15 +1,14 @@
 """Ollama client utilities for local LLM generation."""
 
-import os
 from dataclasses import dataclass
 from typing import Optional
 
 import requests
 
 from ...config.logging import get_logger
+from ...config.settings import settings
 
-DEFAULT_OLLAMA_ENDPOINT = "http://localhost:11434/api/generate"
-DEFAULT_TIMEOUT_SECONDS = 3000.0
+DEFAULT_OLLAMA_ENDPOINT = settings.OLLAMA_ENDPOINT
 
 logger = get_logger("summarization")
 
@@ -24,30 +23,22 @@ class OllamaConfig:
     timeout_seconds: float
 
 
-def _resolve_timeout(value: Optional[str]) -> float:
-    if not value:
-        return DEFAULT_TIMEOUT_SECONDS
-
-    try:
-        parsed = float(value)
-    except ValueError:
-        return DEFAULT_TIMEOUT_SECONDS
-
-    return parsed if parsed > 0 else DEFAULT_TIMEOUT_SECONDS
-
-
 def _build_config(
     endpoint: Optional[str],
     timeout_seconds: Optional[float],
 ) -> OllamaConfig:
-    resolved_endpoint = (endpoint or os.getenv("OLLAMA_ENDPOINT") or "").strip()
+    resolved_endpoint = (endpoint or settings.OLLAMA_ENDPOINT).strip()
     if not resolved_endpoint:
         resolved_endpoint = DEFAULT_OLLAMA_ENDPOINT
+
+    # Auto-fix bare Ollama base URLs missing the /api/generate path
+    if resolved_endpoint and not resolved_endpoint.rstrip("/").endswith(("/api/generate", "/api/chat")):
+        resolved_endpoint = resolved_endpoint.rstrip("/") + "/api/generate"
 
     resolved_timeout = (
         timeout_seconds
         if timeout_seconds is not None
-        else _resolve_timeout(os.getenv("OLLAMA_TIMEOUT_SECONDS"))
+        else settings.OLLAMA_TIMEOUT_SECONDS
     )
 
     return OllamaConfig(
@@ -75,7 +66,7 @@ class OllamaClient:
         prompt: str,
         model: Optional[str] = None,
         response_format: Optional[str] = None,
-        temperature: float = 0.1,
+        temperature: float = 0.0,
     ) -> str:
         from ...config.settings import settings
         model = model or settings.OLLAMA_MODEL

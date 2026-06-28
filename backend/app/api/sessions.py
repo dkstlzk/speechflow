@@ -114,15 +114,15 @@ def get_session_audio(session_id: str):
         from ..config.settings import settings
 
         filename = os.path.basename(session.audio_path)
-        if session.session_type == "upload":
-            safe_path = os.path.join(settings.UPLOAD_DIR, filename)
-        else:
-            safe_path = os.path.join(settings.EXPORT_DIR, "audio", filename)
+        # Both upload and realtime audio are stored in EXPORT_DIR/audio/
+        safe_path = os.path.join(settings.EXPORT_DIR, "audio", filename)
 
         if not os.path.exists(safe_path):
             return jsonify(ApiResponse.fail("audio not found").to_dict()), 404
 
-        return send_file(safe_path, mimetype="audio/wav")
+        import mimetypes
+        mimetype = mimetypes.guess_type(safe_path)[0] or "audio/wav"
+        return send_file(safe_path, mimetype=mimetype)
     except Exception:
         logger.exception("Failed to load audio")
         return jsonify(ApiResponse.fail("Failed to load audio").to_dict()), 500
@@ -344,9 +344,6 @@ def process_session(session_id: str):
         register_job(session_id_int, "intelligence", p.pid)
         return jsonify(ApiResponse.ok({"message": "Processing started"}).to_dict()), 202
     except Exception as e:
-        import traceback
-        with open("debug_error.log", "w") as f:
-            f.write(traceback.format_exc())
         logger.exception(f"Failed to spawn process for session {session_id_int}: {e}")
         rollback_db = SessionLocal()
         try:
@@ -432,9 +429,6 @@ def retry_session_endpoint(session_id: str):
 
         return jsonify(ApiResponse.ok({"message": "Retry started"}).to_dict()), 202
     except Exception as e:
-        import traceback
-        with open("debug_error.log", "w") as f:
-            f.write(traceback.format_exc())
         logger.exception(f"Failed to spawn retry process for session {session_id_int}")
         rollback_db = SessionLocal()
         try:

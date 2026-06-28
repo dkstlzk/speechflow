@@ -21,6 +21,7 @@ from ..services.persistence.transcript_repository import (
     update_chunk_speakers,
 )
 from ..services.transcription.transcript_service import align_transcript_with_speakers
+from .job_manager import unregister_job
 
 AUDIO_READY_TIMEOUT_SECONDS = 600
 POLLING_INTERVAL_SECONDS = 5
@@ -283,6 +284,7 @@ def process_quick_diarization(session_id: int) -> None:
             f"[DiarizationWorker] Quick Diarization failed for session={session_id}"
         )
     finally:
+        unregister_job(session_id, "quick_diarization")
         db.close()
 
 
@@ -422,4 +424,5 @@ def process_accurate_diarization(session_id: int) -> None:
             f"[DiarizationWorker] Accurate Diarization failed for session={session_id}"
         )
     finally:
+        unregister_job(session_id, "accurate_diarization")
         db.close()

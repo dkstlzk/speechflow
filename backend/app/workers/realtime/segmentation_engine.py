@@ -10,8 +10,8 @@ from .worker_state import vad_model
 
 logger = get_logger(__name__)
 
-SILENCE_THRESHOLD_SECONDS = 1.5
-MAX_SEGMENT_SECONDS = 10.0
+SILENCE_THRESHOLD_SECONDS = 0.8
+MAX_SEGMENT_SECONDS = 8.0
 VAD_SPEECH_THRESHOLD = 0.35
 
 

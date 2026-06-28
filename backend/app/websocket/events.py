@@ -92,8 +92,23 @@ def register_events(socketio: SocketIO) -> None:
         logger.debug(
             f"[Socket.IO] audio_chunk received for {request.sid} at {time.time():.3f}"
         )
-        # Append incoming raw bytes directly to this user's stateful audio buffer
-        session_manager.append_audio(request.sid, payload)
+        try:
+            # Append incoming raw bytes directly to this user's stateful audio buffer
+            session_manager.append_audio(request.sid, payload)
+        except RuntimeError as e:
+            logger.error(f"[Socket.IO] Stream aborted for {request.sid}: {e}")
+            session = session_manager.active_sessions.get(request.sid)
+            if session:
+                emit(
+                    "stream_error",
+                    {
+                        "status": "error",
+                        "error": str(e),
+                        "session_id": session.session_id,
+                    },
+                )
+                # The worker loop will see session.is_ending == True (set inside append_audio) 
+                # and clean up the session organically.
 
     @socketio.on("stream_end")
     def handle_stream_end(_payload):

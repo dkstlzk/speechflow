@@ -97,7 +97,7 @@ def list_recent_sessions(
             try:
                 from sqlalchemy import func, literal_column
 
-                search_query = func.plainto_tsquery("english", query)
+                search_query = func.plainto_tsquery("simple", query)
                 q_fts = q.filter(
                     or_(
                         literal_column("sessions.search_vector").op("@@")(search_query),
@@ -309,6 +309,9 @@ def recover_stale_sessions(
 
                 session.status = SessionStatus.FAILED
                 session.processing_error = "Session failed due to unexpected worker interruption (stale state recovery)."
+        else:
+            session.status = SessionStatus.FAILED
+            session.processing_error = "Session failed due to unexpected worker interruption (stale state recovery)."
 
     if stuck_sessions:
         db.commit()

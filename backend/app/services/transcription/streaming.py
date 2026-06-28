@@ -85,6 +85,9 @@ class StreamingSessionManager:
     def __init__(self) -> None:
         self.active_sessions: Dict[str, StreamingSession] = {}
         self.manager_lock = threading.Lock()
+        
+        from ...config.settings import settings
+        self.max_buffer_bytes = settings.MAX_BUFFER_MB * 1024 * 1024
 
     # ── Session Lifecycle ──────────────────────────────────────────────
 
@@ -277,8 +280,6 @@ class StreamingSessionManager:
                     f"[SessionManager] Could not set finalized_event, sid={sid} not found in active_sessions during pop"
                 )
 
-    # ── Audio Ingestion ────────────────────────────────────────────────
-
     def append_audio(self, sid: str, chunk: bytes) -> None:
         session = self.active_sessions.get(sid)
         if session:
@@ -287,6 +288,15 @@ class StreamingSessionManager:
                 session.audio_buffer.extend(chunk)
                 if session.raw_file_handle:
                     session.raw_file_handle.write(chunk)
+                if len(session.audio_buffer) > self.max_buffer_bytes:
+                    logger.critical(
+                        f"[SessionManager] Buffer exceeded "
+                        f"{self.max_buffer_bytes // (1024*1024)}MB "
+                        f"for session {session.session_id}. "
+                        f"Force-ending to prevent OOM."
+                    )
+                    session.is_ending = True
+                    raise RuntimeError("Audio buffer exceeded configured limit.")
         else:
             logger.warning(
                 f"[SessionManager] WARNING: Audio chunk received "
@@ -320,13 +330,16 @@ class StreamingSessionManager:
             return None
 
         bytes_per_sec = session.sample_rate * 2  # PCM Int16 = 2 bytes/sample
-        window_size = int(bytes_per_sec * window_seconds)
+        max_window_bytes = int(bytes_per_sec * window_seconds)
 
         with session.lock:
-            if len(session.audio_buffer) < (bytes_per_sec * 0.3):
+            # Grab all uncommitted audio in the current segment
+            uncommitted = session.audio_buffer[session.segment_start_offset:]
+            if len(uncommitted) < (bytes_per_sec * 0.3):
                 return None  # Need at least 0.3 seconds
 
-            return bytes(session.audio_buffer[-window_size:])
+            # If the segment is longer than window_seconds, take the trailing portion
+            return bytes(uncommitted[-max_window_bytes:])
 
     # ── Segment Audio Extraction ───────────────────────────────────────
 

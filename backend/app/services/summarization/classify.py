@@ -44,6 +44,11 @@ interview:
 presentation:
 - one person presenting information
 
+voice_note:
+- reminder recorded on phone
+- dictated note
+- voice memo to self
+
 Rules:
 - Return ONLY the category name, nothing else.
 - Do not explain your choice.

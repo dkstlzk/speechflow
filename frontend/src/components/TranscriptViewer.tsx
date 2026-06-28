@@ -82,6 +82,7 @@ function SpeakerBadge({
           setIsEditing(true);
         }
       }}
+      aria-label="Rename speaker"
     >
       {currentName}
     </Badge>
@@ -171,6 +172,7 @@ export function TranscriptViewer({
                 : "transcript.txt";
               downloadTranscriptAsTxt(segments!, filename);
             }}
+            aria-label="Download transcript"
           >
             <Download className="h-3.5 w-3.5" />
             Export

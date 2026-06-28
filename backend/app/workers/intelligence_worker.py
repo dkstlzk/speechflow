@@ -20,6 +20,7 @@ from ..services.summarization.transcript_processor import (
     TranscriptProcessor,
     TranscriptProcessorError,
 )
+from .job_manager import unregister_job
 
 logger = logging.getLogger("workers.intelligence")
 
@@ -211,4 +212,5 @@ def run_intelligence_pipeline(session_id: int):
         )
     finally:
         clear_processing_stage(session_id)
+        unregister_job(session_id, "intelligence")
         db.close()

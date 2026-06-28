@@ -14,9 +14,9 @@ from .worker_state import transcriber
 
 logger = get_logger(__name__)
 
-# Window size of 2.0s, update every 1.0s to prevent CPU starvation
-CAPTION_WINDOW_SECONDS = 2.0
-CAPTION_INTERVAL_SECONDS = 1.0
+# Window size of 5.0s to capture full sentences, update every 0.5s for lower latency
+CAPTION_WINDOW_SECONDS = 5.0
+CAPTION_INTERVAL_SECONDS = 0.5
 
 
 def emit_caption_update(socketio: SocketIO, sid: str, session) -> None:

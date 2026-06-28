@@ -17,22 +17,22 @@ def get_base_schema() -> str:
   },
   "topics": [
     {
-      "title": "Topic Name",
+      "title": "Topic Name (only if explicitly discussed)",
       "overview": "1-2 sentence summary of this topic.",
-      "key_points": ["Point 1", "Point 2"]
+      "key_points": ["Key point 1"]
     }
   ],
-  "decisions": ["Decision 1", "Decision 2"],
+  "decisions": ["Only output if an explicit decision was made"],
   "action_items": [
     {
-      "owner": "Name of the person assigned or Unassigned",
-      "task": "Description of the task",
-      "priority": "high|medium|low"
+      "owner": "Name or Unassigned",
+      "task": "Only output if a task was explicitly agreed upon",
+      "priority": "medium"
     }
   ],
-  "future_enhancements": ["Feature 1", "Feature 2"],
-  "risks": ["Risk 1", "Risk 2"],
-  "next_steps": ["Next Step 1"]
+  "future_enhancements": ["Only if explicitly mentioned"],
+  "risks": ["Only if explicitly mentioned"],
+  "next_steps": ["Only if explicitly mentioned"]
 }"""
 
 
@@ -44,7 +44,9 @@ def get_base_rules() -> str:
 4. Do not invent facts, features, decisions, people, timelines, or commitments that are not supported by the transcript.
 5. If a field is not applicable to this transcript type, return an empty array [] or empty object {}. The absence of information is preferable to invented information. Never fabricate goals, tasks, deadlines, projects, owners, meetings, follow-ups, or future work. If uncertain, return an empty array.
 6. Never output SPEAKER_XX identifiers; if a speaker's name isn't known, use their generic label (e.g., Participant A).
-7. If the transcript contains only: greetings, testing audio, introductions, filler conversation, acknowledgements, laughter, or incomplete speech, then treat it as a low-information transcript. Generate Overview: "The transcript contains only a brief casual interaction and does not contain enough meaningful information for detailed analysis." Return empty arrays for topics, action_items, decisions, future_enhancements, risks, next_steps. Do NOT infer any meeting context."""
+7. If the transcript contains only: greetings, testing audio, introductions, filler conversation, acknowledgements, laughter, or incomplete speech, then treat it as a low-information transcript. Generate Overview: "The transcript contains only a brief casual interaction and does not contain enough meaningful information for detailed analysis." Return empty arrays for topics, action_items, decisions, future_enhancements, risks, next_steps. Do NOT infer any meeting context.
+8. DO NOT OVER-INDEX ON SINGLE WORDS. If the transcript is extremely short (e.g., under 50 words) and someone says a random word (like "disease" or "health" due to a mic check misrecognition), DO NOT invent a "health-related meeting". You MUST return empty arrays for topics, decisions, action_items, risks, and next_steps in this case. Never hallucinate "communication strategies" or "future meetings" unless explicitly discussed at length.
+9. ONLY populate the JSON arrays if the information is EXPLICITLY discussed. Otherwise, return `[]`. Default to empty arrays for sparse transcripts."""
 
 
 TYPE_SPECIFIC_POLICIES = {
@@ -108,6 +110,21 @@ Allowed assumptions:
 ✗ Meeting minutes
 Behavior:
 - summarize the message
+""",
+    "presentation": """Transcript Type: presentation
+Allowed assumptions:
+✗ Owners
+✗ Decisions unless explicit
+✓ Key points
+✓ Themes
+✓ Topics
+Behavior:
+- summarize the key points and themes presented
+- identify slides or sections if discernible
+- identify examples and demonstrations
+- identify conclusions only if explicitly stated
+- do NOT generate action items unless explicitly stated
+- do NOT invent decisions or follow-ups
 """
 }
 

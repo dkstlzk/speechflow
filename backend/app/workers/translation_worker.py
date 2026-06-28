@@ -4,6 +4,7 @@ from ..db.session import SessionLocal
 from ..models.translation import SessionTranslation
 from ..services.persistence.summaries import get_summary
 from ..services.translation import TranslationService
+from .job_manager import unregister_job
 
 logger = get_logger("translation_worker")
 
@@ -226,4 +227,5 @@ def process_translation(session_id: int, target_language: str) -> None:
                         f"Failed to persist translation failure state: {inner_err}"
                     )
     finally:
+        unregister_job(session_id, f"translation_{target_language}")
         db.close()

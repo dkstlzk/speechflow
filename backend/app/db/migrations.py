@@ -227,7 +227,7 @@ def ensure_fts_indexes(engine: Engine) -> None:
             if "search_vector" not in chunk_cols:
                 conn.execute(
                     text(
-                        "ALTER TABLE transcript_chunks ADD COLUMN search_vector tsvector GENERATED ALWAYS AS (to_tsvector('english', text)) STORED"
+                        "ALTER TABLE transcript_chunks ADD COLUMN search_vector tsvector GENERATED ALWAYS AS (to_tsvector('simple', text)) STORED"
                     )
                 )
                 logger.info("Added FTS column to transcript_chunks")
@@ -244,7 +244,7 @@ def ensure_fts_indexes(engine: Engine) -> None:
             if "search_vector" not in session_cols:
                 conn.execute(
                     text(
-                        "ALTER TABLE sessions ADD COLUMN search_vector tsvector GENERATED ALWAYS AS (to_tsvector('english', coalesce(title, '') || ' ' || coalesce(original_filename, ''))) STORED"
+                        "ALTER TABLE sessions ADD COLUMN search_vector tsvector GENERATED ALWAYS AS (to_tsvector('simple', coalesce(title, '') || ' ' || coalesce(original_filename, ''))) STORED"
                     )
                 )
                 logger.info("Added FTS column to sessions")

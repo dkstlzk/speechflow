@@ -1,5 +1,6 @@
 import os
 import signal
+import threading
 from typing import Dict, Tuple
 
 from ..config.logging import get_logger
@@ -13,13 +14,16 @@ logger = get_logger(__name__)
 # Key: (session_id, job_type) -> Value: pid
 # job_type: "intelligence", "quick_diarization", "accurate_diarization", "translation_<lang>"
 ACTIVE_JOBS: Dict[Tuple[int, str], int] = {}
+_jobs_lock = threading.Lock()
 
 def register_job(session_id: int, job_type: str, pid: int):
     logger.info(f"[JobManager] Registering job {job_type} for session {session_id} with PID {pid}")
-    ACTIVE_JOBS[(session_id, job_type)] = pid
+    with _jobs_lock:
+        ACTIVE_JOBS[(session_id, job_type)] = pid
 
 def unregister_job(session_id: int, job_type: str):
-    pid = ACTIVE_JOBS.pop((session_id, job_type), None)
+    with _jobs_lock:
+        pid = ACTIVE_JOBS.pop((session_id, job_type), None)
     if pid:
         logger.info(f"[JobManager] Unregistered job {job_type} for session {session_id} (PID {pid})")
 
@@ -28,7 +32,8 @@ def cancel_job(session_id: int, job_type: str) -> bool:
     Attempts to cancel the job by killing its OS process, and safely restores the database state.
     Returns True if a process was actively killed.
     """
-    pid = ACTIVE_JOBS.pop((session_id, job_type), None)
+    with _jobs_lock:
+        pid = ACTIVE_JOBS.pop((session_id, job_type), None)
     process_killed = False
 
     if pid:
