@@ -6,7 +6,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 ENV_PATH = Path(__file__).resolve().parents[3] / ".env"
-load_dotenv(ENV_PATH)
+load_dotenv(ENV_PATH, override=True)
 
 from .constants import DEFAULT_ALLOWED_EXTENSIONS, DEFAULT_MAX_UPLOAD_MB
 
@@ -21,7 +21,8 @@ class Settings:
     PROJECT_ROOT: str = str(Path(__file__).resolve().parents[3])
     OLLAMA_ENDPOINT: str = os.getenv("OLLAMA_ENDPOINT", "http://localhost:11434/api/generate")
     OLLAMA_MODEL: str = os.getenv("OLLAMA_MODEL", "qwen2.5:3b")
-    OLLAMA_TIMEOUT_SECONDS: float = float(os.getenv("OLLAMA_TIMEOUT_SECONDS", "600.0"))
+    TRANSLATION_MODEL: str = os.getenv("TRANSLATION_MODEL", "qwen2.5:7b")
+    OLLAMA_TIMEOUT_SECONDS: float = float(os.getenv("OLLAMA_TIMEOUT_SECONDS", "1800.0"))
     MAX_BUFFER_MB: int = int(os.getenv("MAX_BUFFER_MB", "200"))
     UPLOAD_DIR: str = os.getenv("UPLOAD_DIR", str(Path(PROJECT_ROOT) / "temp"))
     EXPORT_DIR: str = os.getenv("EXPORT_DIR", str(Path(PROJECT_ROOT) / "exports"))
@@ -50,7 +51,7 @@ class Settings:
     QUICK_DIARIZATION_THRESHOLD: float = float(
         os.getenv("QUICK_DIARIZATION_THRESHOLD", "0.3")
     )
-    TRANSLATION_BATCH_SIZE: int = int(os.getenv("TRANSLATION_BATCH_SIZE", "15"))
+    TRANSLATION_BATCH_SIZE: int = int(os.getenv("TRANSLATION_BATCH_SIZE", "5"))
     MAX_BACKGROUND_WORKERS: int = int(os.getenv("MAX_BACKGROUND_WORKERS", "4"))
 
     def __post_init__(self):

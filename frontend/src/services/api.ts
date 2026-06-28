@@ -69,10 +69,10 @@ async function apiFetch<T>(input: string, init: FetchOptions = {}): Promise<ApiR
 
 function mapBackendStatus(s: string): ProcessingStatus {
   const map: Record<string, ProcessingStatus> = {
-    pending: "processing",
-    uploaded: "processing",
-    preprocessing: "processing",
-    transcribing: "processing",
+    pending: "pending",
+    uploaded: "preprocessing",
+    preprocessing: "preprocessing",
+    transcribing: "transcribing",
     diarizing: "diarizing",
     processing: "processing",
     completed: "completed",

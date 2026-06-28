@@ -133,17 +133,30 @@ def process_translation(session_id: int, target_language: str) -> None:
             db.flush()
 
             # Build flattened translated transcript for legacy clients/exports
-            # We fetch speaker names from the original chunks
+            # We fetch speaker names from the original chunks and format them nicely
             id_to_speaker = {}
+            speaker_idx = 0
+            speaker_map = {}
+            
             for c in chunks_query:
-                speaker = (
-                    (c.speaker.display_name or c.speaker.speaker_label)
-                    if c.speaker
-                    else "Speaker"
-                )
-                if speaker in ("UNKNOWN", ""):
-                    speaker = "Speaker"
-                id_to_speaker[c.id] = speaker
+                display_name = None
+                if c.speaker:
+                    if c.speaker.display_name:
+                        display_name = c.speaker.display_name
+                    elif c.speaker.speaker_label:
+                        label = c.speaker.speaker_label
+                        if label.startswith("SPEAKER_"):
+                            if label not in speaker_map:
+                                speaker_map[label] = f"Speaker {chr(65 + speaker_idx)}"
+                                speaker_idx += 1
+                            display_name = speaker_map[label]
+                        else:
+                            display_name = label
+                
+                if not display_name or display_name == "UNKNOWN":
+                    display_name = "Speaker"
+                    
+                id_to_speaker[c.id] = display_name
 
             translated_lines = []
             for chunk in new_chunks:

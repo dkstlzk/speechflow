@@ -511,18 +511,25 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
   const showSkeleton =
     processing ||
     session.data?.status === "finalizing" ||
-    session.data?.status === "processing";
+    session.data?.status === "processing" ||
+    session.data?.status === "pending" ||
+    session.data?.status === "uploading" ||
+    session.data?.status === "preprocessing" ||
+    session.data?.status === "transcribing" ||
+    session.data?.status === "diarizing";
 
   const progressMode =
-    diarizing || session.data?.status === "diarizing"
-      ? "diarization"
-      : session.data?.status === "finalizing"
-        ? "finalizing"
-        : processing || session.data?.status === "processing"
-          ? "intelligence"
-          : !transcript.data?.segments?.length
-            ? "transcript"
-            : "intelligence";
+    session.data?.status === "finalizing"
+      ? "finalizing"
+      : (session.data?.status === "diarizing" || diarizing)
+        ? "diarization"
+        : ["pending", "uploading", "preprocessing", "transcribing"].includes(session.data?.status || "")
+          ? "transcript"
+          : processing || session.data?.status === "processing"
+            ? "intelligence"
+            : !transcript.data?.segments?.length
+              ? "transcript"
+              : "intelligence";
 
   return (
     <AppLayout>
@@ -787,7 +794,11 @@ export function SessionPage({ id, initialSearch }: { id: string; initialSearch?:
               {processing ? "Retrying…" : "Retry Processing"}
             </Button>
           ) : (
-            <Button size="sm" onClick={onProcess} disabled={processing}>
+            <Button 
+              size="sm" 
+              onClick={onProcess} 
+              disabled={processing || session.data?.status !== "completed"}
+            >
               {processing ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
               ) : (

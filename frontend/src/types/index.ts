@@ -1,12 +1,15 @@
 export type ProcessingStatus =
   | "idle"
+  | "pending"
   | "uploading"
+  | "preprocessing"
+  | "transcribing"
+  | "diarizing"
   | "processing"
   | "completed"
   | "failed"
   | "recording"
-  | "finalizing"
-  | "diarizing";
+  | "finalizing";
 
 export type TranscriptType =
   | "meeting"

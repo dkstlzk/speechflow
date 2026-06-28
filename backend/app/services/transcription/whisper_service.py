@@ -55,11 +55,13 @@ class WhisperTranscriptionService:
                             "compute_type": self.compute_type,
                         },
                     )
+                    import os
+                    optimal_threads = max(4, os.cpu_count() - 1) if os.cpu_count() else 4
                     self._model = WhisperModel(
                         self.model_name,
                         device=self.device,
                         compute_type=self.compute_type,
-                        cpu_threads=2,
+                        cpu_threads=optimal_threads,
                     )
         return self._model
 

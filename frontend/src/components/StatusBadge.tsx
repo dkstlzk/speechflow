@@ -2,7 +2,10 @@ import type { ProcessingStatus } from "@/types";
 
 const STYLES: Record<ProcessingStatus, { wrap: string; dot: string }> = {
   idle: { wrap: "bg-muted text-muted-foreground", dot: "bg-muted-foreground/60" },
-  uploading: { wrap: "bg-blue-500/10 text-blue-700 dark:text-blue-300", dot: "bg-blue-500" },
+  pending: { wrap: "bg-muted text-muted-foreground", dot: "bg-muted-foreground/60" },
+  uploading: { wrap: "bg-blue-500/10 text-blue-700 dark:text-blue-300", dot: "bg-blue-500 animate-pulse" },
+  preprocessing: { wrap: "bg-indigo-500/10 text-indigo-700 dark:text-indigo-300", dot: "bg-indigo-500 animate-pulse" },
+  transcribing: { wrap: "bg-indigo-500/10 text-indigo-700 dark:text-indigo-300", dot: "bg-indigo-500 animate-pulse" },
   processing: {
     wrap: "bg-amber-500/10 text-amber-700 dark:text-amber-300",
     dot: "bg-amber-500 animate-pulse",
