@@ -9,14 +9,14 @@ This document is the authoritative engineering architecture reference for Speech
 SpeechFlow is a full-stack, single-tenant ML application designed for recording, transcribing, diarizing, and extracting intelligence from audio sessions.
 
 ### Upload Pipeline
-Files are uploaded via a synchronous HTTP endpoint (`/api/upload`). The upload is verified for basic extension allowance, persisted to a local `UPLOAD_DIR`, and then processed synchronously. Faster-Whisper transcribes the audio, generating `TranscriptChunk` rows. The session is marked `COMPLETED` immediately upon inference completion.
+Files are uploaded via a synchronous HTTP endpoint (`/api/upload`). The upload is verified for basic extension allowance, persisted to a local `UPLOAD_DIR`, and then processed asynchronously via a spawned background process (`multiprocessing.spawn`). Faster-Whisper transcribes the audio, generating `TranscriptChunk` rows. The session is marked `COMPLETED` immediately upon inference completion.
 
 ### Realtime Pipeline
 The realtime pipeline uses WebSocket streaming (`flask-socketio`) combined with browser-based `AudioContext` and WebRTC `getUserMedia`.
 1. **Frontend**: Samples microphone input natively and streams raw PCM packets over WebSockets.
 2. **Backend Engine**: A background worker thread loops over a thread-safe `StreamingSessionManager`. 
 3. **VAD Segmentation**: Raw audio is evaluated by a fast VAD model. Speech/silence boundaries dictate chunking.
-4. **Processing**: Whisper transcribes chunks (executed synchronously to avoid `greenlet` thread-switching crashes associated with Eventlet).
+4. **Processing**: Whisper transcribes chunks (executed asynchronously via `eventlet.tpool.execute()` to avoid `greenlet` thread-switching crashes associated with Eventlet blocking).
 5. **Channels**: The backend streams disposable `caption_update` events instantly and `transcript_committed` events for finalized chunks.
 
 ### Offline Diarization Pipeline
@@ -32,7 +32,7 @@ Triggered on demand. It reads the full transcript payload and prompts a local/re
 Powered by PostgreSQL Full Text Search (FTS). A GIN index on `tsvector` columns enables high-speed lexical search across all transcript text, session titles, and original filenames.
 
 ### Export System
-Clients can export the transcript as a raw `.txt` file directly from the Realtime interface. An offline JSON/Markdown export structure is scaffolded but `.txt` is the primary, verified frontend export vehicle today.
+Clients can export the transcript as a raw `.txt` file or a professionally formatted `.docx` file directly from the Realtime and Session views. Full export pipelines for both native and translated transcripts are fully implemented and verified in the frontend.
 
 ### Session Lifecycle
 1. `RECORDING`: Active microphone streaming.
@@ -82,7 +82,7 @@ Diarization has been aggressively sandboxed to preserve system integrity.
 - Queries are efficiently routed using `to_tsquery`.
 
 ### Export Improvements
-- `.txt` download via blob generation is fully active in the Realtime and Session views.
+- Both `.txt` and `.docx` exports are fully active in the Session view for native and translated transcripts.
 
 ---
 
@@ -107,8 +107,8 @@ These algorithms heavily compress dynamic range and strip the subtle acoustic an
 The model is mathematically forced to merge the highly homogenized voices.
 
 ### Authentication
-**Authentication and authorization are not currently implemented.**
-This has been intentionally deferred. Currently, any user with network access to the API can read, delete, or mutate any session. Do not deploy this branch to the public internet.
+**Single-Admin Authentication is implemented via `require_auth()`.**
+However, multi-user accounts, CSRF protection, and distributed rate limiting are not currently implemented. These have been intentionally deferred. Do not deploy this branch to the public internet until CSRF and proper rate limiting are added.
 
 ### Storage Quotas
 There are no disk storage quotas. A user can upload unlimited audio files until the host disk is completely full.
@@ -116,7 +116,7 @@ There are no disk storage quotas. A user can upload unlimited audio files until 
 ### Eventlet Starvation Avoidance
 The `flask-socketio` server uses `eventlet` for concurrency. Eventlet uses cooperative green-threads.
 Faster-Whisper inference is a CPU-bound C++ process that blocks the Python GIL. 
-- **Current Mitigation**: We previously wrapped `transcriber.transcribe` inside `eventlet.tpool.execute()`. However, this was reverted to synchronous execution due to severe `greenlet` thread-switching clashes and crashes. Currently, the ML inference blocks the Eventlet hub directly, resulting in minor event-loop stutters.
+- **Current Mitigation**: We explicitly wrap `transcriber.transcribe` inside `eventlet.tpool.execute()`. This successfully offloads the heavy inference to a native OS thread, preventing the ML inference from blocking the Eventlet hub directly and eliminating event-loop starvation.
 - **Deprecation Warning**: Eventlet is formally deprecated. A migration to `asyncio` (via FastAPI or Quart) is the strongly recommended path for Phase 2 to natively solve background processing without blocking transports.
 
 ---
@@ -128,7 +128,7 @@ Faster-Whisper inference is a CPU-bound C++ process that blocks the Python GIL.
 - **Mentor Review**: ✅ YES
 - **Demo Usage**: ✅ YES
 - **Trusted Beta Usage**: ✅ YES
-- **Public Production Usage**: ❌ NO (Blocked purely by the lack of Authentication, Authorization, and Rate Limiting).
+- **Public Production Usage**: ❌ NO (Blocked purely by the lack of CSRF Protection and Distributed Rate Limiting).
 
 **Reasoning**: The application does exactly what it is designed to do. State management is resilient, the database maintains perfect referential integrity, and audio streams no longer crash under load. It is a highly impressive technical achievement for an MVP timeline.
 

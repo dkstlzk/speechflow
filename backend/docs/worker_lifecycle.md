@@ -8,9 +8,9 @@ Describe the finalized threaded lifecycles used for Upload Processing, Real-Time
 
 ## Worker Model
 
-- `Upload Processing`: Runs via a Python daemon background thread (`upload_pipeline.py`) kicked off on successful API file upload.
+- `Upload Processing`: Runs via an isolated background process (`multiprocessing.get_context("spawn").Process`) kicked off on successful API file upload.
 - `Real-Time Streaming`: Background daemon thread (`realtime_worker_loop`) continuously processes the active `StreamingSessionManager` buffer while a Socket.IO connection is alive.
-- `Intelligence Generation`: Synchronous execution during the `processing` stage of both pipelines.
+- `Intelligence Generation`: Asynchronous execution via an isolated background process (`multiprocessing.get_context("spawn").Process`).
 
 ## Stage Transitions
 
@@ -78,4 +78,6 @@ Workers always attempt cleanup in `finally`:
 
 - Warmups for Whisper and Pyannote models run in background threads on app startup to prevent the first request from timing out.
 - Transcript persistence is replacement-based per session (for uploads) to prevent duplicate chunk accumulation on retries.
-- Stale `recording` sessions (caused by abrupt server kills) are detected and auto-failed on boot.
+- **Server-Side Throttle (v1.0.0)**: Uses `get_active_job_count()` synchronized by `_jobs_lock` instead of unreliable `multiprocessing.active_children()` heuristics, fully preventing FFmpeg sub-processes from consuming Python worker slots.
+- **WebSocket Concurrency (v1.0.0)**: Event handlers explicitly lock shared session state via `RLock` and safely retrieve sessions using the synchronized `get_session_by_sid()` accessor.
+- Stale `recording` sessions (caused by abrupt server kills) are detected and auto-failed on boot via database-persisted `sample_rate` constraints.

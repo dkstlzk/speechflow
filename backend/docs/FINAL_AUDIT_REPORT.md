@@ -11,6 +11,10 @@ This report serves as the final independent verification of the SpeechFlow MVP c
 
 The primary conclusion is verified: **The codebase is structurally sound for trusted internal deployments, but remains hard-blocked from public or multi-tenant deployment solely due to the deliberate absence of an Authentication/Authorization layer.** 
 
+> [!NOTE]
+> **Post-Audit Status Update (v1.0.0):**
+> This audit was conducted before the authentication implementation. **F-01 (No Authentication)** is now **fully resolved**. The codebase features a `require_auth()` `before_request` hook protecting all `/api/` routes and Socket.IO connections. Consequently, the threat model for **F-07 (`SECRET_KEY=dev`)** has elevated from inert to active, as Flask session cookies are now used for authentication.
+
 Below is the verification of the remaining open findings.
 
 ---
@@ -18,10 +22,10 @@ Below is the verification of the remaining open findings.
 ## 2. Verified Findings
 
 ### F-01 | P0 | No Authentication
-**Status: VERIFIED TRUE**
+**Status: RESOLVED**
 - **Evidence:** `backend/app/api/__init__.py` registers all blueprints (sessions, realtime, upload, config) without any `before_request` middleware, decorators, or API key validation.
 - **Impact:** Any client with network access can invoke `DELETE /api/sessions/<id>`, read all transcripts, or trigger heavy ML diarization payloads. 
-- **Recommendation:** Deferred by design for MVP. Must be implemented (e.g., via shared API Key or JWT middleware) before exposing the backend port to an untrusted network.
+- **Resolution:** Fully resolved in v1.0.0. A `require_auth()` `before_request` hook now protects all `/api/` routes using `session.get("authenticated")`.
 
 ### F-02 | P1 | Delete-During-Diarization Race Condition
 **Status: VERIFIED TRUE**
@@ -49,10 +53,10 @@ Below is the verification of the remaining open findings.
 - **Evidence:** `frontend/src/pages/RealtimePage.tsx` accumulates WebSocket status events via `setEvents((e) => [...e, ev])` without truncation.
 - **Impact:** Harmless for short demos, but multi-hour sessions could generate hundreds of DOM elements, theoretically impacting React render performance. Easily fixed with `.slice(-100)`.
 
-### F-07 | P3 | `SECRET_KEY=dev` Default
-**Status: VERIFIED TRUE**
+### F-07 | P1 | `SECRET_KEY=dev` Default
+**Status: ACTIVE SECURITY RISK**
 - **Evidence:** `.env.example` specifies `SECRET_KEY=dev`.
-- **Impact:** Inert currently because the application does not issue Flask session cookies. Becomes a security risk the moment session-based auth is introduced.
+- **Impact:** Originally inert, this is now a highly elevated security risk because the application issues Flask session cookies for authentication. A hardcoded secret key allows cookie forgery.
 
 ---
 
@@ -72,6 +76,6 @@ This audit confirms that SpeechFlow is a highly capable, structurally sound MVP.
 
 The application has exited the stabilization phase. 
 **Recommended Next Actions:**
-1. Do not proceed to public internet deployment until **F-01 (Auth)** is implemented.
+1. F-01 is resolved in v1.0.0. Do not proceed to public internet deployment until rate limiting and CSRF protection (documented technical debt) are implemented.
 2. Address **F-02 (Delete Guard)** as a quick-win before large-scale internal testing to save CPU cycles.
 3. Transition development focus to feature extraction (analytics, talk-time metrics, speaker statistics) as the core transcription and diarization engines are stable.

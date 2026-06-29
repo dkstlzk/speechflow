@@ -27,7 +27,15 @@ Tracks upload and real-time lifecycle state.
 | `duration_seconds` | FLOAT | Total audio duration |
 | `processing_error` | TEXT | Failure detail |
 | `title` | VARCHAR(255) | Auto-generated or user-edited title |
+| `host_name` | VARCHAR(255) | Optional host name |
+| `participants` | TEXT | Optional participants list |
 | `classification` | VARCHAR(50) | Intelligence classification (e.g. `meeting`, `lecture`) |
+| `diarization_mode` | VARCHAR(32) | Track quick vs accurate execution |
+| `diarized_at` | DATETIME | Timestamp of last diarization |
+| `detected_language` | VARCHAR(10) | Primary spoken language detected |
+| `detected_languages` | JSON | Extended language metadata |
+| `sample_rate` | INTEGER | Persisted sample rate for recovery |
+| `transcript_type` | VARCHAR(32) | Native vs translated transcript tracking |
 | `created_at` | TIMESTAMP | Created timestamp |
 | `updated_at` | TIMESTAMP | Last update timestamp |
 | `completed_at` | TIMESTAMP | Completion/failure timestamp |
@@ -92,6 +100,34 @@ Stores extracted action items.
 | `status` | VARCHAR(50) | `pending` or `completed` |
 | `created_at` | TIMESTAMP | Creation timestamp |
 | `updated_at` | TIMESTAMP | Last update timestamp |
+
+## Table: `session_translations`
+
+Stores fully translated sessions, tracking their status and content.
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `id` | SERIAL / INTEGER | Primary key |
+| `session_id` | FK -> sessions.id | Session scope |
+| `target_language` | VARCHAR(10) | e.g. `hi`, `ta`, `fr` |
+| `status` | VARCHAR(32) | `translating`, `completed`, `failed`, `invalidated` |
+| `translated_summary` | TEXT | Translated executive summary |
+| `translated_mom` | TEXT | Translated MoM |
+| `error_message` | TEXT | Detailed error logs |
+| `created_at` | TIMESTAMP | Creation timestamp |
+| `updated_at` | TIMESTAMP | Last update timestamp |
+
+## Table: `translated_chunks`
+
+Stores the translated text mapping to the original transcript chunks.
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `id` | SERIAL / INTEGER | Primary key |
+| `translation_id` | FK -> session_translations.id | Translation scope |
+| `chunk_id` | FK -> transcript_chunks.id | Original chunk mapping |
+| `translated_text` | TEXT | Translated text |
+| `created_at` | TIMESTAMP | Creation timestamp |
 
 ## Ordering Contract
 

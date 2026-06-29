@@ -86,7 +86,7 @@ flowchart TD
     subgraph AI [Local ML Models]
         Whisper[Faster-Whisper]
         Pyannote[Pyannote Diarization]
-        Ollama[Ollama (qwen2.5:3b)]
+        Ollama[Ollama (qwen2.5:3b / 7b)]
     end
 
     UI <--> |HTTP/REST| API
@@ -108,7 +108,7 @@ flowchart TD
 
 To run SpeechFlow in a containerized environment (ideal for demos or final production deployment):
 
-1. **Ensure Ollama is running locally** on your host machine (with the `qwen2.5:3b` model pulled).
+1. **Ensure Ollama is running locally** on your host machine (with the `qwen2.5:3b` model pulled, and the `qwen2.5:7b` model for translation (`ollama pull qwen2.5:7b`)).
 2. Set your HuggingFace token for Pyannote:
    ```bash
    export HF_TOKEN="your_huggingface_token"

@@ -14,7 +14,7 @@ Define the finalized execution flow and transcript reconstruction behavior for b
 
 1. `POST /api/upload/` receives multipart audio and creates a session record (`pending`).
 2. File is saved to `TEMP_DIR`.
-3. Worker thread starts and marks session `preprocessing`.
+3. Spawned worker process starts and marks session `preprocessing`.
 4. FFmpeg normalizes audio to 16kHz mono WAV.
 5. Worker marks `transcribing` and runs faster-whisper.
 6. Worker marks `diarizing` and runs pyannote diarization.
@@ -43,7 +43,7 @@ Define the finalized execution flow and transcript reconstruction behavior for b
 ## Intelligence Flow (Local LLM via Ollama)
 
 - Requires completed transcript.
-- Uses `qwen2.5:3b` via Ollama backend.
+- Uses `qwen2.5:3b` for summaries/classification and `qwen2.5:7b` for translation via Ollama backend.
 - `Classifier` assigns a type (e.g. `meeting`, `lecture`, `casual_conversation`).
 - `SummaryGenerator` creates a paragraph summary.
 - If type is `meeting` or similar, `MoMGenerator` creates detailed Meeting Minutes.

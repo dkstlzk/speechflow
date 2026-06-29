@@ -142,7 +142,7 @@ flowchart TD
 | **Voice Activity Detection** | Silero VAD |
 | **Speaker Diarization** | Pyannote.audio (wespeaker-voxceleb) |
 | **Database** | PostgreSQL |
-| **Intelligence Generation** | Ollama (qwen2.5:3b) |
+| **Intelligence Generation** | Ollama (`qwen2.5:3b` for summaries, `qwen2.5:7b` for translation) |
 | **Audio Processing** | FFmpeg, pydub, AudioWorkletNode |
 
 ---
