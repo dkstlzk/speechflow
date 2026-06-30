@@ -98,10 +98,8 @@ def transcribe_and_persist_segment(
                     f"[TranscriptEngine] Integrity error saving chunk #{current_chunk_index} "
                     f"for session {session.session_id}. Session was likely deleted mid-transaction. Error: {e}"
                 )
-                return
             except Exception as db_e:
                 logger.error(f"[TranscriptEngine] DB Error saving chunk: {db_e}")
-                return
 
             with session.lock:
                 session.persisted_chunk_indices.add(current_chunk_index)
@@ -112,18 +110,21 @@ def transcribe_and_persist_segment(
                 f"{text[:80]}..."
             )
 
-            socketio.emit(
-                "transcript_committed",
-                {
-                    "speaker": "UNKNOWN",
-                    "text": text,
-                    "start_time": segment.start_time,
-                    "end_time": segment.end_time,
-                    "chunk_index": current_chunk_index,
-                    "session_id": session.session_id,
-                },
-                to=sid,
-            )
+            try:
+                socketio.emit(
+                    "transcript_committed",
+                    {
+                        "speaker": "UNKNOWN",
+                        "text": text,
+                        "start_time": segment.start_time,
+                        "end_time": segment.end_time,
+                        "chunk_index": current_chunk_index,
+                        "session_id": session.session_id,
+                    },
+                    to=sid,
+                )
+            except Exception as emit_e:
+                logger.error(f"[TranscriptEngine] Failed to emit transcript chunk: {emit_e}")
 
             with session.lock:
                 session_manager.advance_segment(

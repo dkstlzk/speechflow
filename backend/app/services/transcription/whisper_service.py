@@ -39,9 +39,15 @@ class WhisperTranscriptionService:
         self.compute_type = compute_type or settings.WHISPER_COMPUTE_TYPE
         self._model = model
 
-        import threading
+        try:
+            # pyrefly: ignore [missing-import]
+            import eventlet.patcher
+            # Use original native threading to avoid greenlet thread-switch errors inside tpool
+            threading_module = eventlet.patcher.original("threading")
+        except ImportError:
+            import threading as threading_module
 
-        self._lock = threading.Lock()
+        self._lock = threading_module.Lock()
 
     def _get_model(self) -> WhisperModel:
         if self._model is None:
