@@ -192,19 +192,16 @@ def create_app() -> Flask:
             for sid, session in list(session_manager.active_sessions.items()):
                 session.is_ending = True
 
-            # Wait up to 10 seconds for worker loop to drain active sessions
-            wait_seconds = 0
-            while session_manager.active_sessions and wait_seconds < 10:
-                time.sleep(1.0)
-                wait_seconds += 1
-
-            logger.info("Active sessions drained. Shutting down thread pool...")
+            # We cannot use time.sleep (eventlet.sleep) inside a signal handler 
+            # because it corrupts the greenlet state and crashes the reloader.
+            logger.info("Shutting down thread pool...")
             from .workers.realtime.worker_state import inference_executor
 
-            inference_executor.shutdown(wait=True)
+            inference_executor.shutdown(wait=False)
 
             logger.info("Shutdown complete.")
-            sys.exit(0)
+            import os
+            os._exit(0)
 
         # only register signal handler in main thread
         if threading.current_thread() is threading.main_thread():
