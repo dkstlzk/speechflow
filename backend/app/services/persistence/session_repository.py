@@ -180,7 +180,7 @@ def update_transcript_type(
 
 
 def recover_stale_sessions(
-    db: Session, max_hours: int = 2, include_recording: bool = True
+    db: Session, max_hours: int = 3, include_recording: bool = True
 ) -> int:
     """
     Find processing sessions that are stuck and mark them as failed.

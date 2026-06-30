@@ -22,7 +22,7 @@ class Settings:
     OLLAMA_ENDPOINT: str = os.getenv("OLLAMA_ENDPOINT", "http://localhost:11434/api/generate")
     OLLAMA_MODEL: str = os.getenv("OLLAMA_MODEL", "qwen2.5:3b")
     TRANSLATION_MODEL: str = os.getenv("TRANSLATION_MODEL", "qwen2.5:7b")
-    OLLAMA_TIMEOUT_SECONDS: float = float(os.getenv("OLLAMA_TIMEOUT_SECONDS", "1800.0"))
+    OLLAMA_TIMEOUT_SECONDS: float = float(os.getenv("OLLAMA_TIMEOUT_SECONDS", "3600.0"))
     MAX_BUFFER_MB: int = int(os.getenv("MAX_BUFFER_MB", "200"))
     UPLOAD_DIR: str = os.getenv("UPLOAD_DIR", str(Path(PROJECT_ROOT) / "temp"))
     EXPORT_DIR: str = os.getenv("EXPORT_DIR", str(Path(PROJECT_ROOT) / "exports"))

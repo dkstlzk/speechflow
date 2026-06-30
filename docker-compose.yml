@@ -28,6 +28,8 @@ services:
       - SECRET_KEY=${SECRET_KEY}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}
       - OLLAMA_ENDPOINT=http://host.docker.internal:11434
+      # - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen2.5:3b}
+      # - TRANSLATION_MODEL=${TRANSLATION_MODEL:-qwen2.5:7b}
       - CORS_ORIGINS=http://localhost:80,http://localhost:5173,http://localhost
       # Required for Pyannote diarization model access
       - HF_TOKEN=${HF_TOKEN}
@@ -35,6 +37,7 @@ services:
       - ./temp:/app/temp
       - ./exports:/app/exports
       - ./transcripts:/app/transcripts
+      - ./ml_models:/app/ml_models
       - huggingface_cache:/root/.cache/huggingface
     depends_on:
       db:

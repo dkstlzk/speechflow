@@ -26,5 +26,5 @@ ENV PORT=5000
 # Expose port
 EXPOSE 5000
 
-# Run with Gunicorn and Eventlet worker (Exactly 1 worker due to SocketIO/SQLite constraints in MVP)
+# Run with Gunicorn and Eventlet worker (Exactly 1 worker due to Socket.IO in-memory session state constraints)
 CMD ["gunicorn", "-w", "1", "-k", "eventlet", "-b", "0.0.0.0:5000", "--timeout", "300", "backend.app.main:create_app()"]

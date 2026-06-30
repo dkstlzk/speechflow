@@ -5,7 +5,9 @@ with warnings.catch_warnings():
     # pyrefly: ignore [missing-import]
     import eventlet
 
-eventlet.monkey_patch()
+# Prevent monkey-patching in spawned multiprocessing workers
+if __name__ == "__main__":
+    eventlet.monkey_patch()
 
 import signal
 import sys

@@ -106,6 +106,11 @@ def process_translation(session_id: int, target_language: str) -> None:
                 else:
                     failed_batches += 1
 
+                # Heartbeat to prevent stale session recovery on long meetings
+                from datetime import datetime, timezone
+                translation_row.updated_at = datetime.now(timezone.utc)
+                db.commit()
+
             # Delete existing translation chunks to avoid duplicates
             db.query(TranslatedChunk).filter(
                 TranslatedChunk.translation_id == translation_row.id
