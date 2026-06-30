@@ -1,243 +1,107 @@
 # SpeechFlow
 
-SpeechFlow is a Flask-first speech-to-text and intelligent transcript processing platform.
+SpeechFlow is a local-first speech-to-text and transcript intelligence platform. It processes both real-time streaming audio and batch media uploads into structured, speaker-labeled transcripts with automated meeting intelligence and multilingual translation.
 
-It converts both uploaded audio/video files and real-time streaming audio into structured outputs including:
+The system is designed around privacy-preserving, CPU-compatible local inference using open-weight models, ensuring audio data never leaves the host infrastructure.
 
-- Speaker-labeled transcripts (Diarization)
-- Live transcript streaming
-- Summaries
-- Meeting Minutes (MoM)
-- Action items
+## Core Capabilities
 
-The project is designed around fully local, CPU-only inference using open-source models.
-
----
-
-## Current MVP Status
-
-### Completed
-
-#### Upload Processing Pipeline
-- MP3 and MP4 upload support
-- FFmpeg audio extraction and normalization
-- Background processing workflow
-
-#### Realtime Reliability Features
-- Session watchdog recovery
-- Browser disconnect recovery
-- Stale session cleanup
-- Transcript ownership isolation
-- Fast "live disposable captions" (0.3s) and persistent committed chunks
-- Atomic row-level database locking (`SELECT FOR UPDATE`)
-- Deterministic API-driven job cancellation via `active_job_type` state tracking
-- Boot-time stale session recovery via database-persisted `sample_rate` constraints
-- Hardened worker lifecycles with deterministic job counting, explicit `RLock` synchronization on WebSocket events, and guaranteed subprocess cleanup
-- Data integrity protection via single-source-of-truth translation invalidation when transcripts change
-
-#### Realtime Streaming Infrastructure
-- Bidirectional Socket.IO transport (Eventlet)
-- In-browser microphone capture via WebRTC / `AudioContext`
-- Chunk-based VAD (Voice Activity Detection) segmentation
-- Live Faster-Whisper transcription with rolling acoustic context
-- Delta-based transcript stabilization (Tentative vs Committed text)
-- Resilient watchdog architecture for dropped connections
-- Strict hardware privacy lifecycle (microphone teardown on pause)
-
-#### Speaker Diarization (Offline)
-- Two-Tier processing: "Quick" (clustering embeddings) and "Accurate" (full re-transcription + Pyannote)
-- Isolated process execution (`multiprocessing.spawn`) to prevent memory leaks and segfaults
-- Hysteresis-based alignment of Whisper transcript chunks to Pyannote speaker segments
-- Orphan speaker cleanup and mapping
-
-#### Intelligent Transcript Processing
-- Transcript classification (e.g., Meeting, Lecture, Brainstorm)
-- Summary and Meeting Minutes (MoM) generation
-- Action item extraction (with parsed deliverables)
-- Multilingual speech transcription (Hindi-English mixed speech, etc.)
-- Full transcript and summary translation (Hindi, Tamil, Telugu, Marathi, etc.)
-- Local LLM inference via Ollama (qwen2.5:3b)
-
-#### Persistence & Management
-- Unified session and transcript chunk storage with strict Unique Constraints
-- Support for streaming real-time persistence
-- Meeting Metadata Tracking (Title, Host, Participants)
-- History tracking, session deletion, and cascading cleanup
-- Indexed session discovery using PostgreSQL FTS (Full-Text Search)
-- Detected language metadata and badging
-
-#### Search & Retrieval
-- PostgreSQL Full-Text Search (FTS)
-- Transcript search highlighting
-- Session discovery and filtering
-
-#### Frontend UI
-- Modern React + TypeScript interface ("Lovable" UI)
-- Real-time live transcript timeline rendering
-- Intelligent loading skeletons and declarative state management
-- Realtime Audio Visualizer and connection status badge
-- Transcript seek navigation
-- Transcript export (.txt and .docx) with Translation and Metadata support
-- Native Web Audio API tab/system capture combined with local microphone recording
-
-#### Authentication & Access Control
-- Session-based authentication using Flask secure cookies
-- Login / Logout workflow
-- Protected API routes
-- Protected Socket.IO realtime connections
-- Session persistence across browser refreshes
-- Single-admin deployment model for MVP usage
-
----
+- **Streaming Transcription**: Low-latency, bidirectional Socket.IO audio streaming with rolling acoustic context and delta-based stabilization.
+- **Batch Processing**: FFmpeg-powered media extraction pipeline for uploaded audio and video files.
+- **Speaker Diarization**: Offline speaker clustering and alignment utilizing Pyannote Audio.
+- **Meeting Intelligence**: Automated generation of summaries, meeting minutes, and action items using local LLMs.
+- **Multilingual Translation**: Chunk-aware, context-preserving transcript translation for multiple regional languages.
 
 ## Architecture
 
 ```mermaid
 flowchart TD
-
-    subgraph Client
-        A[Browser Microphone] --> B[Audio Context]
-        B --> C[Socket.IO Client]
+    subgraph Client [Frontend Interface]
+        Browser[Browser Audio Context] --> Socket[Socket.IO Client]
+        UI[React Application] --> HTTP[REST API]
     end
 
-    subgraph Backend
-        C -->|Raw PCM Audio| D[Session Manager]
-        D --> E[Realtime Worker]
+    subgraph Backend [Flask Application Server]
+        Socket -->|Raw PCM| Realtime[Realtime Worker]
+        HTTP --> Sessions[Session & Job Management]
     end
 
-    subgraph Speech Pipeline
-        E --> F[Silero VAD]
-        F -->|Speech Segments| G[Faster Whisper]
+    subgraph Processing [Multiprocessing Workers]
+        Realtime --> VAD[Silero VAD]
+        VAD --> Whisper[Faster-Whisper]
+        
+        Sessions -->|Spawn| UploadWorker[Upload Pipeline]
+        Sessions -->|Spawn| DiarizationWorker[Diarization Pipeline]
+        Sessions -->|Spawn| IntelligenceWorker[Intelligence Pipeline]
+        Sessions -->|Spawn| TranslationWorker[Translation Pipeline]
     end
 
-    subgraph Diarization Pipeline
-        G -->|Offline Processing| M[Pyannote Audio]
-        M --> N[Speaker Alignment]
-        N --> H[(PostgreSQL)]
+    subgraph Inference [Local Models]
+        Whisper
+        DiarizationWorker --> Pyannote[Pyannote Audio]
+        IntelligenceWorker --> OllamaSum[Ollama: Summarization]
+        TranslationWorker --> OllamaTrans[Ollama: Translation]
     end
 
-    subgraph Persistence
-        G -->|Transcript Chunks| H
+    subgraph Data [Persistence]
+        Realtime --> Postgres[(PostgreSQL)]
+        UploadWorker --> Postgres
+        DiarizationWorker --> Postgres
+        IntelligenceWorker --> Postgres
+        TranslationWorker --> Postgres
     end
-
-    subgraph Intelligence Layer
-        H --> I[Ollama Classifier]
-        I --> J[Summary and Action Items]
-        J --> H
-    end
-
-    H --> K[React Frontend]
 ```
 
----
+## Technical Stack
 
-## Tech Stack
-
-| Layer | Technology |
+| Component | Technology |
 | :--- | :--- |
-| **Realtime Transport** | Socket.IO (Flask-SocketIO + Eventlet) |
-| **Backend Framework** | Flask, SQLAlchemy |
-| **Frontend Framework** | React, TypeScript, Vite, Tailwind CSS |
+| **Backend API** | Flask, SQLAlchemy, Eventlet |
+| **Frontend UI** | React, TypeScript, Vite, Tailwind CSS |
+| **Database** | PostgreSQL (with Full-Text Search) |
 | **Speech Recognition** | Faster-Whisper |
 | **Voice Activity Detection** | Silero VAD |
-| **Speaker Diarization** | Pyannote.audio (wespeaker-voxceleb) |
-| **Database** | PostgreSQL |
-| **Intelligence Generation** | Ollama (`qwen2.5:3b` for summaries, `qwen2.5:7b` for translation) |
-| **Audio Processing** | FFmpeg, pydub, AudioWorkletNode |
+| **Speaker Diarization** | Pyannote Audio |
+| **Language Models** | Ollama (Qwen 2.5 variants) |
+| **Audio Processing** | FFmpeg, Pydub, AudioWorkletNode |
+| **Concurrency** | Multiprocessing (Spawn Context), RLock Synchronization |
 
----
+## Implementation Details
 
-## Local Setup
+### Real-time Streaming
+Audio capture relies on the native Web Audio API (`AudioContext`) with chunk-based transmission over WebSocket. The backend employs Silero VAD for voice activity detection, passing segmented audio to Faster-Whisper. The transcription output distinguishes between tentative (live) text and committed (finalized) chunks, maintaining low latency while preserving acoustic context.
 
-### Prerequisites
+### Background Processing
+Heavy inference workloads (Diarization, Translation, Intelligence) are isolated into dedicated OS-level processes using `multiprocessing.spawn`. This guarantees memory isolation, prevents segmentation faults from C-bindings from affecting the main API server, and ensures blocking operations do not stall the asynchronous WebSocket event loop. A central `JobManager` tracks subprocess identifiers and handles graceful termination and state rollback.
 
-- Python 3.10+
-- PostgreSQL
-- FFmpeg
-- Ollama
+### State and Persistence
+Application state is centralized in PostgreSQL. Database transactions employ explicit `SELECT FOR UPDATE` row-level locks during concurrent transcription and diarization writes. Stale session recovery mechanisms automatically identify and reap orphaned background jobs based on configurable heartbeat thresholds.
 
-### Required Environment Variables
+## Environment Configuration
 
-Required:
+The application requires a `.env` configuration file in the project root. Refer to `.env.example` for the complete schema.
 
-```bash
-SECRET_KEY=generate_a_secure_random_key_here
-DATABASE_URL=postgresql://user:pass@localhost/speechflow
-ADMIN_PASSWORD=your_admin_password
+Required Variables:
+```env
+SECRET_KEY=cryptographically_secure_random_string
+DATABASE_URL=postgresql://username:password@localhost/speechflow
+ADMIN_PASSWORD=secure_admin_password
+HF_TOKEN=huggingface_access_token_for_pyannote
 ```
 
-Required for diarization:
-
-```bash
-HF_TOKEN=your_huggingface_token
-```
-
-Optional:
-
-```bash
+Optional Overrides:
+```env
 OLLAMA_ENDPOINT=http://localhost:11434
-OLLAMA_TIMEOUT_SECONDS=120
-LOG_LEVEL=INFO
+OLLAMA_TIMEOUT_SECONDS=3600
+MAX_BUFFER_MB=200
 ```
 
----
+## Known Limitations
 
-### Phase 1 — Upload Pipeline
-✅ Complete
-
-### Phase 2 — Intelligent Processing Layer
-✅ Complete
-
-### Phase 3 — Realtime Streaming Infrastructure
-✅ Complete
-
-### Phase 4 — Diarization, Reliability & Production Hardening
-✅ Complete
-
-### Phase 5 — Authentication & MVP Stabilization
-✅ Complete
-
-### Future Work
-🚧 Multi-user support
-🚧 User ownership and permissions
-🚧 Deployment hardening
-🚧 Eventlet migration (deprecation warnings cleanly suppressed for v1.0.0 demo readiness)
-🚧 Storage quotas
-
----
-
-## Current Limitations
-
-- Authentication currently supports a single administrative user.
-- Multi-user ownership and permissions are not implemented.
-- **Deployment Architecture Constraint**: SpeechFlow heavily relies on a single-process deployment (`gunicorn -w 1`) using Eventlet. Critical MVP states, such as the `ACTIVE_JOBS` cancellation dictionary, are maintained exclusively in-memory. Horizontal scaling will require migrating these structures to a Redis-backed state management layer.
-- Eventlet remains the realtime transport layer and is a future migration candidate.
-- **Production Recommendation**: Background jobs (Diarization, Intelligence, Translation) currently use local `multiprocessing`. If the backend crashes, active jobs are lost. For large-scale production, replace local multiprocessing workers with **Celery + Redis task queues**.
-- No application-level storage quotas are enforced.
-- Browser audio preprocessing (AGC, noise suppression, echo cancellation, microphone quality, room acoustics) can reduce speaker separability and lower realtime diarization accuracy compared to uploaded audio.
-
----
-
-## Realtime Diarization Note
-
-Realtime recordings and uploaded files do not necessarily produce identical diarization results.
-
-Browser audio capture pipelines commonly apply:
-
-- Automatic Gain Control (AGC)
-- Noise Suppression
-- Echo Cancellation
-
-These transformations alter speaker characteristics before the audio reaches the diarization models.
-
-As a result:
-
-- Uploaded source audio may produce more accurate speaker separation.
-- Realtime microphone recordings of the same content may produce fewer detected speakers.
-
-This is an expected limitation of browser-based audio capture and not necessarily a defect in the diarization pipeline.
-
----
+- **Authentication Constraints**: The current implementation restricts access to a single administrative user via Flask secure cookies. Multi-user role-based access control is not implemented.
+- **Horizontal Scaling**: The architecture heavily utilizes single-process state management (`gunicorn -w 1` with Eventlet). Process-specific state dictionaries must be migrated to a distributed key-value store (e.g., Redis) before horizontal scaling is feasible.
+- **Fault Tolerance**: Background task execution relies on local OS processes. In the event of a host failure, active background jobs cannot be automatically recovered. Production deployments should transition to dedicated task queues (e.g., Celery) for high availability.
+- **Real-time Diarization Discrepancies**: Browser-based audio capture pipelines implicitly apply Automatic Gain Control (AGC), noise suppression, and echo cancellation. These transformations modify acoustic characteristics, which can reduce speaker separability and lower diarization accuracy compared to raw uploaded media.
 
 ## License
 
